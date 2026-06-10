@@ -1993,6 +1993,11 @@ header button.action.secondary{
   margin-top:12px;
 }
 
+
+/* V36 — Onboarding fiable */
+.bp-onboarding-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.bp-onboarding-list{margin:12px 0 0;padding-left:18px;line-height:1.6}
+
 </style>
 
 <!--
@@ -8102,202 +8107,204 @@ function openBackupFilePicker(kind){
 
 
 <script>
-/* V35 — Messages de connexion et onboarding joueur */
+function bpModalClose(){
+  const b=document.getElementById("bpModalBackdrop");
+  if(b) b.style.display="none";
+}
+</script>
+
+
+<script>
+/* V36 — Onboarding fiable après connexion */
 (function(){
-  function playerFirstName(p){
-    const base = String(p?.pseudo || p?.name || "champion").trim();
-    return base.split(/\s+/)[0] || base || "champion";
-  }
+  let onboardingShownForSession = false;
 
-  function playerDisplayName(p){
-    return String(p?.pseudo || p?.name || "champion").trim();
-  }
-
-  function getActivePlayerAfterLogin(){
+  function getLoggedPlayer(){
     try{
-      if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null && state.players[currentUserIndex]){
+      if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null && state.players && state.players[currentUserIndex]){
         return {player:state.players[currentUserIndex], index:currentUserIndex};
       }
       const sel=document.getElementById("activePlayer");
       const idx=sel ? Number(sel.value||0) : 0;
-      return {player:state.players[idx], index:idx};
-    }catch(e){
-      return {player:null,index:null};
-    }
+      if(state.players && state.players[idx]) return {player:state.players[idx], index:idx};
+    }catch(e){}
+    return {player:null,index:null};
   }
 
-  function currentOpenDay(){
-    if(typeof currentPronoDay === "function") return Number(currentPronoDay());
-    return Number(state.currentDay || 1);
+  function firstName(p){
+    const raw=String(p?.pseudo || p?.name || "champion").trim();
+    return raw.split(/\s+/)[0] || "champion";
   }
 
-  function dayIsOpen(day){
-    if(typeof isDayClosed === "function") return !isDayClosed(day);
+  function displayName(p){
+    return String(p?.pseudo || p?.name || "champion").trim();
+  }
+
+  function openDay(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
+  }
+
+  function dayOpen(day){
+    if(typeof isDayClosed==="function") return !isDayClosed(day);
     return !(state.closedDays && state.closedDays[day]);
   }
 
-  function validatedBetsForPlayerDay(playerName, day){
-    return (state.bets||[]).filter(b =>
-      b.player === playerName &&
-      Number(b.day) === Number(day) &&
-      String(b.status || "").toUpperCase() === "VALIDATED"
-    );
-  }
-
   function matchesForDay(day){
-    return (state.matches||[]).filter(m => Number(m.day) === Number(day));
+    return (state.matches||[]).filter(m=>Number(m.day)===Number(day));
   }
 
-  function hasUnvalidatedBet(player, day){
-    const matches = matchesForDay(day);
+  function missingValidatedBets(p, day){
+    const matches=matchesForDay(day);
     if(!matches.length) return false;
-    const done = new Set(validatedBetsForPlayerDay(player.name, day).map(b=>b.matchId));
-    return matches.some(m => !done.has(m.id));
+    const validated=new Set((state.bets||[])
+      .filter(b=>b.player===p.name && Number(b.day)===Number(day) && String(b.status||"").toUpperCase()==="VALIDATED")
+      .map(b=>b.matchId));
+    return matches.some(m=>!validated.has(m.id));
   }
 
-  function secretsComplete(player){
-    const s = player?.secrets || {};
+  function secretsDone(p){
+    const s=p?.secrets||{};
     return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed);
   }
 
-  function needsProfileSetup(player){
-    if(!player) return false;
-    const pseudoMissing = !player.pseudo || player.pseudo === player.name || /^nouveau/i.test(String(player.pseudo));
-    const avatarMissing = !player.avatar;
+  function profileIncomplete(p){
+    if(!p) return true;
+    const pseudoMissing=!p.pseudo || p.pseudo===p.name || /^nouvel/i.test(String(p.pseudo));
+    const avatarMissing=!p.avatar;
     return pseudoMissing || avatarMissing;
   }
 
-  function markPlayerSeen(player){
-    if(!player) return;
-    player.firstLoginDone = true;
-    player.lastLoginAt = new Date().toISOString();
+  function saveSeen(p){
+    if(!p) return;
+    p.firstLoginDone=true;
+    p.lastLoginAt=new Date().toISOString();
     try{
-      if(typeof save === "function") save();
+      if(typeof save==="function") save();
       else localStorage.setItem("bp_wc_dev", JSON.stringify(state));
-    }catch(e){}
-    try{
-      if(typeof bpCloudSaveDebounced === "function") bpCloudSaveDebounced();
+      if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
     }catch(e){}
   }
 
-  function showBPMessage(title, htmlBody, icon="👋"){
-    if(typeof bpAlert === "function"){
-      return bpAlert(`<div class="bp-onboarding-highlight">${htmlBody}</div>`, {
-        title,
-        icon,
-        okText:"OK"
-      });
-    }
-    alert(title + "\n\n" + String(htmlBody).replace(/<[^>]+>/g,""));
+  function closeOnboarding(){
+    const b=document.getElementById("bpOnboardingBackdrop");
+    if(b) b.remove();
+  }
+  window.bpCloseOnboarding=closeOnboarding;
+
+  function go(tabId){
+    closeOnboarding();
+    const btn=document.getElementById(tabId==="bets"?"navBets":tabId==="scores"?"navScores":"");
+    if(typeof tab==="function") tab(tabId,btn||undefined);
+  }
+  window.bpOnboardingGo=go;
+
+  function showModal(title, body, icon){
+    closeOnboarding();
+    const div=document.createElement("div");
+    div.id="bpOnboardingBackdrop";
+    div.className="bp-modal-backdrop";
+    div.style.display="flex";
+    div.innerHTML=`
+      <div class="bp-modal" role="dialog" aria-modal="true">
+        <div class="bp-modal-head">
+          <div class="bp-modal-icon">${icon||"👋"}</div>
+          <div>
+            <div class="bp-modal-title">${title}</div>
+            <div class="muted">B Partner World Cup</div>
+          </div>
+        </div>
+        <div class="bp-modal-body">${body}</div>
+        <div class="bp-modal-actions">
+          <button class="bp-modal-ok" onclick="bpCloseOnboarding()">OK</button>
+        </div>
+      </div>`;
+    document.body.appendChild(div);
   }
 
-  function goTab(tabId){
-    const btn = document.querySelector(`nav button[onclick*="'${tabId}'"], nav button[onclick*="&#39;${tabId}&#39;"]`);
-    if(typeof tab === "function") tab(tabId, btn || undefined);
-  }
-
-  window.showFirstLoginOnboarding = function(player){
-    const first = playerFirstName(player);
-    const body = `
-      <p><b>Bienvenue ${first} !</b></p>
-      <p>Avant de commencer la compétition, prends 1 minute pour personnaliser ton espace.</p>
+  function firstLoginMessage(p){
+    const body=`
+      <p><b>Bienvenue ${firstName(p)} !</b></p>
+      <p>Avant de commencer, personnalise ton espace :</p>
       <ul class="bp-onboarding-list">
         <li>Choisis un <b>pseudo</b>.</li>
         <li>Ajoute un <b>avatar ou une image</b>.</li>
         <li>Réponds aux <b>questions secrètes</b> dans l’onglet <b>Mes scores</b>.</li>
       </ul>
       <div class="bp-onboarding-actions">
-        <button class="action" onclick="bpModalClose();tab('bets',document.getElementById('navBets'))">Compléter mon profil</button>
-        <button class="action secondary" onclick="bpModalClose();tab('scores',document.getElementById('navScores'))">Répondre aux questions secrètes</button>
-      </div>
-    `;
-    showBPMessage("Bienvenue dans B Partner World Cup", body, "🏆");
-    markPlayerSeen(player);
-  };
+        <button class="action" onclick="bpOnboardingGo('bets')">Compléter mon profil</button>
+        <button class="action secondary" onclick="bpOnboardingGo('scores')">Questions secrètes</button>
+      </div>`;
+    showModal("Bienvenue dans la compétition",body,"🏆");
+  }
 
-  window.showReturningLoginMessage = function(player){
-    const pseudo = playerDisplayName(player);
-    const day = currentOpenDay();
-    const open = dayIsOpen(day);
-    const missingBets = open && hasUnvalidatedBet(player, day);
+  function returningMessage(p){
+    const day=openDay();
+    const isOpen=dayOpen(day);
+    const missing=isOpen && missingValidatedBets(p,day);
+    let body=`<p><b>Bonjour ${displayName(p)}.</b></p>`;
+    body+=isOpen?`<p>La <b>journée ${day}</b> est ouverte.</p>`:`<p>La <b>journée ${day}</b> est fermée.</p>`;
 
-    let body = `<p><b>Bonjour ${pseudo}.</b></p>`;
-
-    if(open){
-      body += `<p>La <b>journée ${day}</b> est ouverte.</p>`;
+    if(missing){
+      body+=`<p>Il te reste au moins un match sans mise validée.</p>
+      <p>Va dans <b>Mes Pronos</b> pour saisir tes mises.</p>
+      <div class="bp-onboarding-actions"><button class="action" onclick="bpOnboardingGo('bets')">Aller à Mes Pronos</button></div>`;
     }else{
-      body += `<p>La <b>journée ${day}</b> est actuellement fermée.</p>`;
+      body+=`<p>Toutes tes mises disponibles sont validées.</p>
+      <p>Tu peux consulter ton score dans <b>Mes scores</b>.</p>
+      <div class="bp-onboarding-actions"><button class="action" onclick="bpOnboardingGo('scores')">Voir Mes scores</button></div>`;
     }
 
-    if(missingBets){
-      body += `
-        <p>Il te reste au moins un match sans mise validée.</p>
-        <p>Va dans l’onglet <b>Mes Pronos</b> pour saisir tes pronostics et tes mises.</p>
-        <div class="bp-onboarding-actions">
-          <button class="action" onclick="bpModalClose();tab('bets',document.getElementById('navBets'))">Aller à Mes Pronos</button>
-        </div>
-      `;
-    }else{
-      body += `
-        <p>Toutes tes mises disponibles sont validées.</p>
-        <p>Tu peux consulter ton bilan dans <b>Mes scores</b>.</p>
-        <div class="bp-onboarding-actions">
-          <button class="action" onclick="bpModalClose();tab('scores',document.getElementById('navScores'))">Voir Mes scores</button>
-        </div>
-      `;
+    if(!secretsDone(p)){
+      body+=`<div class="help">Rappel : réponds aux questions secrètes dans <b>Mes scores</b>.</div>`;
     }
+    showModal("Connexion réussie",body,"👋");
+  }
 
-    if(!secretsComplete(player)){
-      body += `<p class="muted">Rappel : pense aussi à répondre aux questions secrètes dans <b>Mes scores</b>.</p>`;
-    }
+  window.bpShowLoginOnboarding=function(force=false){
+    if(onboardingShownForSession && !force) return;
+    const login=document.getElementById("loginScreen");
+    const stillVisible=login && getComputedStyle(login).display!=="none" && login.offsetParent!==null;
+    if(stillVisible && !force) return;
 
-    showBPMessage("Connexion réussie", body, "👋");
-    markPlayerSeen(player);
-  };
-
-  function showLoginMessageIfPlayer(){
-    const {player} = getActivePlayerAfterLogin();
+    const {player}=getLoggedPlayer();
     if(!player) return;
 
-    const isFirst = !player.firstLoginDone;
-    const shouldTreatFirst = isFirst || needsProfileSetup(player) && !secretsComplete(player);
+    onboardingShownForSession=true;
+    const first=!player.firstLoginDone || (profileIncomplete(player) && !secretsDone(player));
+    if(first) firstLoginMessage(player);
+    else returningMessage(player);
+    saveSeen(player);
+  };
 
-    setTimeout(()=>{
-      if(shouldTreatFirst) showFirstLoginOnboarding(player);
-      else showReturningLoginMessage(player);
-    }, 350);
-  }
-
-  function patchLoginWithCode(){
-    if(typeof window.loginWithCode !== "function" || window.loginWithCode.__bpOnboardingWrapped) return;
-    const oldLogin = window.loginWithCode;
-    window.loginWithCode = function(){
-      const before = document.getElementById("loginScreen")?.style.display;
-      const result = oldLogin.apply(this, arguments);
-      setTimeout(()=>{
-        const after = document.getElementById("loginScreen")?.style.display;
-        const loginHidden = after === "none" || document.getElementById("loginScreen")?.offsetParent === null;
-        if(loginHidden) showLoginMessageIfPlayer();
-      }, 250);
-      return result;
+  function patchLogin(){
+    if(typeof window.loginWithCode!=="function" || window.loginWithCode.__bpV36Wrapped) return;
+    const old=window.loginWithCode;
+    window.loginWithCode=function(){
+      const r=old.apply(this,arguments);
+      setTimeout(()=>window.bpShowLoginOnboarding(false),500);
+      setTimeout(()=>window.bpShowLoginOnboarding(false),1200);
+      return r;
     };
-    window.loginWithCode.__bpOnboardingWrapped = true;
+    window.loginWithCode.__bpV36Wrapped=true;
   }
 
-  document.addEventListener("DOMContentLoaded", ()=>{
-    patchLoginWithCode();
+  function observeLoginScreen(){
+    const login=document.getElementById("loginScreen");
+    if(!login || login.__bpObserved) return;
+    const obs=new MutationObserver(()=>setTimeout(()=>window.bpShowLoginOnboarding(false),250));
+    obs.observe(login,{attributes:true,attributeFilter:["style","class"]});
+    login.__bpObserved=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    patchLogin();
+    observeLoginScreen();
   });
-  setTimeout(patchLoginWithCode, 500);
-  setTimeout(patchLoginWithCode, 1500);
+  setTimeout(patchLogin,500);
+  setTimeout(patchLogin,1500);
+  setTimeout(observeLoginScreen,500);
 })();
-</script>
-
-
-<script>
-function bpModalClose(){
-  const b=document.getElementById("bpModalBackdrop");
-  if(b) b.style.display="none";
-}
 </script>
 
 </body></html>
