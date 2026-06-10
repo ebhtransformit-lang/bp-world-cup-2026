@@ -9182,4 +9182,132 @@ function bpModalClose(){
 })();
 </script>
 
+
+<script>
+/* V50 — Sync pronos user depuis state.bets */
+(function(){
+  function currentUser(){
+    if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null && state.players && state.players[currentUserIndex]){
+      return state.players[currentUserIndex];
+    }
+    const sel=document.getElementById("activePlayer");
+    const idx=sel ? Number(sel.value||0) : 0;
+    return (state.players||[])[idx] || null;
+  }
+  function currentDayVisible(){
+    if(typeof currentPronoDay === "function") return Number(currentPronoDay());
+    return Number(state.currentDay || 1);
+  }
+  function samePlayerName(b,p){
+    const bp=String(b.player||"").trim();
+    return bp === String(p.name||"").trim() || bp === String(p.pseudo||"").trim();
+  }
+  function normalizeBet(b){
+    let a=b.scoreA, c=b.scoreB;
+    if((a===undefined || c===undefined) && b.score){
+      const sp=String(b.score).split(/[-–]/); a=sp[0]; c=sp[1];
+    }
+    if((a===undefined || c===undefined) && b.predictedScore){
+      const sp=String(b.predictedScore).split(/[-–]/); a=sp[0]; c=sp[1];
+    }
+    return {scoreA:Number(a??0),scoreB:Number(c??0),stake:Number(b.stake??b.mise??1),status:String(b.status||"").toUpperCase()};
+  }
+  function findBetForCard(card,p,day){
+    const text=card.textContent||"";
+    const matches=(state.matches||[]).filter(m=>Number(m.day)===Number(day));
+    const match=matches.find(m=>text.includes(m.teamA) && text.includes(m.teamB));
+    if(!match) return null;
+    const bet=(state.bets||[]).find(b=>samePlayerName(b,p) && Number(b.day)===Number(day) && String(b.matchId)===String(match.id));
+    return {bet,match};
+  }
+  function setSelectValue(select,value){
+    if(!select) return;
+    const v=String(value);
+    if([...select.options].some(o=>String(o.value)===v)) select.value=v;
+  }
+  function applyBetToCard(card,found){
+    if(!found || !found.bet) return;
+    const b=normalizeBet(found.bet);
+    setSelectValue(card.querySelector(".scoreA"),b.scoreA);
+    setSelectValue(card.querySelector(".scoreB"),b.scoreB);
+    setSelectValue(card.querySelector(".stake"),b.stake);
+
+    const status=card.querySelector(".bet-status");
+    if(status) status.innerHTML = b.status==="VALIDATED" ? '<span class="good">Validé</span>' : '<span class="muted">Brouillon</span>';
+
+    const badge=card.querySelector(".bet-title .badge");
+    if(badge){
+      badge.textContent=b.status==="VALIDATED" ? "Validé" : "Brouillon";
+      badge.className=b.status==="VALIDATED" ? "badge ok" : "badge";
+    }
+
+    const btn=[...card.querySelectorAll("button")].find(x=>/valider/i.test(x.textContent||""));
+    if(btn && b.status==="VALIDATED"){
+      btn.textContent="Mise validée";
+      btn.classList.add("validatedBtn");
+    }
+
+    const pred=card.querySelector(".prediction-derived");
+    if(pred){
+      const label=b.scoreA>b.scoreB?found.match.teamA:(b.scoreB>b.scoreA?found.match.teamB:"Nul");
+      pred.innerHTML=`Résultat pronostiqué : <b>${label}</b>`;
+    }
+  }
+
+  window.bpV50SyncUserBetsView=function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole === "admin") return;
+    const p=currentUser();
+    if(!p) return;
+    const day=currentDayVisible();
+    document.querySelectorAll("#betRows .bet-card").forEach(card=>{
+      const found=findBetForCard(card,p,day);
+      if(found && found.bet) applyBetToCard(card,found);
+    });
+  };
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV50Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(window.bpV50SyncUserBetsView,120);
+      setTimeout(window.bpV50SyncUserBetsView,500);
+      return r;
+    };
+    window.renderAll.__bpV50Wrapped=true;
+  }
+
+  const oldTab=window.tab;
+  if(typeof oldTab==="function" && !oldTab.__bpV50Wrapped){
+    window.tab=function(id,btn){
+      const r=oldTab.apply(this,arguments);
+      if(id==="bets") setTimeout(window.bpV50SyncUserBetsView,150);
+      return r;
+    };
+    window.tab.__bpV50Wrapped=true;
+  }
+
+  window.bpV50AuditUserBets=function(code){
+    const p=(state.players||[]).find(x=>String(x.code||"")===String(code||"4533"));
+    if(!p){ alert("Utilisateur introuvable pour code "+(code||"4533")); return; }
+    const bets=(state.bets||[]).filter(b=>samePlayerName(b,p));
+    alert(`${p.name} / ${p.pseudo||""}\nCode: ${p.code}\nPronostics trouvés: ${bets.length}\n\n`+
+      bets.slice(0,10).map(b=>`J${b.day} ${b.matchId} ${b.scoreA ?? b.score ?? ""}-${b.scoreB ?? ""} mise ${b.stake} ${b.status}`).join("\n"));
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(window.bpV50SyncUserBetsView,800);
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV50AuditPanel")){
+      backup.insertAdjacentHTML("afterbegin",`
+        <div id="bpV50AuditPanel" class="card" style="border-color:rgba(250,204,21,.45)">
+          <h2>🔎 Audit pronostics utilisateur</h2>
+          <div class="muted">Vérifie que les pronostics stockés dans state.bets sont bien liés au joueur.</div>
+          <button class="action secondary" onclick="bpV50AuditUserBets('4533')">Auditer Hassan / 4533</button>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
 </body></html>
