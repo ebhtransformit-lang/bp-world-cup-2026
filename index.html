@@ -1980,7 +1980,7 @@ SANITY V18
 </head>
 <body>
 
-<div id="loginScreen" class="login-screen" style="display: none;">
+<div id="loginScreen" class="login-screen" style="display: flex;">
   <div class="login-card">
     <h2>🏆 B Partner FIFA World Cup 2026</h2>
     <p class="muted">Saisis ton code personnel à 4 chiffres pour accéder à ton espace.</p>
@@ -4537,9 +4537,14 @@ const starterMatches=[
 const defaultPlayers=[]; // V24: joueurs démo supprimés
 let state;
 try {
-  state = JSON.parse(localStorage.getItem("bp_wc_dev") || "null") || initState();
+  const rawState = localStorage.getItem("bp_wc_dev");
+  state = rawState ? JSON.parse(rawState) : initState();
 } catch(e) {
-  localStorage.removeItem("bp_wc_dev");
+  const corrupted = localStorage.getItem("bp_wc_dev");
+  if(corrupted){
+    localStorage.setItem("bp_wc_dev_CORRUPTED_BACKUP_" + new Date().toISOString(), corrupted);
+  }
+  alert("Sauvegarde locale corrompue : une copie de secours a été créée. Redémarrage en mode démo.");
   state = initState();
 }
 
@@ -4571,12 +4576,14 @@ function ensurePlayerCodes(){
       changed=true;
     }
     seen.add(String(p.code));
-    if(!p.pseudo){p.pseudo=p.name;changed=true;}
-    if(p.startFid===undefined){p.startFid=Number(p.balance||50);changed=true;}
-    if(p.balance===undefined){p.balance=Number(p.startFid||50);changed=true;}
-    if(p.evolution===undefined){p.evolution=0;changed=true;}
-    if(p.good===undefined){p.good=0;changed=true;}
-    if(p.exact===undefined){p.exact=0;changed=true;}
+    if(!p.pseudo){ p.pseudo=p.name; changed=true; }
+    if(p.startFid===undefined || p.startFid===null){ p.startFid=Number(p.balance||50); changed=true; }
+    if(p.balance===undefined || p.balance===null){ p.balance=Number(p.startFid||50); changed=true; }
+    if(p.evolution===undefined || p.evolution===null){ p.evolution=0; changed=true; }
+    if(p.good===undefined || p.good===null){ p.good=0; changed=true; }
+    if(p.exact===undefined || p.exact===null){ p.exact=0; changed=true; }
+    if(p.avatar===undefined){ p.avatar=null; changed=true; }
+    if(p.secrets===undefined){ p.secrets=null; changed=true; }
   });
   if(changed) save();
 }
@@ -4636,15 +4643,30 @@ function initState(){
   };
 }
 function migrateCalendar(){
-  if(!confirm("Réparer uniquement le calendrier ? Les utilisateurs seront conservés.")) return;
-  try{localStorage.setItem("bp_wc_dev_backup_before_calendar_repair",JSON.stringify(state));}catch(e){}
-  const oldById=new Map((state.matches||[]).map(m=>[m.id,m]));
-  state.matches=starterMatches.map(base=>{
-    const old=oldById.get(base.id)||{};
-    return {...base,scoreA:old.scoreA!==undefined?old.scoreA:base.scoreA,scoreB:old.scoreB!==undefined?old.scoreB:base.scoreB,status:old.status||base.status};
+  const ok = confirm("Réparer uniquement le calendrier ?\n\nLes utilisateurs, pronostics, questions secrètes, événements et soldes seront conservés.");
+  if(!ok) return;
+  try{ localStorage.setItem("bp_wc_dev_backup_before_calendar_repair", JSON.stringify(state)); }catch(e){}
+  const existingMatches = Array.isArray(state.matches) ? state.matches : [];
+  const byId = new Map(existingMatches.map(m=>[m.id,m]));
+  state.matches = starterMatches.map(base=>{
+    const old = byId.get(base.id) || {};
+    return {
+      ...base,
+      scoreA: old.scoreA !== undefined ? old.scoreA : base.scoreA,
+      scoreB: old.scoreB !== undefined ? old.scoreB : base.scoreB,
+      status: old.status || base.status
+    };
   });
-  state.scheduleVersion="official-fifa-2026-v1";
-  save();renderAll();alert("Calendrier réparé sans modifier les utilisateurs.");
+  if(!state.closedDays) state.closedDays={};
+  starterMatches.forEach(m=>{
+    if(state.closedDays[m.day] === undefined){
+      state.closedDays[m.day] = Number(m.day)!==Number(state.currentDay||1);
+    }
+  });
+  state.scheduleVersion = "official-fifa-2026-v1";
+  save();
+  renderAll();
+  alert("Calendrier réparé sans modifier les utilisateurs.");
 }
 function save(){localStorage.setItem("bp_wc_dev",JSON.stringify(state));}
 function f(team){let c=flagCodes[team];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${team}`:`<span class="muted">${team}</span>`;}
@@ -7364,38 +7386,76 @@ function runSanityCheck(){
 
 
 <script>
-/* V24 CLEAN USERS MODULE — remplace totalement l'ancien module utilisateurs */
+/* V25 — Forcer l'écran de connexion au chargement */
 (function(){
-  const DEMO_NAMES = new Set(["Sarah","Karim","Nadia","Hassan","Mehdi","Youssef","Amina","Rachid","Leila","Sofia","Omar","Samir","Meryem","Anas","Imane"]);
+  function forceLoginOnLoad(){
+    try{
+      window.currentRole = null;
+      window.currentUserIndex = null;
+    }catch(e){}
 
+    const login = document.getElementById("loginScreen");
+    if(login) login.style.display = "flex";
+
+    const code = document.getElementById("loginCode");
+    if(code) code.value = "";
+
+    document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+
+    const adminPanel = document.getElementById("adminPanel");
+    if(adminPanel) adminPanel.style.display = "none";
+
+    const adminLock = document.getElementById("adminLock");
+    if(adminLock) adminLock.style.display = "block";
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", forceLoginOnLoad);
+  }else{
+    forceLoginOnLoad();
+  }
+})();
+</script>
+
+
+<script>
+/* V26 USERS SAFE MODULE — conserve les utilisateurs déjà sauvegardés */
+(function(){
   function esc(v){
     return String(v ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
   }
-  function backupUsers(reason){
-    try{
-      localStorage.setItem("bp_wc_dev_backup_users_last", JSON.stringify(window.state || state));
-      localStorage.setItem("bp_wc_dev_backup_users_" + reason + "_" + new Date().toISOString(), JSON.stringify(window.state || state));
-    }catch(e){ console.warn("Backup users failed", e); }
-  }
-  function users(){
+  function list(){
     if(!Array.isArray(state.players)) state.players=[];
     return state.players;
   }
-  function saveState(){
-    if(typeof save === "function") save();
-    else localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+  function persist(){
+    try{
+      localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+    }catch(e){
+      console.error("Sauvegarde localStorage impossible", e);
+      alert("Erreur : impossible d’enregistrer dans le navigateur.");
+      return false;
+    }
+    return true;
   }
-  function generateCode(){
-    const used = new Set(users().map(p=>String(p.code||"")));
+  function backup(reason){
+    try{
+      localStorage.setItem("bp_wc_dev_backup_users_last", JSON.stringify(state));
+      localStorage.setItem("bp_wc_dev_backup_users_" + reason + "_" + new Date().toISOString(), JSON.stringify(state));
+    }catch(e){ console.warn("Backup utilisateurs impossible", e); }
+  }
+  function newCode(){
+    const used=new Set(list().map(p=>String(p.code||"")));
     let code;
     do{ code=String(Math.floor(1000+Math.random()*9000)); }
     while(code==="1573" || used.has(code));
     return code;
   }
-  function normalizeUser(p){
-    p.name = String(p.name||"").trim() || "Nouvel utilisateur";
-    p.pseudo = String(p.pseudo||p.name).trim() || p.name;
-    if(!/^\d{4}$/.test(String(p.code||"")) || p.code==="1573") p.code=generateCode();
+  function normalize(p){
+    p.name=String(p.name||"").trim() || "Nouvel utilisateur";
+    p.pseudo=String(p.pseudo||p.name).trim() || p.name;
+    if(!/^\d{4}$/.test(String(p.code||"")) || p.code==="1573") p.code=newCode();
     if(p.startFid===undefined || p.startFid===null) p.startFid=Number(p.balance||50);
     if(p.balance===undefined || p.balance===null) p.balance=Number(p.startFid||50);
     if(p.evolution===undefined || p.evolution===null) p.evolution=0;
@@ -7405,105 +7465,97 @@ function runSanityCheck(){
     if(p.secrets===undefined) p.secrets=null;
     return p;
   }
-  function purgeDemoUsersIfPolluted(){
-    const list=users();
-    const demoCount=list.filter(p=>DEMO_NAMES.has(String(p.name||""))).length;
-    // Si ancien stockage pollué par les 15 utilisateurs démo, on les retire.
-    if(demoCount >= 10){
-      backupUsers("before_demo_purge");
-      state.players=list.filter(p=>!DEMO_NAMES.has(String(p.name||"")));
-      saveState();
-      console.warn("V24: utilisateurs démo purgés automatiquement:", demoCount);
-    }
+  function uniqueName(base="Nouvel utilisateur"){
+    const existing=new Set(list().map(p=>String(p.name||"").toLowerCase()));
+    let i=list().length+1, name=`${base} ${i}`;
+    while(existing.has(name.toLowerCase())){ i++; name=`${base} ${i}`; }
+    return name;
   }
-  window.ensurePlayerCodes = function(){
-    users().forEach(normalizeUser);
+
+  window.ensurePlayerCodes=function(){
     const seen=new Set();
-    users().forEach(p=>{
+    list().forEach(p=>{
+      normalize(p);
       if(seen.has(String(p.code))){
-        p.code=generateCode();
+        p.code=newCode();
       }
       seen.add(String(p.code));
     });
-    saveState();
+    persist();
   };
-  function uniqueName(base){
-    const existing=new Set(users().map(p=>String(p.name||"").toLowerCase()));
-    let i=users().length+1, name=`${base} ${i}`;
-    while(existing.has(name.toLowerCase())){i++;name=`${base} ${i}`;}
-    return name;
-  }
-  window.addPlayer = async function(){
-    backupUsers("before_add");
+
+  window.addPlayer=async function(){
+    backup("before_add");
     const fid=Number(document.getElementById("defaultFid")?.value || 50);
-    const name=uniqueName("Nouvel utilisateur");
-    users().push(normalizeUser({
-      name, pseudo:name, code:generateCode(), avatar:null,
-      startFid:fid, balance:fid, evolution:0, good:0, exact:0, secrets:null
+    const name=uniqueName();
+    list().push(normalize({
+      name,
+      pseudo:name,
+      code:newCode(),
+      avatar:null,
+      startFid:fid,
+      balance:fid,
+      evolution:0,
+      good:0,
+      exact:0,
+      secrets:null
     }));
-    saveState();
+    persist();
     if(typeof renderAll==="function") renderAll();
-    if(typeof bpAlert==="function") await bpAlert(`Utilisateur ajouté : ${name}`,{icon:"✅"});
+    if(typeof bpAlert==="function") await bpAlert(`Utilisateur ajouté et enregistré : ${name}`,{icon:"✅"});
   };
-  window.adminUpdatePlayer = function(index, field, value){
-    const list=users();
-    if(!list[index]) return;
-    backupUsers("before_update");
-    const p=list[index];
+
+  window.adminUpdatePlayer=function(index,field,value){
+    if(!list()[index]) return;
+    backup("before_update");
+    const p=list()[index];
     if(field==="name"){
       const old=p.name;
       const val=String(value||"").trim() || old || "Nouvel utilisateur";
-      if(list.some((x,i)=>i!==index && String(x.name||"").toLowerCase()===val.toLowerCase())){
+      if(list().some((x,i)=>i!==index && String(x.name||"").toLowerCase()===val.toLowerCase())){
         alert("Ce nom existe déjà.");
-        renderAdmin();
+        renderAdminUsersSafe();
         return;
       }
       p.name=val;
       if(!p.pseudo || p.pseudo===old) p.pseudo=val;
-      (state.bets||[]).forEach(b=>{if(b.player===old)b.player=val;});
-      (state.logs||[]).forEach(l=>{if(l.player===old)l.player=val;});
-      (state.settlementDetails||[]).forEach(d=>{if(d.player===old)d.player=val;});
+      (state.bets||[]).forEach(b=>{ if(b.player===old) b.player=val; });
+      (state.logs||[]).forEach(l=>{ if(l.player===old) l.player=val; });
+      (state.settlementDetails||[]).forEach(d=>{ if(d.player===old) d.player=val; });
     }
     if(field==="pseudo") p.pseudo=String(value||p.name).trim() || p.name;
     if(field==="startFid") p.startFid=Number(value||0);
     if(field==="balance") p.balance=Number(value||0);
-    normalizeUser(p);
-    saveState();
-    renderAll();
+    normalize(p);
+    persist();
+    if(typeof renderAll==="function") renderAll();
   };
-  window.safeDeletePlayer = async function(index){
-    const list=users();
-    if(!list[index]) return;
-    const name=list[index].name;
-    if(!confirm(`Supprimer uniquement "${name}" ?\n\nAucun autre utilisateur ne sera modifié.`)) return;
-    backupUsers("before_delete");
-    list.splice(index,1);
-    saveState();
-    renderAll();
-    if(typeof bpAlert==="function") await bpAlert(`Utilisateur supprimé : ${name}`,{icon:"✅"});
+
+  window.safeDeletePlayer=async function(index){
+    if(!list()[index]) return;
+    const name=list()[index].name;
+    if(!confirm(`Supprimer uniquement "${name}" ?\n\nLes autres utilisateurs restent inchangés.`)) return;
+    backup("before_delete");
+    list().splice(index,1);
+    persist();
+    if(typeof renderAll==="function") renderAll();
+    if(typeof bpAlert==="function") await bpAlert(`Utilisateur supprimé et enregistré : ${name}`,{icon:"✅"});
   };
-  window.restoreBeforeUserChangeBackup = async function(){
+
+  window.restoreBeforeUserChangeBackup=async function(){
     const raw=localStorage.getItem("bp_wc_dev_backup_users_last");
     if(!raw){ if(typeof bpAlert==="function") await bpAlert("Aucune sauvegarde utilisateurs trouvée.",{icon:"ℹ️"}); return; }
     if(!confirm("Restaurer la dernière sauvegarde utilisateurs ?")) return;
     state=JSON.parse(raw);
-    saveState();
-    renderAll();
+    persist();
+    if(typeof renderAll==="function") renderAll();
     if(typeof bpAlert==="function") await bpAlert("Sauvegarde utilisateurs restaurée.",{icon:"✅"});
   };
-  window.purgeDemoUsers = async function(){
-    backupUsers("manual_demo_purge");
-    const before=users().length;
-    state.players=users().filter(p=>!DEMO_NAMES.has(String(p.name||"")));
-    const removed=before-state.players.length;
-    saveState();
-    renderAll();
-    if(typeof bpAlert==="function") await bpAlert(`${removed} utilisateur(s) démo supprimé(s).`,{icon:"🧹"});
-  };
-  window.renderAdminUsersClean = function(){
-    const container=document.getElementById("adminPlayers");
-    if(!container) return;
-    container.innerHTML=users().map((p,i)=>`
+
+  window.renderAdminUsersSafe=function(){
+    const box=document.getElementById("adminPlayers");
+    if(!box) return;
+    box.innerHTML=list().map((p,i)=>`
       <div class="admin-player-card" data-player-index="${i}">
         <label>Utilisateur
           <input value="${esc(p.name)}" onchange="adminUpdatePlayer(${i},'name',this.value)">
@@ -7513,7 +7565,7 @@ function runSanityCheck(){
         </label>
         <label>Code
           <span class="user-code">${esc(p.code)}</span>
-          <button class="action secondary admin-mini-btn" type="button" onclick="regeneratePlayerCode(${i});renderAll()">Nouveau code</button>
+          <button class="action secondary admin-mini-btn" type="button" onclick="regeneratePlayerCode(${i});persistUserStateAfterCodeChange()">Nouveau code</button>
         </label>
         <label>FID départ
           <input type="number" value="${Number(p.startFid||0)}" onchange="adminUpdatePlayer(${i},'startFid',this.value)">
@@ -7526,25 +7578,33 @@ function runSanityCheck(){
           <button class="action danger" type="button" onclick="safeDeletePlayer(${i})">Suppr.</button>
         </div>
       </div>
-    `).join("") || `<div class="help">Aucun utilisateur. Clique sur <b>Ajouter utilisateur</b> pour créer le premier participant.</div>`;
+    `).join("") || `<div class="help">Aucun utilisateur enregistré. Clique sur <b>Ajouter utilisateur</b>.</div>`;
   };
 
-  const oldRenderAdmin = window.renderAdmin;
-  window.renderAdmin = function(){
-    if(typeof oldRenderAdmin==="function") oldRenderAdmin.apply(this, arguments);
-    renderAdminUsersClean();
+  window.persistUserStateAfterCodeChange=function(){
+    persist();
+    if(typeof renderAll==="function") renderAll();
+  };
+
+  const oldRenderAdmin=window.renderAdmin;
+  window.renderAdmin=function(){
+    if(typeof oldRenderAdmin==="function") oldRenderAdmin.apply(this,arguments);
+    renderAdminUsersSafe();
+
     const addBtn=[...document.querySelectorAll("button")].find(b=>b.getAttribute("onclick")==="addPlayer()");
-    if(addBtn) addBtn.textContent="Ajouter utilisateur";
-    const parent=addBtn?.parentElement;
-    if(parent && !document.getElementById("restoreUsersBtn")){
-      addBtn.insertAdjacentHTML("afterend", ` <button id="restoreUsersBtn" class="action secondary" onclick="restoreBeforeUserChangeBackup()">Restaurer utilisateurs</button> <button id="purgeDemoUsersBtn" class="action danger" onclick="purgeDemoUsers()">Purger joueurs démo</button>`);
+    if(addBtn){
+      addBtn.textContent="Ajouter utilisateur";
+      if(!document.getElementById("restoreUsersBtn")){
+        addBtn.insertAdjacentHTML("afterend", ` <button id="restoreUsersBtn" class="action secondary" onclick="restoreBeforeUserChangeBackup()">Restaurer utilisateurs</button>`);
+      }
     }
   };
 
-  purgeDemoUsersIfPolluted();
-  ensurePlayerCodes();
-  saveState();
-  setTimeout(()=>{ if(typeof renderAll==="function") renderAll(); },0);
+  // Clean static old HTML after load, without changing saved users.
+  document.addEventListener("DOMContentLoaded", ()=>{
+    ensurePlayerCodes();
+    renderAdminUsersSafe();
+  });
 })();
 </script>
 
