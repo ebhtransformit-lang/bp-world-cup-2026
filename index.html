@@ -9205,4 +9205,181 @@ function bpModalClose(){
 })();
 </script>
 
+
+<script>
+/* V45 — Session stricte : aucun retour forcé sur le premier joueur */
+(function(){
+  function setActivePlayerIndex(idx){
+    window.currentUserIndex = idx === null || idx === undefined ? null : Number(idx);
+    const sel=document.getElementById("activePlayer");
+    if(sel){
+      if(idx === null || idx === undefined){
+        sel.value = "";
+        sel.selectedIndex = -1;
+      }else{
+        sel.value = String(idx);
+      }
+    }
+  }
+
+  function lockSession(){
+    window.bpIsAuthenticated = false;
+    window.currentRole = null;
+    setActivePlayerIndex(null);
+    document.body.classList.add("bp-locked");
+
+    const login=document.getElementById("loginScreen");
+    if(login) login.style.display="flex";
+
+    const code=document.getElementById("loginCode");
+    if(code) code.value="";
+
+    document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+  }
+
+  function unlockSession(){
+    window.bpIsAuthenticated = true;
+    document.body.classList.remove("bp-locked");
+    const login=document.getElementById("loginScreen");
+    if(login) login.style.display="none";
+  }
+
+  function error(msg){
+    const e=document.getElementById("loginError");
+    if(e){ e.textContent=msg||"Code incorrect."; e.style.display="block"; }
+    else alert(msg||"Code incorrect.");
+  }
+
+  function findUserByCode(code){
+    return (state.players||[]).findIndex(p=>String(p.code||"")===String(code));
+  }
+
+  window.logout = function(){
+    lockSession();
+    try{ sessionStorage.removeItem("bp_current_user_index"); }catch(e){}
+    return false;
+  };
+
+  window.loginWithCode = function(){
+    const input=document.getElementById("loginCode");
+    const code=String(input?.value||"").trim();
+
+    if(!/^\d{4}$/.test(code)){
+      lockSession();
+      error("Saisis ton code personnel à 4 chiffres.");
+      return false;
+    }
+
+    if(code==="1573"){
+      window.currentRole="admin";
+      setActivePlayerIndex(null);
+      unlockSession();
+      try{ sessionStorage.setItem("bp_current_user_index","admin"); }catch(e){}
+      if(typeof renderAll==="function") renderAll();
+      if(typeof tab==="function") tab("admin",document.getElementById("navAdmin"));
+      return true;
+    }
+
+    const idx=findUserByCode(code);
+    if(idx < 0){
+      lockSession();
+      error("Code incorrect.");
+      return false;
+    }
+
+    window.currentRole="user";
+    setActivePlayerIndex(idx);
+    unlockSession();
+    try{ sessionStorage.setItem("bp_current_user_index",String(idx)); }catch(e){}
+
+    if(typeof renderAll==="function") renderAll();
+    if(typeof tab==="function") tab("bets",document.getElementById("navBets"));
+
+    setTimeout(()=>{
+      if(typeof bpV40ShowLoginMessage==="function") bpV40ShowLoginMessage();
+      else if(typeof bpShowLoginOnboarding==="function") bpShowLoginOnboarding(true);
+    },600);
+
+    return true;
+  };
+
+  // Corrige activePlayer : il ne peut jamais choisir un joueur si non authentifié.
+  document.addEventListener("change",function(e){
+    if(e.target && e.target.id==="activePlayer"){
+      if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+        // Un user normal ne peut pas changer de profil via le select.
+        e.preventDefault();
+        e.stopPropagation();
+        if(window.currentRole==="user" && window.currentUserIndex!==null){
+          e.target.value=String(window.currentUserIndex);
+        }else{
+          e.target.value="";
+          e.target.selectedIndex=-1;
+          lockSession();
+        }
+        return false;
+      }
+    }
+  },true);
+
+  // Patch renderAll : après rendu, on remet le select sur le bon utilisateur connecté.
+  function keepUserSelection(){
+    const sel=document.getElementById("activePlayer");
+    if(!sel) return;
+
+    if(window.bpIsAuthenticated !== true){
+      sel.value="";
+      sel.selectedIndex=-1;
+      return;
+    }
+
+    if(window.currentRole==="user" && window.currentUserIndex!==null){
+      sel.value=String(window.currentUserIndex);
+    }
+  }
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV45Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(keepUserSelection,50);
+      return r;
+    };
+    window.renderAll.__bpV45Wrapped=true;
+  }
+
+  // Patch tab : un user reste sur son propre profil.
+  const oldTab=window.tab;
+  if(typeof oldTab==="function" && !oldTab.__bpV45Wrapped){
+    window.tab=function(id,btn){
+      if(window.bpIsAuthenticated!==true){
+        lockSession();
+        return false;
+      }
+      const r=oldTab.apply(this,arguments);
+      keepUserSelection();
+      return r;
+    };
+    window.tab.__bpV45Wrapped=true;
+  }
+
+  // Au chargement, toujours login. Pas de restauration automatique du dernier joueur.
+  document.addEventListener("DOMContentLoaded",()=>{
+    lockSession();
+    setTimeout(keepUserSelection,300);
+  });
+
+  // Protection tardive contre les anciens scripts qui remettent selectedIndex=0.
+  setInterval(()=>{
+    if(window.bpIsAuthenticated!==true){
+      const sel=document.getElementById("activePlayer");
+      if(sel){ sel.value=""; sel.selectedIndex=-1; }
+    }else if(window.currentRole==="user"){
+      keepUserSelection();
+    }
+  },500);
+})();
+</script>
+
 </body></html>
