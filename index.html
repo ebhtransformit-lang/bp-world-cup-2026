@@ -1968,6 +1968,31 @@ header button.action.secondary{
 /* V32 — GitHub persistence panel */
 #githubPersistPanel h2{margin-bottom:8px}
 
+
+/* V35 — Onboarding première connexion */
+.bp-onboarding-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:16px;
+}
+.bp-onboarding-actions .action{
+  min-height:46px;
+}
+.bp-onboarding-list{
+  margin:12px 0 0;
+  padding-left:18px;
+  color:#e6e6e6;
+  line-height:1.6;
+}
+.bp-onboarding-highlight{
+  padding:12px;
+  border-radius:12px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+  margin-top:12px;
+}
+
 </style>
 
 <!--
@@ -8073,6 +8098,206 @@ function openBackupFilePicker(kind){
   setTimeout(installAutoSave, 1000);
   setTimeout(installAutoSave, 3000);
 })();
+</script>
+
+
+<script>
+/* V35 — Messages de connexion et onboarding joueur */
+(function(){
+  function playerFirstName(p){
+    const base = String(p?.pseudo || p?.name || "champion").trim();
+    return base.split(/\s+/)[0] || base || "champion";
+  }
+
+  function playerDisplayName(p){
+    return String(p?.pseudo || p?.name || "champion").trim();
+  }
+
+  function getActivePlayerAfterLogin(){
+    try{
+      if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null && state.players[currentUserIndex]){
+        return {player:state.players[currentUserIndex], index:currentUserIndex};
+      }
+      const sel=document.getElementById("activePlayer");
+      const idx=sel ? Number(sel.value||0) : 0;
+      return {player:state.players[idx], index:idx};
+    }catch(e){
+      return {player:null,index:null};
+    }
+  }
+
+  function currentOpenDay(){
+    if(typeof currentPronoDay === "function") return Number(currentPronoDay());
+    return Number(state.currentDay || 1);
+  }
+
+  function dayIsOpen(day){
+    if(typeof isDayClosed === "function") return !isDayClosed(day);
+    return !(state.closedDays && state.closedDays[day]);
+  }
+
+  function validatedBetsForPlayerDay(playerName, day){
+    return (state.bets||[]).filter(b =>
+      b.player === playerName &&
+      Number(b.day) === Number(day) &&
+      String(b.status || "").toUpperCase() === "VALIDATED"
+    );
+  }
+
+  function matchesForDay(day){
+    return (state.matches||[]).filter(m => Number(m.day) === Number(day));
+  }
+
+  function hasUnvalidatedBet(player, day){
+    const matches = matchesForDay(day);
+    if(!matches.length) return false;
+    const done = new Set(validatedBetsForPlayerDay(player.name, day).map(b=>b.matchId));
+    return matches.some(m => !done.has(m.id));
+  }
+
+  function secretsComplete(player){
+    const s = player?.secrets || {};
+    return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed);
+  }
+
+  function needsProfileSetup(player){
+    if(!player) return false;
+    const pseudoMissing = !player.pseudo || player.pseudo === player.name || /^nouveau/i.test(String(player.pseudo));
+    const avatarMissing = !player.avatar;
+    return pseudoMissing || avatarMissing;
+  }
+
+  function markPlayerSeen(player){
+    if(!player) return;
+    player.firstLoginDone = true;
+    player.lastLoginAt = new Date().toISOString();
+    try{
+      if(typeof save === "function") save();
+      else localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+    }catch(e){}
+    try{
+      if(typeof bpCloudSaveDebounced === "function") bpCloudSaveDebounced();
+    }catch(e){}
+  }
+
+  function showBPMessage(title, htmlBody, icon="👋"){
+    if(typeof bpAlert === "function"){
+      return bpAlert(`<div class="bp-onboarding-highlight">${htmlBody}</div>`, {
+        title,
+        icon,
+        okText:"OK"
+      });
+    }
+    alert(title + "\n\n" + String(htmlBody).replace(/<[^>]+>/g,""));
+  }
+
+  function goTab(tabId){
+    const btn = document.querySelector(`nav button[onclick*="'${tabId}'"], nav button[onclick*="&#39;${tabId}&#39;"]`);
+    if(typeof tab === "function") tab(tabId, btn || undefined);
+  }
+
+  window.showFirstLoginOnboarding = function(player){
+    const first = playerFirstName(player);
+    const body = `
+      <p><b>Bienvenue ${first} !</b></p>
+      <p>Avant de commencer la compétition, prends 1 minute pour personnaliser ton espace.</p>
+      <ul class="bp-onboarding-list">
+        <li>Choisis un <b>pseudo</b>.</li>
+        <li>Ajoute un <b>avatar ou une image</b>.</li>
+        <li>Réponds aux <b>questions secrètes</b> dans l’onglet <b>Mes scores</b>.</li>
+      </ul>
+      <div class="bp-onboarding-actions">
+        <button class="action" onclick="bpModalClose();tab('bets',document.getElementById('navBets'))">Compléter mon profil</button>
+        <button class="action secondary" onclick="bpModalClose();tab('scores',document.getElementById('navScores'))">Répondre aux questions secrètes</button>
+      </div>
+    `;
+    showBPMessage("Bienvenue dans B Partner World Cup", body, "🏆");
+    markPlayerSeen(player);
+  };
+
+  window.showReturningLoginMessage = function(player){
+    const pseudo = playerDisplayName(player);
+    const day = currentOpenDay();
+    const open = dayIsOpen(day);
+    const missingBets = open && hasUnvalidatedBet(player, day);
+
+    let body = `<p><b>Bonjour ${pseudo}.</b></p>`;
+
+    if(open){
+      body += `<p>La <b>journée ${day}</b> est ouverte.</p>`;
+    }else{
+      body += `<p>La <b>journée ${day}</b> est actuellement fermée.</p>`;
+    }
+
+    if(missingBets){
+      body += `
+        <p>Il te reste au moins un match sans mise validée.</p>
+        <p>Va dans l’onglet <b>Mes Pronos</b> pour saisir tes pronostics et tes mises.</p>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpModalClose();tab('bets',document.getElementById('navBets'))">Aller à Mes Pronos</button>
+        </div>
+      `;
+    }else{
+      body += `
+        <p>Toutes tes mises disponibles sont validées.</p>
+        <p>Tu peux consulter ton bilan dans <b>Mes scores</b>.</p>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpModalClose();tab('scores',document.getElementById('navScores'))">Voir Mes scores</button>
+        </div>
+      `;
+    }
+
+    if(!secretsComplete(player)){
+      body += `<p class="muted">Rappel : pense aussi à répondre aux questions secrètes dans <b>Mes scores</b>.</p>`;
+    }
+
+    showBPMessage("Connexion réussie", body, "👋");
+    markPlayerSeen(player);
+  };
+
+  function showLoginMessageIfPlayer(){
+    const {player} = getActivePlayerAfterLogin();
+    if(!player) return;
+
+    const isFirst = !player.firstLoginDone;
+    const shouldTreatFirst = isFirst || needsProfileSetup(player) && !secretsComplete(player);
+
+    setTimeout(()=>{
+      if(shouldTreatFirst) showFirstLoginOnboarding(player);
+      else showReturningLoginMessage(player);
+    }, 350);
+  }
+
+  function patchLoginWithCode(){
+    if(typeof window.loginWithCode !== "function" || window.loginWithCode.__bpOnboardingWrapped) return;
+    const oldLogin = window.loginWithCode;
+    window.loginWithCode = function(){
+      const before = document.getElementById("loginScreen")?.style.display;
+      const result = oldLogin.apply(this, arguments);
+      setTimeout(()=>{
+        const after = document.getElementById("loginScreen")?.style.display;
+        const loginHidden = after === "none" || document.getElementById("loginScreen")?.offsetParent === null;
+        if(loginHidden) showLoginMessageIfPlayer();
+      }, 250);
+      return result;
+    };
+    window.loginWithCode.__bpOnboardingWrapped = true;
+  }
+
+  document.addEventListener("DOMContentLoaded", ()=>{
+    patchLoginWithCode();
+  });
+  setTimeout(patchLoginWithCode, 500);
+  setTimeout(patchLoginWithCode, 1500);
+})();
+</script>
+
+
+<script>
+function bpModalClose(){
+  const b=document.getElementById("bpModalBackdrop");
+  if(b) b.style.display="none";
+}
 </script>
 
 </body></html>
