@@ -9310,4 +9310,578 @@ function bpModalClose(){
 })();
 </script>
 
+
+<script>
+/* V51 — Notifications login propres : pas au logout, pseudo complet */
+(function(){
+  window.bpLoginJustSucceeded = false;
+  window.bpSuppressLoginNotifications = false;
+
+  function closeLoginModals(){
+    ["bpV40Modal","bpOnboardingBackdrop","bpV40Modal","bpModalBackdrop"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el){
+        if(id==="bpModalBackdrop") el.style.display="none";
+        else el.remove();
+      }
+    });
+  }
+
+  function isAuthedUser(){
+    return window.bpIsAuthenticated === true && window.currentRole === "user";
+  }
+
+  function getLoggedPlayer(){
+    if(!isAuthedUser()) return null;
+    if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null && state.players && state.players[currentUserIndex]){
+      return state.players[currentUserIndex];
+    }
+    return null;
+  }
+
+  function fullDisplayName(p){
+    return String(p?.pseudo || p?.name || "champion").trim();
+  }
+
+  function secretsDone(p){
+    const s=p?.secrets||{};
+    return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed);
+  }
+
+  function currentDay(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
+  }
+
+  function missingBetsCount(p){
+    const d=currentDay();
+    const matches=(state.matches||[]).filter(m=>Number(m.day)===Number(d));
+    const done=new Set((state.bets||[])
+      .filter(b=>b.player===p.name && Number(b.day)===Number(d) && String(b.status||"").toUpperCase()==="VALIDATED")
+      .map(b=>b.matchId));
+    return matches.filter(m=>!done.has(m.id)).length;
+  }
+
+  function showCleanLoginMessage(){
+    if(!window.bpLoginJustSucceeded || window.bpSuppressLoginNotifications || !isAuthedUser()) return false;
+
+    closeLoginModals();
+
+    const p=getLoggedPlayer();
+    if(!p) return false;
+
+    const name=fullDisplayName(p);
+    const first=!p.firstLoginDone;
+    const missing=missingBetsCount(p);
+    const d=currentDay();
+
+    const modal=document.createElement("div");
+    modal.id="bpV51LoginModal";
+    modal.className="bp-modal-backdrop";
+    modal.style.display="flex";
+
+    let body="";
+    if(first){
+      body=`
+        <p><b>Bienvenue ${name} !</b></p>
+        <p>Avant de commencer, personnalise ton espace :</p>
+        <ul>
+          <li>Choisis un <b>pseudo</b>.</li>
+          <li>Ajoute un <b>avatar ou une image</b>.</li>
+          <li>Réponds aux <b>questions secrètes</b> dans l’onglet <b>Mes scores</b>.</li>
+        </ul>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpV51Go('bets')">Compléter mon profil</button>
+          <button class="action secondary" onclick="bpV51Go('scores')">Questions secrètes</button>
+        </div>
+      `;
+    }else if(missing>0){
+      body=`
+        <p><b>Bonjour ${name}.</b></p>
+        <p>La <b>journée ${d}</b> est ouverte.</p>
+        <p>Il te reste <b>${missing}</b> match(s) sans mise validée.</p>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpV51Go('bets')">Aller à Mes Pronos</button>
+        </div>
+      `;
+    }else{
+      body=`
+        <p><b>Bonjour ${name}.</b></p>
+        <p>Toutes tes mises disponibles sont validées.</p>
+        <p>Tu peux consulter ton score dans <b>Mes scores</b>.</p>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpV51Go('scores')">Voir Mes scores</button>
+        </div>
+      `;
+    }
+
+    if(!secretsDone(p)){
+      body+=`<div class="help">Rappel : pense à compléter tes questions secrètes dans <b>Mes scores</b>.</div>`;
+    }
+
+    modal.innerHTML=`
+      <div class="bp-modal" role="dialog" aria-modal="true">
+        <div class="bp-modal-head">
+          <div class="bp-modal-icon">${first?"🏆":"👋"}</div>
+          <div>
+            <div class="bp-modal-title">${first?"Bienvenue dans la compétition":"Connexion réussie"}</div>
+            <div class="muted">B Partner World Cup</div>
+          </div>
+        </div>
+        <div class="bp-modal-body">${body}</div>
+        <div class="bp-modal-actions"><button class="bp-modal-ok" onclick="bpV51Close()">OK</button></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    p.firstLoginDone=true;
+    p.lastLoginAt=new Date().toISOString();
+    try{
+      if(typeof save==="function") save();
+      if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
+    }catch(e){}
+
+    window.bpLoginJustSucceeded=false;
+    return true;
+  }
+
+  window.bpV51Close=function(){
+    const el=document.getElementById("bpV51LoginModal");
+    if(el) el.remove();
+  };
+
+  window.bpV51Go=function(tabId){
+    bpV51Close();
+    const btn=document.getElementById(tabId==="bets"?"navBets":tabId==="scores"?"navScores":"");
+    if(typeof tab==="function") tab(tabId,btn||undefined);
+  };
+
+  // Neutralise les anciens modules de notification : seul V51 décide.
+  [
+    "bpV40ShowLoginMessage",
+    "bpShowLoginOnboarding",
+    "bpV36ShowLoginOnboarding",
+    "showFirstLoginOnboarding",
+    "showReturningLoginMessage",
+    "bpSmartLoginMessage"
+  ].forEach(name=>{
+    window[name]=function(){ return false; };
+  });
+
+  const oldLogin=window.loginWithCode;
+  if(typeof oldLogin==="function" && !oldLogin.__bpV51Wrapped){
+    window.loginWithCode=function(){
+      window.bpSuppressLoginNotifications=false;
+      const code=String(document.getElementById("loginCode")?.value||"").trim();
+      const result=oldLogin.apply(this,arguments);
+      if(result && code!=="1573"){
+        window.bpLoginJustSucceeded=true;
+        setTimeout(showCleanLoginMessage,700);
+      }else{
+        window.bpLoginJustSucceeded=false;
+      }
+      return result;
+    };
+    window.loginWithCode.__bpV51Wrapped=true;
+  }
+
+  const oldLogout=window.logout;
+  if(typeof oldLogout==="function" && !oldLogout.__bpV51Wrapped){
+    window.logout=function(){
+      window.bpSuppressLoginNotifications=true;
+      window.bpLoginJustSucceeded=false;
+      closeLoginModals();
+      bpV51Close();
+      const r=oldLogout.apply(this,arguments);
+      setTimeout(closeLoginModals,100);
+      setTimeout(closeLoginModals,500);
+      return r;
+    };
+    window.logout.__bpV51Wrapped=true;
+  }
+
+  // Si le login screen est visible, aucune popup ne doit rester.
+  setInterval(()=>{
+    const login=document.getElementById("loginScreen");
+    const visible=login && getComputedStyle(login).display!=="none" && login.offsetParent!==null;
+    if(visible || !isAuthedUser()){
+      if(!window.bpLoginJustSucceeded){
+        closeLoginModals();
+        bpV51Close();
+      }
+    }
+  },500);
+})();
+</script>
+
+
+<script>
+/* V52 — Normalisation pronostics : Admin/BDD vers vue joueur */
+(function(){
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+
+  function playerAliases(p){
+    return [p.name,p.pseudo,p.displayName,p.fullName]
+      .filter(Boolean)
+      .map(norm);
+  }
+
+  function resolvePlayerForBet(b){
+    const bp=norm(b.player || b.playerName || b.user || b.username);
+    if(!bp) return null;
+
+    return (state.players||[]).find(p=>{
+      const aliases=playerAliases(p);
+      if(aliases.includes(bp)) return true;
+      // matching souple pour anciens libellés type "Hassan" vs "Hassan El Bakkali"
+      return aliases.some(a => a && (a.includes(bp) || bp.includes(a)));
+    }) || null;
+  }
+
+  function resolveMatchForBet(b){
+    if(b.matchId){
+      const exact=(state.matches||[]).find(m=>String(m.id)===String(b.matchId));
+      if(exact) return exact;
+    }
+
+    const txt=norm(b.match || b.label || b.fixture || b.teams || b.matchName);
+    if(txt){
+      const m=(state.matches||[]).find(x => txt.includes(norm(x.teamA)) && txt.includes(norm(x.teamB)));
+      if(m) return m;
+    }
+
+    // Ancien format éventuel teamA/teamB dans le bet
+    if(b.teamA && b.teamB){
+      const a=norm(b.teamA), c=norm(b.teamB);
+      const m=(state.matches||[]).find(x => norm(x.teamA)===a && norm(x.teamB)===c);
+      if(m) return m;
+    }
+
+    return null;
+  }
+
+  function normalizeScoreFields(b){
+    if((b.scoreA===undefined || b.scoreB===undefined) && b.score){
+      const sp=String(b.score).split(/[-–]/);
+      if(sp.length>=2){ b.scoreA=Number(sp[0]); b.scoreB=Number(sp[1]); }
+    }
+    if((b.scoreA===undefined || b.scoreB===undefined) && b.predictedScore){
+      const sp=String(b.predictedScore).split(/[-–]/);
+      if(sp.length>=2){ b.scoreA=Number(sp[0]); b.scoreB=Number(sp[1]); }
+    }
+    b.scoreA=Number(b.scoreA??0);
+    b.scoreB=Number(b.scoreB??0);
+    b.score=`${b.scoreA} - ${b.scoreB}`;
+    b.stake=Number(b.stake ?? b.mise ?? 1);
+  }
+
+  function normalizeStatus(b){
+    const st=norm(b.status);
+    if(["validé","valide","validated","validée","validee"].includes(st)) b.status="VALIDATED";
+    else if(["draft","brouillon"].includes(st)) b.status="DRAFT";
+  }
+
+  window.bpV52NormalizeBets = function(){
+    if(!state || !Array.isArray(state.bets)) return;
+
+    let changed=false;
+    state.bets.forEach(b=>{
+      const before=JSON.stringify({p:b.player,m:b.matchId,s:b.status,a:b.scoreA,c:b.scoreB,st:b.stake});
+
+      const p=resolvePlayerForBet(b);
+      if(p) b.player=p.name;
+
+      const m=resolveMatchForBet(b);
+      if(m) {
+        b.matchId=m.id;
+        if(!b.day) b.day=m.day;
+      }
+
+      normalizeScoreFields(b);
+      normalizeStatus(b);
+
+      if(!b.prediction && typeof outcomeFromScore==="function"){
+        b.prediction=outcomeFromScore(b.scoreA,b.scoreB);
+      }
+      if(!b.predictedOutcome) b.predictedOutcome=b.prediction;
+
+      const after=JSON.stringify({p:b.player,m:b.matchId,s:b.status,a:b.scoreA,c:b.scoreB,st:b.stake});
+      if(before!==after) changed=true;
+    });
+
+    if(changed){
+      try{
+        localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+        if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
+      }catch(e){}
+    }
+  };
+
+  // Remplace player() par une version qui ne retombe pas sur Sandrine si un user est connecté.
+  window.player = function(){
+    if(window.currentRole==="user" && window.currentUserIndex!==null && state.players && state.players[window.currentUserIndex]){
+      return state.players[window.currentUserIndex];
+    }
+    const sel=document.getElementById("activePlayer");
+    const idx=sel ? Number(sel.value||0) : 0;
+    return (state.players||[])[idx] || (state.players||[])[0];
+  };
+
+  // Patch renderBets : normaliser avant rendu
+  const oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==="function" && !oldRenderBets.__bpV52Wrapped){
+    window.renderBets=function(){
+      window.bpV52NormalizeBets();
+      const r=oldRenderBets.apply(this,arguments);
+      setTimeout(window.bpV52ApplyCurrentBetCards,80);
+      return r;
+    };
+    window.renderBets.__bpV52Wrapped=true;
+  }
+
+  function setVal(el,v){
+    if(!el) return;
+    el.value=String(v);
+  }
+
+  window.bpV52ApplyCurrentBetCards=function(){
+    if(window.currentRole==="admin") return;
+    const p=window.player();
+    if(!p) return;
+    const day=typeof currentPronoDay==="function" ? Number(currentPronoDay()) : Number(state.currentDay||1);
+
+    document.querySelectorAll("#betRows .bet-card").forEach(card=>{
+      const id=String(card.id||"").replace("betCard_","");
+      if(!id) return;
+      const b=(state.bets||[]).find(x=>Number(x.day)===day && String(x.matchId)===id && norm(x.player)===norm(p.name));
+      if(!b) return;
+
+      setVal(card.querySelector(".scoreA"),b.scoreA);
+      setVal(card.querySelector(".scoreB"),b.scoreB);
+      setVal(card.querySelector(".stake"),b.stake);
+
+      const badge=card.querySelector(".bet-title .badge");
+      const status=card.querySelector(".bet-status");
+      const btn=[...card.querySelectorAll("button")].find(x=>/valider|modifier|validée/i.test(x.textContent||""));
+
+      if(b.status==="VALIDATED"){
+        if(badge){ badge.textContent="✅ Validée"; badge.className="badge ok"; }
+        if(status){ status.innerHTML=b.validatedAt ? "Validée le "+new Date(b.validatedAt).toLocaleString("fr-FR") : "Validée"; }
+        if(btn){ btn.textContent="✏️ Modifier la mise"; btn.classList.add("editBtn"); }
+      }
+
+      const pred=card.querySelector(".prediction-derived b");
+      const match=(state.matches||[]).find(m=>String(m.id)===id);
+      if(pred && match){
+        pred.textContent=b.scoreA>b.scoreB ? match.teamA : b.scoreB>b.scoreA ? match.teamB : "Nul";
+      }
+    });
+  };
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV52Wrapped){
+    window.renderAll=function(){
+      window.bpV52NormalizeBets();
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(window.bpV52ApplyCurrentBetCards,150);
+      setTimeout(window.bpV52ApplyCurrentBetCards,600);
+      return r;
+    };
+    window.renderAll.__bpV52Wrapped=true;
+  }
+
+  window.bpV52AuditHassan=function(){
+    window.bpV52NormalizeBets();
+    const p=(state.players||[]).find(x=>String(x.code||"")==="4533" || /hassan/i.test(String(x.name||"")));
+    if(!p){ alert("Hassan/code 4533 introuvable"); return; }
+    const bets=(state.bets||[]).filter(b=>norm(b.player)===norm(p.name));
+    alert(`Audit Hassan\nNom: ${p.name}\nPseudo: ${p.pseudo||""}\nCode: ${p.code}\nPronostics liés: ${bets.length}\n\n`+
+      bets.slice(0,12).map(b=>`J${b.day} ${b.matchId} ${b.scoreA}-${b.scoreB} mise ${b.stake} ${b.status}`).join("\n"));
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(()=>{ window.bpV52NormalizeBets(); window.bpV52ApplyCurrentBetCards(); },600);
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV52AuditPanel")){
+      backup.insertAdjacentHTML("afterbegin",`
+        <div id="bpV52AuditPanel" class="card" style="border-color:rgba(250,204,21,.45)">
+          <h2>🧭 Audit mapping pronostics</h2>
+          <div class="muted">Normalise les pronostics Admin/BDD vers la vue joueur.</div>
+          <button class="action secondary" onclick="bpV52AuditHassan()">Auditer mapping Hassan / 4533</button>
+          <button class="action" onclick="bpV52NormalizeBets(); renderAll(); alert('Pronostics normalisés.')">Normaliser maintenant</button>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
+
+<script>
+/* V53 — Fix Valider la mise */
+(function(){
+  function getCurrentPlayerSafe(){
+    if(window.currentRole==="user" && window.currentUserIndex!==null && state.players && state.players[window.currentUserIndex]){
+      return state.players[window.currentUserIndex];
+    }
+    if(typeof player==="function") return player();
+    const sel=document.getElementById("activePlayer");
+    return (state.players||[])[Number(sel?.value||0)] || null;
+  }
+
+  function getCurrentDaySafe(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
+  }
+
+  function dayAvailableSafe(day){
+    if(typeof pronoDayIsAvailable==="function") return pronoDayIsAvailable(day);
+    if(typeof isDayClosed==="function") return !isDayClosed(day);
+    return true;
+  }
+
+  function scoreTextSafe(a,b){
+    if(typeof scoreText==="function") return scoreText(a,b);
+    return `${a} - ${b}`;
+  }
+
+  function outcomeSafe(a,b){
+    if(typeof outcomeFromScore==="function") return outcomeFromScore(a,b);
+    return a>b ? "A" : b>a ? "B" : "N";
+  }
+
+  function getBetFormDataSafe(matchId){
+    const scoreA=Number(document.querySelector(`.scoreA[data-match="${matchId}"]`)?.value ?? 0);
+    const scoreB=Number(document.querySelector(`.scoreB[data-match="${matchId}"]`)?.value ?? 0);
+    const stake=Number(document.querySelector(`.stake[data-match="${matchId}"]`)?.value ?? 1);
+    const prediction=outcomeSafe(scoreA,scoreB);
+    return {prediction,predictedOutcome:prediction,scoreA,scoreB,score:scoreTextSafe(scoreA,scoreB),stake};
+  }
+
+  function upsertBetSafe(matchId,data,status){
+    const p=getCurrentPlayerSafe();
+    const day=getCurrentDaySafe();
+    if(!p) throw new Error("Joueur introuvable.");
+    state.bets=Array.isArray(state.bets)?state.bets:[];
+    state.bets=state.bets.filter(b=>!(Number(b.day)===Number(day) && String(b.matchId)===String(matchId) && String(b.player)===String(p.name)));
+    state.bets.push({
+      day,
+      matchId:String(matchId),
+      player:p.name,
+      ...data,
+      status,
+      validatedAt:status==="VALIDATED"?new Date().toISOString():null
+    });
+  }
+
+  function saveEverywhere(){
+    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){ console.warn(e); }
+    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){ console.warn(e); }
+  }
+
+  function updateCardNow(matchId){
+    const card=document.getElementById(`betCard_${matchId}`);
+    if(!card) return;
+    const badge=card.querySelector(".bet-title .badge");
+    if(badge){ badge.textContent="✅ Validée"; badge.className="badge ok"; }
+    const status=card.querySelector(".bet-status");
+    if(status) status.innerHTML="Validée le "+new Date().toLocaleString("fr-FR");
+    const btn=[...card.querySelectorAll("button")].find(b=>/valider/i.test(b.textContent||""));
+    if(btn){
+      btn.textContent="✏️ Modifier la mise";
+      btn.classList.add("editBtn");
+      btn.onclick=function(){ if(typeof editBet==="function") editBet(matchId); };
+    }
+  }
+
+  window.validateSingleBet = async function(matchId){
+    try{
+      const day=getCurrentDaySafe();
+      if(!dayAvailableSafe(day)){
+        if(typeof bpAlert==="function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
+        alert("Mise non disponible sur cette journée.");
+        return false;
+      }
+
+      const p=getCurrentPlayerSafe();
+      const m=(state.matches||[]).find(x=>String(x.id)===String(matchId));
+      if(!p || !m){
+        alert("Impossible de valider : joueur ou match introuvable.");
+        return false;
+      }
+
+      const data=getBetFormDataSafe(matchId);
+      const label=data.prediction==="A"?m.teamA:data.prediction==="B"?m.teamB:"Nul";
+
+      let ok=true;
+      if(typeof bpConfirmBet==="function"){
+        try{
+          ok=await bpConfirmBet({
+            match:`${m.teamA} vs ${m.teamB}`,
+            result:label,
+            score:data.score,
+            stake:data.stake
+          });
+        }catch(e){
+          console.warn("bpConfirmBet KO, fallback confirm",e);
+          ok=confirm(`Confirmer la mise ?\n\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nRésultat : ${label}\nMise : ${data.stake} FID`);
+        }
+      }else{
+        ok=confirm(`Confirmer la mise ?\n\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nRésultat : ${label}\nMise : ${data.stake} FID`);
+      }
+      if(!ok) return false;
+
+      upsertBetSafe(matchId,data,"VALIDATED");
+
+      try{ if(typeof log==="function") log(p.name,`Mise validée ${matchId}`,0); }catch(e){}
+
+      saveEverywhere();
+      updateCardNow(matchId);
+
+      setTimeout(()=>{
+        if(typeof renderAll==="function") renderAll();
+        if(typeof bpV52ApplyCurrentBetCards==="function") bpV52ApplyCurrentBetCards();
+        if(typeof bpV50SyncUserBetsView==="function") bpV50SyncUserBetsView();
+      },150);
+
+      if(typeof bpAlert==="function"){
+        setTimeout(()=>bpAlert("Mise validée et sauvegardée.",{icon:"✅"}),250);
+      }
+
+      return true;
+    }catch(e){
+      console.error(e);
+      alert("Erreur validation mise : "+(e.message||e));
+      return false;
+    }
+  };
+
+  // Réattache les boutons qui auraient gardé un ancien handler.
+  window.bpV53PatchValidateButtons=function(){
+    document.querySelectorAll("#betRows .bet-card").forEach(card=>{
+      const id=String(card.id||"").replace("betCard_","");
+      const btn=[...card.querySelectorAll("button")].find(b=>/valider la mise/i.test(b.textContent||""));
+      if(btn && id){
+        btn.onclick=function(){ return window.validateSingleBet(id); };
+      }
+    });
+  };
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV53Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(window.bpV53PatchValidateButtons,200);
+      return r;
+    };
+    window.renderAll.__bpV53Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(window.bpV53PatchValidateButtons,800);
+    setInterval(window.bpV53PatchValidateButtons,1500);
+  });
+})();
+</script>
+
 </body></html>
