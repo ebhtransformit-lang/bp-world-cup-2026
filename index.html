@@ -2048,6 +2048,58 @@ body.bp-locked #loginScreen{
   filter:none!important;
 }
 
+
+/* V46 — Correctifs sécurité/session/layout/chrono */
+body.bp-locked main,
+body.bp-locked nav,
+body.bp-locked header{
+  pointer-events:none!important;
+  filter:blur(2px);
+  user-select:none;
+}
+body.bp-locked #loginScreen{
+  pointer-events:auto!important;
+  filter:none!important;
+}
+body.bp-admin #navAdmin,
+body.bp-admin #navBackup{
+  display:inline-flex!important;
+}
+body.bp-admin .admin-only{
+  display:inline-flex!important;
+}
+body.bp-user #navAdmin,
+body.bp-user #navBackup,
+body.bp-user .admin-only{
+  display:none!important;
+}
+body.bp-admin #activePlayerCard{display:none!important;}
+#bets .profile-extra-grid,
+#bets #profilePlusCard,
+#bets .profile-plus-card{
+  display:none!important;
+}
+#bets .profile-card-horizontal{
+  align-items:center!important;
+}
+#bets .profile-info{
+  min-width:0!important;
+}
+#pronoCountdownPanel{
+  margin:0 0 18px;
+  padding:16px 18px;
+  border-radius:16px;
+  border:1px solid rgba(250,204,21,.35);
+  background:linear-gradient(90deg,rgba(122,16,32,.85),rgba(20,20,20,.96));
+}
+#pronoCountdownPanel .countdown-title{font-weight:900;font-size:17px;margin-bottom:8px}
+#pronoCountdownPanel .countdown-value{font-size:28px;font-weight:900;letter-spacing:.5px}
+#pronoCountdownPanel.closed{
+  border-color:rgba(251,113,133,.45);
+  background:linear-gradient(90deg,rgba(139,26,26,.85),rgba(20,20,20,.96));
+}
+#pronoCountdownPanel .countdown-sub{margin-top:6px;color:#e6e6e6;font-size:13px}
+
 </style>
 
 <!--
@@ -8358,538 +8410,286 @@ function bpModalClose(){
 </script>
 
 
-<script>
-/* V40 — Notifications intelligentes, profil enrichi, classement live, backup quotidien */
-(function(){
-  const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
-
-  function getPlayerIndex(){
-    try{
-      if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null) return Number(currentUserIndex);
-      const sel=document.getElementById("activePlayer");
-      return sel ? Number(sel.value||0) : 0;
-    }catch(e){ return 0; }
-  }
-  function getPlayer(){ return (state.players||[])[getPlayerIndex()] || null; }
-  function getDay(){ return typeof currentPronoDay==="function" ? Number(currentPronoDay()) : Number(state.currentDay||1); }
-  function getMatches(d){ return (state.matches||[]).filter(m=>Number(m.day)===Number(d)); }
-  function getValidated(p,d){
-    return (state.bets||[]).filter(b=>b.player===p.name && Number(b.day)===Number(d) && String(b.status||"").toUpperCase()==="VALIDATED");
-  }
-  function getMissingCount(p,d){
-    const ids=new Set(getValidated(p,d).map(b=>b.matchId));
-    return getMatches(d).filter(m=>!ids.has(m.id)).length;
-  }
-  function isDayOpen(d){
-    if(typeof isDayClosed==="function") return !isDayClosed(d);
-    return !(state.closedDays && state.closedDays[d]);
-  }
-  function eventList(d){
-    if(typeof activeEventsList==="function") return activeEventsList(d);
-    return [];
-  }
-  function secretsDone(p){
-    const s=p?.secrets||{};
-    return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed);
-  }
-  function saveState(){
-    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
-    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
-  }
-  function closeModal(){
-    const el=document.getElementById("bpV40Modal");
-    if(el) el.remove();
-  }
-  window.bpV40Close=closeModal;
-  window.bpV40Go=function(tabId){
-    closeModal();
-    const btn=document.getElementById(tabId==="bets"?"navBets":tabId==="scores"?"navScores":tabId==="ranking"?"navRanking":"");
-    if(typeof tab==="function") tab(tabId,btn||undefined);
-  };
-  function modal(title,body,icon){
-    closeModal();
-    const el=document.createElement("div");
-    el.id="bpV40Modal";
-    el.className="bp-modal-backdrop";
-    el.style.display="flex";
-    el.innerHTML=`<div class="bp-modal" role="dialog" aria-modal="true">
-      <div class="bp-modal-head"><div class="bp-modal-icon">${icon||"👋"}</div><div><div class="bp-modal-title">${title}</div><div class="muted">B Partner World Cup</div></div></div>
-      <div class="bp-modal-body">${body}</div>
-      <div class="bp-modal-actions"><button class="bp-modal-ok" onclick="bpV40Close()">OK</button></div>
-    </div>`;
-    document.body.appendChild(el);
-  }
-
-  // 1) Notifications intelligentes, avec pseudo complet
-  window.bpV40ShowLoginMessage=function(){
-    const p=getPlayer(); if(!p) return;
-    const d=getDay(), miss=getMissingCount(p,d), open=isDayOpen(d), ev=eventList(d);
-    const pseudo=String(p.pseudo||p.name||"champion").trim();
-    const first=!p.firstLoginDone;
-    let body=`<div class="smart-login-card">`;
-    if(first){
-      body+=`<p><b>Bienvenue ${pseudo} !</b></p>
-      <p>Avant de commencer, personnalise ton espace et réponds aux questions secrètes.</p>`;
-    }else{
-      body+=`<p><b>Bonjour ${pseudo}.</b></p>`;
-    }
-    body+=`<div class="smart-kpis">
-      <div class="smart-kpi">🏆 Journée<b>${d} ${open?"ouverte":"fermée"}</b></div>
-      <div class="smart-kpi">⚽ Matchs restants<b>${miss}</b></div>
-      <div class="smart-kpi">💰 Solde<b>${Number(p.balance||0)} FID</b></div>
-      <div class="smart-kpi">🎯 Questions secrètes<b>${secretsDone(p)?"OK":"À compléter"}</b></div>
-    </div>`;
-    if(ev.length){
-      body+=`<p><b>🔥 Évènement(s) actif(s)</b></p>${ev.map(x=>`<span class="smart-event-pill">${x}</span>`).join("")}`;
-    }
-    if(miss>0 && open){
-      body+=`<div class="bp-onboarding-actions"><button class="action" onclick="bpV40Go('bets')">Aller à Mes Pronos</button></div>`;
-    }else{
-      body+=`<div class="bp-onboarding-actions"><button class="action" onclick="bpV40Go('scores')">Voir Mes scores</button></div>`;
-    }
-    if(!secretsDone(p)){
-      body+=`<div class="help">Rappel : réponds aux questions secrètes dans <b>Mes scores</b>.</div>`;
-    }
-    body+=`</div>`;
-    p.firstLoginDone=true; p.lastLoginAt=new Date().toISOString(); saveState();
-    modal(first?"Bienvenue dans la compétition":"Connexion réussie",body,first?"🏆":"👋");
-  };
-
-  function patchLogin(){
-    if(typeof window.loginWithCode!=="function" || window.loginWithCode.__bpV40Wrapped) return;
-    const old=window.loginWithCode;
-    window.loginWithCode=function(){
-      const r=old.apply(this,arguments);
-      setTimeout(()=> {
-        const login=document.getElementById("loginScreen");
-        const hidden=login && (getComputedStyle(login).display==="none" || login.offsetParent===null);
-        if(hidden) bpV40ShowLoginMessage();
-      },700);
-      return r;
-    };
-    window.loginWithCode.__bpV40Wrapped=true;
-  }
-
-  // 3) Profil enrichi : ville + équipe favorite
-  function renderProfileExtras(){
-    const card=document.querySelector("#bets .profile-card");
-    const p=getPlayer();
-    if(!card || !p) return;
-    if(document.getElementById("profileExtraGrid")) return;
-    const wrap=document.createElement("div");
-    wrap.id="profileExtraGrid";
-    wrap.className="profile-extra-grid";
-    wrap.innerHTML=`<label>📍 Ville
-      <input id="profileCityInput" placeholder="Ex. Bruxelles" value="${String(p.city||"").replace(/"/g,'&quot;')}">
-    </label>
-    <label>❤️ Équipe favorite
-      <input id="profileFavTeamInput" placeholder="Ex. Maroc" value="${String(p.favoriteTeam||"").replace(/"/g,'&quot;')}">
-    </label>
-    <button class="action secondary" style="grid-column:1/-1" onclick="bpV40SaveProfileExtras()">Sauver profil enrichi</button>`;
-    card.appendChild(wrap);
-  }
-  window.bpV40SaveProfileExtras=function(){
-    const p=getPlayer(); if(!p) return;
-    p.city=document.getElementById("profileCityInput")?.value||"";
-    p.favoriteTeam=document.getElementById("profileFavTeamInput")?.value||"";
-    saveState();
-    alert("Profil enrichi sauvegardé.");
-  };
-
-  // 6) Classement live avec évolution
-  function snapshotRanks(){
-    const sorted=[...(state.players||[])].sort((a,b)=>Number(b.balance||0)-Number(a.balance||0));
-    sorted.forEach((p,i)=>{
-      if(!p.previousRank) p.previousRank=i+1;
-      p.currentRank=i+1;
-    });
-  }
-  function delta(p){
-    if(!p.previousRank || !p.currentRank) return `<span class="live-rank-delta same">➖</span>`;
-    const diff=p.previousRank-p.currentRank;
-    if(diff>0) return `<span class="live-rank-delta up">⬆️ +${diff}</span>`;
-    if(diff<0) return `<span class="live-rank-delta down">⬇️ ${diff}</span>`;
-    return `<span class="live-rank-delta same">➖ stable</span>`;
-  }
-  function enhanceRanking(){
-    snapshotRanks();
-    document.querySelectorAll("#ranking tbody tr").forEach(tr=>{
-      const cells=[...tr.children];
-      const name=(cells[1]?.textContent||cells[0]?.textContent||"").trim();
-      const p=(state.players||[]).find(x=>String(x.pseudo||x.name).trim()===name || String(x.name).trim()===name);
-      if(p && !tr.querySelector(".live-rank-delta")){
-        const td=document.createElement("td");
-        td.innerHTML=delta(p);
-        tr.appendChild(td);
-      }
-    });
-  }
-
-  // 14) Backup quotidien Supabase
-  window.bpDailyCloudBackup=async function(showAlert=true){
-    if(typeof window.supabase==="undefined" || typeof window.BP_SUPABASE_URL==="undefined") return false;
-    if(typeof window.bpCloudSave==="function") await window.bpCloudSave(false);
-    try{
-      const sb=window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
-      const today=new Date().toISOString().slice(0,10);
-      const payload={id:`${APP_ID}-backup-${today}`,data:JSON.parse(JSON.stringify(state)),updated_at:new Date().toISOString()};
-      const {error}=await sb.from("app_state").upsert(payload,{onConflict:"id"});
-      if(error) throw error;
-      localStorage.setItem("bp_last_daily_backup",today);
-      const s=document.getElementById("dailyBackupStatus");
-      if(s) s.innerHTML=`<span class="good">Backup du ${today} OK</span>`;
-      if(showAlert) alert("Backup quotidien Supabase OK.");
-      return true;
-    }catch(e){
-      console.error(e);
-      const s=document.getElementById("dailyBackupStatus");
-      if(s) s.innerHTML=`<span class="bad">Erreur backup : ${e.message||e}</span>`;
-      if(showAlert) alert("Erreur backup quotidien : "+(e.message||e));
-      return false;
-    }
-  };
-  function autoDailyBackup(){
-    const today=new Date().toISOString().slice(0,10);
-    if(localStorage.getItem("bp_last_daily_backup")!==today){
-      setTimeout(()=>bpDailyCloudBackup(false),2500);
-    }
-  }
-  function addBackupPanel(){
-    const backup=document.getElementById("backup");
-    if(backup && !document.getElementById("dailyBackupPanel")){
-      backup.insertAdjacentHTML("afterbegin",`<div id="dailyBackupPanel" class="card">
-        <h2>🛡️ Backup quotidien Supabase</h2>
-        <div class="muted">Une copie quotidienne est créée automatiquement pour pouvoir restaurer l’état en cas d’erreur.</div>
-        <button class="action" onclick="bpDailyCloudBackup()">Créer backup maintenant</button>
-        <div id="dailyBackupStatus" class="help">Statut : en attente.</div>
-      </div>`);
-    }
-  }
-
-  // Hooks render/login
-  const oldRenderAll=window.renderAll;
-  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV40Wrapped){
-    window.renderAll=function(){ const r=oldRenderAll.apply(this,arguments); setTimeout(renderProfileExtras,100); setTimeout(enhanceRanking,150); return r; };
-    window.renderAll.__bpV40Wrapped=true;
-  }
-  document.addEventListener("DOMContentLoaded",()=>{patchLogin(); addBackupPanel(); setTimeout(renderProfileExtras,500); setTimeout(enhanceRanking,700); autoDailyBackup();});
-  setTimeout(patchLogin,800);
-})();
-</script>
-
 
 <script>
-/* V41 — Profil + Badges + Classement live */
+/* V46 — Correctif sécurité/session/layout/chrono */
 (function(){
-  function saveState(){
-    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
-    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
+  const PARIS_OFFSET = "+02:00"; // Coupe du Monde 2026 en juin/juillet = heure d’été Paris
+  const CLOSE_HOUR = 10;
+
+  function setRoleClass(role){
+    document.body.classList.remove("bp-admin","bp-user");
+    if(role==="admin") document.body.classList.add("bp-admin");
+    if(role==="user") document.body.classList.add("bp-user");
   }
-  function activeIndex(){
-    try{
-      if(typeof currentUserIndex!=="undefined" && currentUserIndex!==null) return Number(currentUserIndex);
-      const sel=document.getElementById("activePlayer");
-      return sel ? Number(sel.value||0) : 0;
-    }catch(e){ return 0; }
-  }
-  function activePlayerV41(){ return (state.players||[])[activeIndex()] || null; }
-  function exactCount(p){ return Number(p.exact||0); }
-  function goodCount(p){ return Number(p.good||0); }
-  function totalValidatedBets(p){ return (state.bets||[]).filter(b=>b.player===p.name && String(b.status||"").toUpperCase()==="VALIDATED").length; }
-  function secretDone(p){ const s=p.secrets||{}; return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed); }
-
-  function badgesForV41(p){
-    return [
-      {id:"perfect",label:"🎯 Score parfait",unlocked:exactCount(p)>=1},
-      {id:"serie3",label:"🔥 3 bons pronos",unlocked:goodCount(p)>=3},
-      {id:"fid100",label:"💰 100 FID+",unlocked:Number(p.balance||0)>=100},
-      {id:"oracle",label:"🧠 Oracle secret",unlocked:secretDone(p)},
-      {id:"active",label:"⚽ Joueur actif",unlocked:totalValidatedBets(p)>=5}
-    ];
-  }
-  window.bpV41RecomputeBadges=function(){
-    (state.players||[]).forEach(p=>{
-      p.badges=badgesForV41(p).filter(b=>b.unlocked).map(b=>b.id);
-    });
-    saveState();
-  };
-
-  function esc(v){ return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
-
-  function renderProfilePlusV41(){
-    const base=document.querySelector("#bets .profile-card");
-    const p=activePlayerV41();
-    if(!base || !p) return;
-
-    let box=document.getElementById("profilePlusCard");
-    if(!box){
-      box=document.createElement("div");
-      box.id="profilePlusCard";
-      box.className="profile-plus-card";
-      base.appendChild(box);
-    }
-
-    box.innerHTML=`
-      <h3>👤 Profil joueur</h3>
-      <div class="profile-plus-grid">
-        <label>📍 Ville
-          <input id="profileCityInputV41" placeholder="Ex. Bruxelles" value="${esc(p.city||"")}">
-        </label>
-        <label>❤️ Équipe favorite
-          <input id="profileFavTeamInputV41" placeholder="Ex. Maroc" value="${esc(p.favoriteTeam||"")}">
-        </label>
-      </div>
-      <button class="action secondary" onclick="bpV41SaveProfilePlus()">Sauver profil joueur</button>
-      <div class="profile-plus-view">
-        <span class="profile-plus-pill">📍 ${esc(p.city || "Ville non renseignée")}</span>
-        <span class="profile-plus-pill">❤️ ${esc(p.favoriteTeam || "Équipe favorite non renseignée")}</span>
-      </div>
-      <h3 style="margin-top:16px">🏅 Mes badges</h3>
-      <div class="badge-wall">
-        ${badgesForV41(p).map(b=>`<span class="player-badge ${b.unlocked?"":"locked"}">${b.label}</span>`).join("")}
-      </div>
-    `;
-  }
-  window.bpV41SaveProfilePlus=function(){
-    const p=activePlayerV41(); if(!p) return;
-    p.city=document.getElementById("profileCityInputV41")?.value||"";
-    p.favoriteTeam=document.getElementById("profileFavTeamInputV41")?.value||"";
-    saveState();
-    renderProfilePlusV41();
-    alert("Profil joueur sauvegardé.");
-  };
-
-  function computeRanksV41(){
-    const sorted=[...(state.players||[])].sort((a,b)=>Number(b.balance||0)-Number(a.balance||0));
-    sorted.forEach((p,i)=>{
-      if(!p.previousRank) p.previousRank=i+1;
-      p.currentRank=i+1;
-    });
-    return sorted;
-  }
-  function deltaV41(p){
-    if(!p.previousRank || !p.currentRank) return `<span class="live-rank-delta same">➖</span>`;
-    const diff=p.previousRank-p.currentRank;
-    if(diff>0) return `<span class="live-rank-delta up">⬆️ +${diff}</span>`;
-    if(diff<0) return `<span class="live-rank-delta down">⬇️ ${diff}</span>`;
-    return `<span class="live-rank-delta same">➖ stable</span>`;
-  }
-  function renderLiveRankingPanelV41(){
-    const section=document.getElementById("ranking");
-    if(!section) return;
-    const sorted=computeRanksV41();
-    let panel=document.getElementById("liveRankingPanel");
-    if(!panel){
-      panel=document.createElement("div");
-      panel.id="liveRankingPanel";
-      panel.className="live-ranking-panel";
-      const h=section.querySelector("h2");
-      if(h) h.insertAdjacentElement("afterend",panel);
-      else section.prepend(panel);
-    }
-    panel.innerHTML=`<h3>📈 Classement live</h3>
-      ${sorted.slice(0,10).map((p,i)=>`
-        <div class="live-ranking-row">
-          <div class="live-ranking-rank">${i===0?"🥇":i===1?"🥈":i===2?"🥉":"#"+(i+1)}</div>
-          <div class="live-ranking-name">${esc(p.pseudo||p.name)}</div>
-          <div class="live-ranking-fid">${Number(p.balance||0)} FID</div>
-          <div>${deltaV41(p)}</div>
-        </div>
-      `).join("")}`;
-    saveState();
-  }
-
-  function renderBadgesInRankingV41(){
-    bpV41RecomputeBadges();
-    document.querySelectorAll("#ranking table tbody tr, #ranking tbody tr").forEach(tr=>{
-      if(tr.querySelector(".v41-badges-cell")) return;
-      const txt=tr.textContent||"";
-      const p=(state.players||[]).find(x=>txt.includes(x.name) || txt.includes(x.pseudo||""));
-      if(!p) return;
-      const unlocked=badgesForV41(p).filter(b=>b.unlocked);
-      const td=document.createElement("td");
-      td.className="v41-badges-cell";
-      td.innerHTML=unlocked.length ? unlocked.map(b=>`<span class="player-badge">${b.label}</span>`).join(" ") : `<span class="muted">—</span>`;
-      tr.appendChild(td);
-    });
-  }
-
-  function renderV41(){
-    renderProfilePlusV41();
-    renderLiveRankingPanelV41();
-    renderBadgesInRankingV41();
-  }
-
-  const oldRenderAll=window.renderAll;
-  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV41Wrapped){
-    window.renderAll=function(){
-      const r=oldRenderAll.apply(this,arguments);
-      setTimeout(renderV41,150);
-      return r;
-    };
-    window.renderAll.__bpV41Wrapped=true;
-  }
-
-  document.addEventListener("DOMContentLoaded",()=>setTimeout(renderV41,700));
-  setTimeout(renderV41,1200);
-})();
-</script>
-
-
-<script>
-/* V42 — Sécurité login stricte */
-(function(){
-  window.bpIsAuthenticated = false;
-  window.currentUserIndex = null;
-  window.currentRole = null;
 
   function lockApp(){
-    window.bpIsAuthenticated = false;
-    window.currentUserIndex = null;
-    window.currentRole = null;
+    window.bpIsAuthenticated=false;
+    window.currentRole=null;
+    window.currentUserIndex=null;
+    setRoleClass(null);
     document.body.classList.add("bp-locked");
 
     const login=document.getElementById("loginScreen");
     if(login) login.style.display="flex";
-
     const code=document.getElementById("loginCode");
     if(code) code.value="";
 
     document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
     document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
 
-    const err=document.getElementById("loginError");
-    if(err){ err.style.display="none"; err.textContent="Code incorrect."; }
+    const sel=document.getElementById("activePlayer");
+    if(sel){ sel.value=""; sel.selectedIndex=-1; }
   }
 
-  function unlockApp(){
-    window.bpIsAuthenticated = true;
+  function unlockApp(role){
+    window.bpIsAuthenticated=true;
+    window.currentRole=role;
+    setRoleClass(role);
     document.body.classList.remove("bp-locked");
     const login=document.getElementById("loginScreen");
     if(login) login.style.display="none";
   }
 
-  function showLoginError(msg){
-    const err=document.getElementById("loginError");
-    if(err){
-      err.textContent=msg||"Code incorrect.";
-      err.style.display="block";
-    }else{
-      alert(msg||"Code incorrect.");
-    }
+  function showError(msg){
+    const e=document.getElementById("loginError");
+    if(e){ e.textContent=msg||"Code incorrect."; e.style.display="block"; }
+    else alert(msg||"Code incorrect.");
   }
 
-  function findPlayerByCode(code){
+  function setActiveUser(idx){
+    window.currentUserIndex=Number(idx);
+    const sel=document.getElementById("activePlayer");
+    if(sel) sel.value=String(idx);
+  }
+
+  function playerByCode(code){
     return (state.players||[]).findIndex(p=>String(p.code||"")===String(code));
   }
 
-  window.bpLockApp = lockApp;
-  window.bpUnlockApp = unlockApp;
+  function patchHeaderForAdmin(){
+    if(window.currentRole!=="admin") return;
+    const name=document.getElementById("headerUserName");
+    const av=document.getElementById("headerAvatar");
+    if(name) name.textContent="Admin";
+    if(av) av.textContent="A";
+  }
 
-  // Remplacement complet du login : aucune connexion sans code valide.
-  window.loginWithCode = function(){
+  window.logout=function(){
+    lockApp();
+    return false;
+  };
+
+  window.loginWithCode=function(){
     const input=document.getElementById("loginCode");
     const code=String(input?.value||"").trim();
 
     if(!/^\d{4}$/.test(code)){
       lockApp();
-      showLoginError("Saisis ton code personnel à 4 chiffres.");
+      showError("Saisis ton code personnel à 4 chiffres.");
       return false;
     }
 
     if(code==="1573"){
-      window.currentRole="admin";
-      window.currentUserIndex=0;
-      unlockApp();
-      if(typeof tab==="function") tab("admin",document.getElementById("navAdmin"));
+      unlockApp("admin");
+      window.currentUserIndex=null;
+      const sel=document.getElementById("activePlayer");
+      if(sel){ sel.value=""; sel.selectedIndex=-1; }
       if(typeof renderAll==="function") renderAll();
-      setTimeout(()=>{ if(typeof bpV40ShowLoginMessage==="function") bpV40ShowLoginMessage(); },500);
+      patchHeaderForAdmin();
+      if(typeof tab==="function") tab("admin",document.getElementById("navAdmin"));
+      setTimeout(patchHeaderForAdmin,200);
       return true;
     }
 
-    const idx=findPlayerByCode(code);
+    const idx=playerByCode(code);
     if(idx<0){
       lockApp();
-      showLoginError("Code incorrect.");
+      showError("Code incorrect.");
       return false;
     }
 
-    window.currentRole="user";
-    window.currentUserIndex=idx;
-
-    const active=document.getElementById("activePlayer");
-    if(active) active.value=String(idx);
-
-    unlockApp();
-
-    // Navigation utilisateur par défaut
-    if(typeof tab==="function") tab("bets",document.getElementById("navBets"));
+    unlockApp("user");
+    setActiveUser(idx);
     if(typeof renderAll==="function") renderAll();
+    setActiveUser(idx);
+    if(typeof tab==="function") tab("bets",document.getElementById("navBets"));
 
     setTimeout(()=>{
-      if(typeof bpV40ShowLoginMessage==="function") bpV40ShowLoginMessage();
-      else if(typeof bpShowLoginOnboarding==="function") bpShowLoginOnboarding(true);
-      else if(typeof bpV36ShowLoginOnboarding==="function") bpV36ShowLoginOnboarding(true);
-    },650);
-
+      setActiveUser(idx);
+      if(typeof bpShowLoginOnboarding==="function") bpShowLoginOnboarding(true);
+      else if(typeof bpV40ShowLoginMessage==="function") bpV40ShowLoginMessage();
+    },500);
     return true;
   };
 
-  // Sécurise la navigation : aucune tab si non authentifié.
-  if(typeof window.tab==="function" && !window.tab.__bpSecurityWrapped){
-    const oldTab=window.tab;
+  // Secure tab navigation
+  const oldTab=window.tab;
+  if(typeof oldTab==="function" && !oldTab.__bpV46Wrapped){
     window.tab=function(id,btn){
-      if(!window.bpIsAuthenticated){
+      if(window.bpIsAuthenticated!==true){
         lockApp();
         return false;
       }
-      return oldTab.apply(this,arguments);
-    };
-    window.tab.__bpSecurityWrapped=true;
-  }
-
-  // Sécurise les actions sur joueur actif.
-  if(typeof window.renderAll==="function" && !window.renderAll.__bpSecurityWrapped){
-    const oldRenderAll=window.renderAll;
-    window.renderAll=function(){
-      if(!window.bpIsAuthenticated){
-        // On autorise seulement le rendu technique initial, sans activer de profil.
-        const login=document.getElementById("loginScreen");
-        if(login) login.style.display="flex";
-        return;
+      if(window.currentRole==="user" && (id==="admin" || id==="backup")){
+        return false;
       }
-      return oldRenderAll.apply(this,arguments);
+      const r=oldTab.apply(this,arguments);
+      if(window.currentRole==="admin") patchHeaderForAdmin();
+      if(window.currentRole==="user" && window.currentUserIndex!==null){
+        const sel=document.getElementById("activePlayer");
+        if(sel) sel.value=String(window.currentUserIndex);
+      }
+      setTimeout(renderCountdown,80);
+      return r;
     };
-    window.renderAll.__bpSecurityWrapped=true;
+    window.tab.__bpV46Wrapped=true;
   }
 
-  // Empêche le select joueur de connecter quelqu’un sans code.
+  // Keep the active user fixed for normal users
   document.addEventListener("change",function(e){
-    if(e.target && e.target.id==="activePlayer" && !window.bpIsAuthenticated){
-      e.preventDefault();
-      e.stopPropagation();
-      lockApp();
-      return false;
+    if(e.target && e.target.id==="activePlayer"){
+      if(window.currentRole==="user"){
+        e.preventDefault();
+        e.stopPropagation();
+        e.target.value=String(window.currentUserIndex);
+        return false;
+      }
+      if(window.bpIsAuthenticated!==true){
+        lockApp();
+        return false;
+      }
     }
   },true);
 
-  // Verrouillage au chargement, toujours.
+  // Chrono: true date difference to Paris 10:00
+  function parseDayISO(dayNo){
+    const ms=(state.matches||[]).filter(m=>Number(m.day)===Number(dayNo));
+    const raw=(ms[0]?.date||"").trim();
+    if(!raw) return null;
+    if(/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0,10);
+    const months={"janvier":"01","février":"02","fevrier":"02","mars":"03","avril":"04","mai":"05","juin":"06","juillet":"07","août":"08","aout":"08","septembre":"09","octobre":"10","novembre":"11","décembre":"12","decembre":"12"};
+    const m=raw.toLowerCase().match(/(\d{1,2})\s+([a-zéûôîàèùç]+)\s+(\d{4})/i);
+    if(m) return `${m[3]}-${months[m[2]]||"01"}-${String(Number(m[1])).padStart(2,"0")}`;
+    return null;
+  }
+
+  function timeMinutes(t){
+    const m=String(t||"").match(/(\d{1,2})[:hH](\d{2})?/);
+    if(!m) return null;
+    return Number(m[1])*60+Number(m[2]||0);
+  }
+
+  function deadlineForDay(dayNo){
+    const iso=parseDayISO(dayNo);
+    if(!iso){
+      const today=new Date();
+      return new Date(today.getFullYear(),today.getMonth(),today.getDate(),CLOSE_HOUR,0,0);
+    }
+
+    let mins=CLOSE_HOUR*60;
+    const times=(state.matches||[]).filter(m=>Number(m.day)===Number(dayNo))
+      .map(m=>timeMinutes(m.time||m.kickoff||m.hour)).filter(x=>x!==null);
+    if(times.length){
+      mins=Math.min(mins,Math.max(0,Math.min(...times)-120));
+    }
+    const hh=Math.floor(mins/60), mm=mins%60;
+    return new Date(`${iso}T${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}:00${PARIS_OFFSET}`);
+  }
+
+  function currentDaySafe(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
+  }
+
+  function isClosed(dayNo){
+    if(typeof isDayClosed==="function") return isDayClosed(dayNo);
+    return !!(state.closedDays&&state.closedDays[dayNo]);
+  }
+
+  function autoRollDay(){
+    if(!state.closedDays) state.closedDays={};
+    const max=Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
+    let d=Number(state.currentDay||1);
+    let changed=false;
+    while(d<=max && new Date()>=deadlineForDay(d)){
+      if(!state.closedDays[d]){ state.closedDays[d]=true; changed=true; }
+      if(d<max){
+        d++;
+        if(state.closedDays[d]!==false){ state.closedDays[d]=false; changed=true; }
+        if(Number(state.currentDay)!==d){ state.currentDay=d; changed=true; }
+      }else break;
+    }
+    if(changed){
+      try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
+      try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
+    }
+  }
+
+  function fmt(ms){
+    const sec=Math.max(0,Math.floor(ms/1000));
+    const h=Math.floor(sec/3600);
+    const m=Math.floor((sec%3600)/60);
+    const s=sec%60;
+    return `${String(h).padStart(2,"0")} h ${String(m).padStart(2,"0")} min ${String(s).padStart(2,"0")} sec`;
+  }
+
+  function renderCountdown(){
+    const bets=document.getElementById("bets");
+    if(!bets || window.bpIsAuthenticated!==true || window.currentRole!=="user") return;
+    let panel=document.getElementById("pronoCountdownPanel");
+    if(!panel){
+      panel=document.createElement("div");
+      panel.id="pronoCountdownPanel";
+      const h=bets.querySelector("h2");
+      if(h) h.insertAdjacentElement("afterend",panel);
+      else bets.prepend(panel);
+    }
+
+    const d=currentDaySafe();
+    const deadline=deadlineForDay(d);
+    const remaining=deadline-new Date();
+    const closed=isClosed(d)||remaining<=0;
+    panel.classList.toggle("closed",closed);
+
+    const hh=String(deadline.getHours()).padStart(2,"0");
+    const mm=String(deadline.getMinutes()).padStart(2,"0");
+
+    if(closed){
+      panel.innerHTML=`<div class="countdown-title">🔒 Pronostics clôturés pour la journée ${d}</div>
+      <div class="countdown-sub">La journée est fermée. Le calcul des gains reste manuel côté Admin.</div>`;
+    }else{
+      panel.innerHTML=`<div class="countdown-title">⏳ Les pronostics de la journée ${d} se terminent dans :</div>
+      <div class="countdown-value">${fmt(remaining)}</div>
+      <div class="countdown-sub">Clôture automatique à ${hh}h${mm} — heure de Paris.</div>`;
+    }
+  }
+
+  // Patch renderAll to restore admin/user display after old code runs
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV46Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      if(window.currentRole==="admin") setTimeout(patchHeaderForAdmin,50);
+      if(window.currentRole==="user" && window.currentUserIndex!==null){
+        setTimeout(()=>{ const sel=document.getElementById("activePlayer"); if(sel) sel.value=String(window.currentUserIndex); },50);
+      }
+      setTimeout(renderCountdown,80);
+      return r;
+    };
+    window.renderAll.__bpV46Wrapped=true;
+  }
+
   document.addEventListener("DOMContentLoaded",()=>{
     lockApp();
     const input=document.getElementById("loginCode");
     if(input){
       input.addEventListener("keydown",e=>{
-        if(e.key==="Enter"){
-          e.preventDefault();
-          window.loginWithCode();
-        }
+        if(e.key==="Enter"){ e.preventDefault(); window.loginWithCode(); }
       });
     }
+    setInterval(()=>{ autoRollDay(); renderCountdown(); },1000);
   });
-
-  // Au cas où un ancien script masque le login après coup.
-  setTimeout(()=>{ if(!window.bpIsAuthenticated) lockApp(); },400);
-  setTimeout(()=>{ if(!window.bpIsAuthenticated) lockApp(); },1200);
 })();
 </script>
 
