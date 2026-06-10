@@ -2012,6 +2012,42 @@ header button.action.secondary{
 #dailyBackupPanel{border-color:rgba(74,222,128,.45)!important}
 @media(max-width:750px){.smart-login-card .smart-kpis,.profile-extra-grid{grid-template-columns:1fr}}
 
+
+/* V41 — Profil joueur + Badges + Classement live */
+.profile-plus-card{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.035)}
+.profile-plus-card h3{margin:0 0 10px}
+.profile-plus-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.profile-plus-grid label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:13px;font-weight:800}
+.profile-plus-view{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.profile-plus-pill{padding:7px 10px;border-radius:999px;background:#191919;border:1px solid var(--line);font-weight:800}
+.badge-wall{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.player-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid rgba(250,204,21,.28);background:rgba(250,204,21,.10);font-weight:900;white-space:nowrap}
+.player-badge.locked{opacity:.35;filter:grayscale(1)}
+.live-ranking-panel{margin-bottom:16px;padding:14px;border:1px solid rgba(74,222,128,.28);border-radius:14px;background:rgba(74,222,128,.045)}
+.live-ranking-row{display:grid;grid-template-columns:56px 1fr 110px 90px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+.live-ranking-row:last-child{border-bottom:0}
+.live-ranking-rank{font-size:18px;font-weight:900}
+.live-ranking-name{font-weight:900}
+.live-ranking-fid{text-align:right;font-weight:900}
+.live-rank-delta.up{color:var(--ok);font-weight:900}
+.live-rank-delta.down{color:var(--bad);font-weight:900}
+.live-rank-delta.same{color:var(--muted);font-weight:900}
+@media(max-width:750px){.profile-plus-grid{grid-template-columns:1fr}.live-ranking-row{grid-template-columns:44px 1fr}.live-ranking-fid,.live-rank-delta{text-align:left}}
+
+
+/* V42 — Sécurité login stricte */
+body.bp-locked main,
+body.bp-locked nav,
+body.bp-locked header{
+  pointer-events:none!important;
+  filter:blur(2px);
+  user-select:none;
+}
+body.bp-locked #loginScreen{
+  pointer-events:auto!important;
+  filter:none!important;
+}
+
 </style>
 
 <!--
@@ -8538,6 +8574,322 @@ function bpModalClose(){
   }
   document.addEventListener("DOMContentLoaded",()=>{patchLogin(); addBackupPanel(); setTimeout(renderProfileExtras,500); setTimeout(enhanceRanking,700); autoDailyBackup();});
   setTimeout(patchLogin,800);
+})();
+</script>
+
+
+<script>
+/* V41 — Profil + Badges + Classement live */
+(function(){
+  function saveState(){
+    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
+    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
+  }
+  function activeIndex(){
+    try{
+      if(typeof currentUserIndex!=="undefined" && currentUserIndex!==null) return Number(currentUserIndex);
+      const sel=document.getElementById("activePlayer");
+      return sel ? Number(sel.value||0) : 0;
+    }catch(e){ return 0; }
+  }
+  function activePlayerV41(){ return (state.players||[])[activeIndex()] || null; }
+  function exactCount(p){ return Number(p.exact||0); }
+  function goodCount(p){ return Number(p.good||0); }
+  function totalValidatedBets(p){ return (state.bets||[]).filter(b=>b.player===p.name && String(b.status||"").toUpperCase()==="VALIDATED").length; }
+  function secretDone(p){ const s=p.secrets||{}; return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed); }
+
+  function badgesForV41(p){
+    return [
+      {id:"perfect",label:"🎯 Score parfait",unlocked:exactCount(p)>=1},
+      {id:"serie3",label:"🔥 3 bons pronos",unlocked:goodCount(p)>=3},
+      {id:"fid100",label:"💰 100 FID+",unlocked:Number(p.balance||0)>=100},
+      {id:"oracle",label:"🧠 Oracle secret",unlocked:secretDone(p)},
+      {id:"active",label:"⚽ Joueur actif",unlocked:totalValidatedBets(p)>=5}
+    ];
+  }
+  window.bpV41RecomputeBadges=function(){
+    (state.players||[]).forEach(p=>{
+      p.badges=badgesForV41(p).filter(b=>b.unlocked).map(b=>b.id);
+    });
+    saveState();
+  };
+
+  function esc(v){ return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+
+  function renderProfilePlusV41(){
+    const base=document.querySelector("#bets .profile-card");
+    const p=activePlayerV41();
+    if(!base || !p) return;
+
+    let box=document.getElementById("profilePlusCard");
+    if(!box){
+      box=document.createElement("div");
+      box.id="profilePlusCard";
+      box.className="profile-plus-card";
+      base.appendChild(box);
+    }
+
+    box.innerHTML=`
+      <h3>👤 Profil joueur</h3>
+      <div class="profile-plus-grid">
+        <label>📍 Ville
+          <input id="profileCityInputV41" placeholder="Ex. Bruxelles" value="${esc(p.city||"")}">
+        </label>
+        <label>❤️ Équipe favorite
+          <input id="profileFavTeamInputV41" placeholder="Ex. Maroc" value="${esc(p.favoriteTeam||"")}">
+        </label>
+      </div>
+      <button class="action secondary" onclick="bpV41SaveProfilePlus()">Sauver profil joueur</button>
+      <div class="profile-plus-view">
+        <span class="profile-plus-pill">📍 ${esc(p.city || "Ville non renseignée")}</span>
+        <span class="profile-plus-pill">❤️ ${esc(p.favoriteTeam || "Équipe favorite non renseignée")}</span>
+      </div>
+      <h3 style="margin-top:16px">🏅 Mes badges</h3>
+      <div class="badge-wall">
+        ${badgesForV41(p).map(b=>`<span class="player-badge ${b.unlocked?"":"locked"}">${b.label}</span>`).join("")}
+      </div>
+    `;
+  }
+  window.bpV41SaveProfilePlus=function(){
+    const p=activePlayerV41(); if(!p) return;
+    p.city=document.getElementById("profileCityInputV41")?.value||"";
+    p.favoriteTeam=document.getElementById("profileFavTeamInputV41")?.value||"";
+    saveState();
+    renderProfilePlusV41();
+    alert("Profil joueur sauvegardé.");
+  };
+
+  function computeRanksV41(){
+    const sorted=[...(state.players||[])].sort((a,b)=>Number(b.balance||0)-Number(a.balance||0));
+    sorted.forEach((p,i)=>{
+      if(!p.previousRank) p.previousRank=i+1;
+      p.currentRank=i+1;
+    });
+    return sorted;
+  }
+  function deltaV41(p){
+    if(!p.previousRank || !p.currentRank) return `<span class="live-rank-delta same">➖</span>`;
+    const diff=p.previousRank-p.currentRank;
+    if(diff>0) return `<span class="live-rank-delta up">⬆️ +${diff}</span>`;
+    if(diff<0) return `<span class="live-rank-delta down">⬇️ ${diff}</span>`;
+    return `<span class="live-rank-delta same">➖ stable</span>`;
+  }
+  function renderLiveRankingPanelV41(){
+    const section=document.getElementById("ranking");
+    if(!section) return;
+    const sorted=computeRanksV41();
+    let panel=document.getElementById("liveRankingPanel");
+    if(!panel){
+      panel=document.createElement("div");
+      panel.id="liveRankingPanel";
+      panel.className="live-ranking-panel";
+      const h=section.querySelector("h2");
+      if(h) h.insertAdjacentElement("afterend",panel);
+      else section.prepend(panel);
+    }
+    panel.innerHTML=`<h3>📈 Classement live</h3>
+      ${sorted.slice(0,10).map((p,i)=>`
+        <div class="live-ranking-row">
+          <div class="live-ranking-rank">${i===0?"🥇":i===1?"🥈":i===2?"🥉":"#"+(i+1)}</div>
+          <div class="live-ranking-name">${esc(p.pseudo||p.name)}</div>
+          <div class="live-ranking-fid">${Number(p.balance||0)} FID</div>
+          <div>${deltaV41(p)}</div>
+        </div>
+      `).join("")}`;
+    saveState();
+  }
+
+  function renderBadgesInRankingV41(){
+    bpV41RecomputeBadges();
+    document.querySelectorAll("#ranking table tbody tr, #ranking tbody tr").forEach(tr=>{
+      if(tr.querySelector(".v41-badges-cell")) return;
+      const txt=tr.textContent||"";
+      const p=(state.players||[]).find(x=>txt.includes(x.name) || txt.includes(x.pseudo||""));
+      if(!p) return;
+      const unlocked=badgesForV41(p).filter(b=>b.unlocked);
+      const td=document.createElement("td");
+      td.className="v41-badges-cell";
+      td.innerHTML=unlocked.length ? unlocked.map(b=>`<span class="player-badge">${b.label}</span>`).join(" ") : `<span class="muted">—</span>`;
+      tr.appendChild(td);
+    });
+  }
+
+  function renderV41(){
+    renderProfilePlusV41();
+    renderLiveRankingPanelV41();
+    renderBadgesInRankingV41();
+  }
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV41Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(renderV41,150);
+      return r;
+    };
+    window.renderAll.__bpV41Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>setTimeout(renderV41,700));
+  setTimeout(renderV41,1200);
+})();
+</script>
+
+
+<script>
+/* V42 — Sécurité login stricte */
+(function(){
+  window.bpIsAuthenticated = false;
+  window.currentUserIndex = null;
+  window.currentRole = null;
+
+  function lockApp(){
+    window.bpIsAuthenticated = false;
+    window.currentUserIndex = null;
+    window.currentRole = null;
+    document.body.classList.add("bp-locked");
+
+    const login=document.getElementById("loginScreen");
+    if(login) login.style.display="flex";
+
+    const code=document.getElementById("loginCode");
+    if(code) code.value="";
+
+    document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+
+    const err=document.getElementById("loginError");
+    if(err){ err.style.display="none"; err.textContent="Code incorrect."; }
+  }
+
+  function unlockApp(){
+    window.bpIsAuthenticated = true;
+    document.body.classList.remove("bp-locked");
+    const login=document.getElementById("loginScreen");
+    if(login) login.style.display="none";
+  }
+
+  function showLoginError(msg){
+    const err=document.getElementById("loginError");
+    if(err){
+      err.textContent=msg||"Code incorrect.";
+      err.style.display="block";
+    }else{
+      alert(msg||"Code incorrect.");
+    }
+  }
+
+  function findPlayerByCode(code){
+    return (state.players||[]).findIndex(p=>String(p.code||"")===String(code));
+  }
+
+  window.bpLockApp = lockApp;
+  window.bpUnlockApp = unlockApp;
+
+  // Remplacement complet du login : aucune connexion sans code valide.
+  window.loginWithCode = function(){
+    const input=document.getElementById("loginCode");
+    const code=String(input?.value||"").trim();
+
+    if(!/^\d{4}$/.test(code)){
+      lockApp();
+      showLoginError("Saisis ton code personnel à 4 chiffres.");
+      return false;
+    }
+
+    if(code==="1573"){
+      window.currentRole="admin";
+      window.currentUserIndex=0;
+      unlockApp();
+      if(typeof tab==="function") tab("admin",document.getElementById("navAdmin"));
+      if(typeof renderAll==="function") renderAll();
+      setTimeout(()=>{ if(typeof bpV40ShowLoginMessage==="function") bpV40ShowLoginMessage(); },500);
+      return true;
+    }
+
+    const idx=findPlayerByCode(code);
+    if(idx<0){
+      lockApp();
+      showLoginError("Code incorrect.");
+      return false;
+    }
+
+    window.currentRole="user";
+    window.currentUserIndex=idx;
+
+    const active=document.getElementById("activePlayer");
+    if(active) active.value=String(idx);
+
+    unlockApp();
+
+    // Navigation utilisateur par défaut
+    if(typeof tab==="function") tab("bets",document.getElementById("navBets"));
+    if(typeof renderAll==="function") renderAll();
+
+    setTimeout(()=>{
+      if(typeof bpV40ShowLoginMessage==="function") bpV40ShowLoginMessage();
+      else if(typeof bpShowLoginOnboarding==="function") bpShowLoginOnboarding(true);
+      else if(typeof bpV36ShowLoginOnboarding==="function") bpV36ShowLoginOnboarding(true);
+    },650);
+
+    return true;
+  };
+
+  // Sécurise la navigation : aucune tab si non authentifié.
+  if(typeof window.tab==="function" && !window.tab.__bpSecurityWrapped){
+    const oldTab=window.tab;
+    window.tab=function(id,btn){
+      if(!window.bpIsAuthenticated){
+        lockApp();
+        return false;
+      }
+      return oldTab.apply(this,arguments);
+    };
+    window.tab.__bpSecurityWrapped=true;
+  }
+
+  // Sécurise les actions sur joueur actif.
+  if(typeof window.renderAll==="function" && !window.renderAll.__bpSecurityWrapped){
+    const oldRenderAll=window.renderAll;
+    window.renderAll=function(){
+      if(!window.bpIsAuthenticated){
+        // On autorise seulement le rendu technique initial, sans activer de profil.
+        const login=document.getElementById("loginScreen");
+        if(login) login.style.display="flex";
+        return;
+      }
+      return oldRenderAll.apply(this,arguments);
+    };
+    window.renderAll.__bpSecurityWrapped=true;
+  }
+
+  // Empêche le select joueur de connecter quelqu’un sans code.
+  document.addEventListener("change",function(e){
+    if(e.target && e.target.id==="activePlayer" && !window.bpIsAuthenticated){
+      e.preventDefault();
+      e.stopPropagation();
+      lockApp();
+      return false;
+    }
+  },true);
+
+  // Verrouillage au chargement, toujours.
+  document.addEventListener("DOMContentLoaded",()=>{
+    lockApp();
+    const input=document.getElementById("loginCode");
+    if(input){
+      input.addEventListener("keydown",e=>{
+        if(e.key==="Enter"){
+          e.preventDefault();
+          window.loginWithCode();
+        }
+      });
+    }
+  });
+
+  // Au cas où un ancien script masque le login après coup.
+  setTimeout(()=>{ if(!window.bpIsAuthenticated) lockApp(); },400);
+  setTimeout(()=>{ if(!window.bpIsAuthenticated) lockApp(); },1200);
 })();
 </script>
 
