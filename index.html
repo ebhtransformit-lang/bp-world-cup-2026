@@ -7974,4 +7974,105 @@ function openBackupFilePicker(kind){
 })();
 </script>
 
+
+<script>
+/* V34 — Auto-save Supabase renforcé */
+(function(){
+  const IMPORTANT_FUNCTIONS = [
+    "addPlayer",
+    "safeDeletePlayer",
+    "adminUpdatePlayer",
+    "savePlayersAdmin",
+    "saveBets",
+    "validateSingleBet",
+    "sealSecrets",
+    "saveScores",
+    "calculateGains",
+    "saveSpecialEventsFromAdmin",
+    "clearSpecialEventsForCurrentDay",
+    "importSmartFile",
+    "bpImportObjects",
+    "bpSaveImportedState"
+  ];
+
+  function canCloudSave(){
+    return typeof window.bpCloudSaveDebounced === "function";
+  }
+
+  function scheduleCloudSave(reason){
+    try{
+      console.log("[Supabase autosave]", reason);
+      if(canCloudSave()) window.bpCloudSaveDebounced();
+    }catch(e){
+      console.warn("[Supabase autosave] impossible", reason, e);
+    }
+  }
+
+  function wrapFunction(name){
+    const fn = window[name];
+    if(typeof fn !== "function" || fn.__bpAutoSaveWrapped) return;
+
+    const wrapped = function(){
+      const result = fn.apply(this, arguments);
+
+      if(result && typeof result.then === "function"){
+        return result.then(value=>{
+          scheduleCloudSave(name);
+          return value;
+        }).catch(err=>{
+          throw err;
+        });
+      }
+
+      scheduleCloudSave(name);
+      return result;
+    };
+
+    wrapped.__bpAutoSaveWrapped = true;
+    window[name] = wrapped;
+  }
+
+  function installAutoSave(){
+    IMPORTANT_FUNCTIONS.forEach(wrapFunction);
+
+    // Sécurité supplémentaire : toute sauvegarde locale déclenche le cloud.
+    if(typeof window.save === "function" && !window.save.__bpAutoSaveWrapped){
+      const oldSave = window.save;
+      window.save = function(){
+        const result = oldSave.apply(this, arguments);
+        scheduleCloudSave("save");
+        return result;
+      };
+      window.save.__bpAutoSaveWrapped = true;
+    }
+
+    const status = document.getElementById("bpAutoSaveStatus");
+    if(status){
+      status.innerHTML = '<span class="good">Auto-save Supabase actif</span>';
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", ()=>{
+    installAutoSave();
+
+    const backup = document.getElementById("backup");
+    if(backup && !document.getElementById("bpAutoSavePanel")){
+      backup.insertAdjacentHTML("afterbegin", `
+        <div id="bpAutoSavePanel" class="card" style="border-color:rgba(74,222,128,.45)">
+          <h2>✅ Auto-save Supabase</h2>
+          <div class="muted">
+            Les utilisateurs, pronostics, mises, questions secrètes, résultats et événements sont envoyés automatiquement vers Supabase après modification.
+          </div>
+          <div id="bpAutoSaveStatus" class="help"><span class="good">Auto-save Supabase actif</span></div>
+        </div>
+      `);
+    }
+  });
+
+  // Réinstalle après rendu tardif si certains modules sont chargés après.
+  setTimeout(installAutoSave, 1000);
+  setTimeout(installAutoSave, 3000);
+})();
+</script>
+
 </body></html>
