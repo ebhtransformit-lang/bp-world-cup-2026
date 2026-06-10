@@ -1693,301 +1693,17 @@ header button.action.secondary{
   }
 }
 
-
-/* V13 — Carte prono enrichie : infos match + alignement score/mise */
-#bets .match-info-panel{
-  padding:14px 22px!important;
-  background:rgba(255,255,255,.035)!important;
-  border-bottom:1px solid rgba(255,255,255,.08)!important;
-  color:#d7d7d7!important;
-  display:grid!important;
-  grid-template-columns:1.2fr .8fr!important;
-  gap:12px!important;
-  font-size:13px!important;
-  line-height:1.45!important;
-}
-#bets .match-info-sep{
-  margin:0 10px!important;
-  color:#777!important;
-}
-#bets .bet-form.score-only > label > span{
-  margin-bottom:18px!important;
-}
-#bets .bet-inline-row{
-  grid-template-columns:minmax(120px,1fr) 120px 38px 120px minmax(120px,1fr) 140px!important;
-  align-items:end!important;
-}
-#bets .bet-inline-row .flag-wrap{
-  align-self:center!important;
-  padding-bottom:13px!important;
-}
-#bets .bet-inline-row .scoreA,
-#bets .bet-inline-row .scoreB,
-#bets .bet-inline-row .stake{
-  align-self:center!important;
-}
-#bets .score-dash{
-  align-self:center!important;
-  display:flex!important;
-  justify-content:center!important;
-  align-items:center!important;
-  padding-bottom:0!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
-  grid-template-columns:1fr 1fr 140px!important;
-  padding:0!important;
-  margin-top:10px!important;
-  align-items:start!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(1){
-  text-align:center!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(2){
-  text-align:center!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{
-  content:"Mise";
-  text-align:center;
-  color:#cfcfcf;
-}
-#bets .prediction-derived{
-  margin-top:10px!important;
-}
-@media(max-width:900px){
-  #bets .match-info-panel{
-    grid-template-columns:1fr!important;
-  }
-  #bets .bet-inline-row{
-    grid-template-columns:1fr 96px 30px 96px 1fr!important;
-  }
-  #bets .bet-inline-row .stake{
-    grid-column:1 / -1!important;
-    justify-self:center!important;
-  }
-  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
-    grid-template-columns:1fr 1fr!important;
-  }
-  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{
-    content:"";
-  }
-}
-
-
-/* V14 — infos match visibles et alignement score/mise */
-#bets .match-info-panel{
-  display:grid!important;
-  grid-template-columns:1.35fr .65fr!important;
-  gap:14px!important;
-  padding:14px 22px!important;
-  background:rgba(255,255,255,.045)!important;
-  border-bottom:1px solid rgba(255,255,255,.08)!important;
-  color:#e0e0e0!important;
-  font-size:13px!important;
-  line-height:1.45!important;
-}
-#bets .match-info-sep{
-  display:inline-block!important;
-  margin:0 10px!important;
-  color:#8e8e8e!important;
-}
-#bets .bet-form.score-only{
-  padding-top:24px!important;
-}
-#bets .bet-inline-row{
-  display:grid!important;
-  grid-template-columns:minmax(120px,1fr) 120px 38px 120px minmax(120px,1fr) 140px!important;
-  gap:16px!important;
-  align-items:center!important;
-}
-#bets .bet-inline-row .flag-wrap,
-#bets .bet-inline-row .scoreA,
-#bets .bet-inline-row .scoreB,
-#bets .bet-inline-row .stake,
-#bets .score-dash{
-  align-self:center!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
-  display:grid!important;
-  grid-template-columns:minmax(120px,1fr) 120px 38px 120px minmax(120px,1fr) 140px!important;
-  gap:16px!important;
-  padding:0!important;
-  margin-top:10px!important;
-  color:#cfcfcf!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:first-child{
-  grid-column:1 / 3!important;
-  text-align:center!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(2){
-  grid-column:4 / 6!important;
-  text-align:center!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{
-  content:"Mise";
-  grid-column:6!important;
-  text-align:center!important;
-}
-@media(max-width:900px){
-  #bets .match-info-panel{grid-template-columns:1fr!important}
-  #bets .bet-inline-row{
-    grid-template-columns:1fr 96px 30px 96px 1fr!important;
-  }
-  #bets .bet-inline-row .stake{
-    grid-column:1 / -1!important;
-    justify-self:center!important;
-  }
-  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
-    grid-template-columns:1fr 1fr!important;
-  }
-  #bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:first-child,
-  #bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(2){
-    grid-column:auto!important;
-  }
-  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{content:""!important}
-}
-
-
-/* V17 — H2H élargi + labels score/mise au-dessus */
-#bets .match-info-panel{
-  display:grid!important;
-  grid-template-columns:1.15fr .85fr!important;
-  gap:16px!important;
-  padding:16px 22px!important;
-  background:rgba(255,255,255,.05)!important;
-  border-bottom:1px solid rgba(255,255,255,.09)!important;
-  color:#e6e6e6!important;
-  font-size:13px!important;
-  line-height:1.55!important;
-}
-#bets .match-info-title{
-  font-weight:900!important;
-  color:#fff!important;
-  margin-bottom:6px!important;
-  text-transform:uppercase!important;
-  letter-spacing:.3px!important;
-}
-#bets .match-info-sep{
-  display:inline-block!important;
-  margin:0 10px!important;
-  color:#8e8e8e!important;
-}
-#bets .score-main-label{
-  display:block!important;
-  text-align:center!important;
-  font-weight:900!important;
-  color:#fff!important;
-  font-size:17px!important;
-  margin:4px 0 16px!important;
-  text-transform:uppercase!important;
-  letter-spacing:.3px!important;
-}
-#bets .bet-inline-row{
-  display:grid!important;
-  grid-template-columns:minmax(110px,1fr) 120px 38px 120px minmax(110px,1fr)!important;
-  gap:16px!important;
-  align-items:center!important;
-  width:100%!important;
-}
-#bets .team-label-row{
-  display:grid!important;
-  grid-template-columns:1fr 1fr!important;
-  gap:20px!important;
-  margin:10px auto 18px!important;
-  max-width:720px!important;
-  color:#cfcfcf!important;
-  font-size:14px!important;
-  text-align:center!important;
-}
-#bets .stake-container{
-  display:flex!important;
-  flex-direction:column!important;
-  align-items:center!important;
-  justify-content:center!important;
-  gap:8px!important;
-  margin:0 auto 10px!important;
-}
-#bets .stake-label{
-  font-weight:900!important;
-  color:#fff!important;
-  font-size:15px!important;
-  text-transform:uppercase!important;
-  letter-spacing:.35px!important;
-}
-#bets .stake-container .stake{
-  width:150px!important;
-  height:58px!important;
-  border-radius:14px!important;
-  font-size:20px!important;
-  font-weight:900!important;
-  text-align:center!important;
-  background:#111!important;
-  border:1px solid rgba(255,255,255,.18)!important;
-}
-#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
-  display:none!important;
-}
-@media(max-width:900px){
-  #bets .match-info-panel{grid-template-columns:1fr!important}
-  #bets .bet-inline-row{
-    grid-template-columns:1fr 96px 30px 96px 1fr!important;
-  }
-}
-@media(max-width:650px){
-  #bets .bet-inline-row{
-    grid-template-columns:1fr 82px 24px 82px 1fr!important;
-    gap:8px!important;
-  }
-  #bets .team-label-row{font-size:12px!important}
-}
-
-
-/* V18 — Sanity check fixes */
-#scores .scores-block{margin-bottom:22px!important;padding:22px!important}
-#scores .summary{grid-template-columns:repeat(4,1fr)!important;gap:10px!important}
-#scores .tile{min-height:78px!important}
-#backup input[type="file"]{margin:6px 0 14px}
-#backup label{display:block;margin-top:10px;font-weight:900}
-@media(max-width:900px){#scores .summary{grid-template-columns:1fr 1fr!important}}
-@media(max-width:650px){#scores .summary{grid-template-columns:1fr!important}}
-
-
-/* V20 — Événements spéciaux */
-.special-events-admin-card{border:1px solid rgba(250,204,21,.35)!important;background:linear-gradient(180deg,#17110a,#111)!important}
-.special-events-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
-.special-events-grid label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#101010;font-weight:800}
-.special-events-grid input{width:auto}
-.special-events-settings{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.special-events-settings label{font-weight:800;color:#eee}
-.special-events-banner{margin:0 0 18px;padding:18px 20px;border-radius:18px;border:1px solid rgba(250,204,21,.45);background:linear-gradient(90deg,#7a1020,#201006,#111);box-shadow:0 14px 32px rgba(0,0,0,.35)}
-.special-events-banner-title{font-size:18px;font-weight:900;margin-bottom:10px;color:#fff}
-.special-events-banner-list{display:flex;flex-wrap:wrap;gap:8px}
-.special-events-banner-list span{padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);font-weight:800}
-@media(max-width:900px){.special-events-grid,.special-events-settings{grid-template-columns:1fr}}
-
 </style>
-
-<!--
-SANITY V18
-- Correction doublon section Mes scores.
-- Correction fonctions avec await => async.
-- Admin refresh : renderAdminBetsTable appelé via renderAdmin/renderAll.
-- Secrets : sealSecrets sauvegarde dans state.players[].secrets, renderAdminSecrets les affiche.
-- Export CSV ajouté : secrets.
-- Import CSV ajouté : pronostics, résultats, questions secrètes.
-- Import JSON conservé.
--->
-
-<script id="bpEmbeddedState" type="application/json">null</script>
 </head>
 <body>
 
-<div id="loginScreen" class="login-screen" style="display: flex;">
+<div id="loginScreen" class="login-screen" style="display: none;">
   <div class="login-card">
     <h2>🏆 B Partner FIFA World Cup 2026</h2>
     <p class="muted">Saisis ton code personnel à 4 chiffres pour accéder à ton espace.</p>
     <input id="loginCode" class="code-input" type="password" maxlength="4" inputmode="numeric" placeholder="••••" onkeydown="if(event.key===&#39;Enter&#39;) loginWithCode()">
     <button class="action" style="width:100%;margin-top:12px" onclick="loginWithCode()">Entrer</button>
-    <button class="action secondary" style="width:100%;margin-top:8px" onclick="if(confirm(&#39;Réinitialiser uniquement l’écran de connexion ? Les données sont conservées.&#39;)){document.getElementById(&#39;loginCode&#39;).value=&#39;&#39;;location.reload();}">Réparer l’accès</button>
+    <button class="action secondary" style="width:100%;margin-top:8px" onclick="localStorage.removeItem(&#39;bp_wc_dev&#39;); location.reload();">Réparer / réinitialiser l’accès</button>
     <p id="loginError" class="bad" style="display:none">Code incorrect.</p>
     
   </div>
@@ -2122,8 +1838,6 @@ SANITY V18
       
   </div>
 
-  <div id="specialEventsBanner"></div>
-
   <div class="card pronos-matches-block">
     <h2>2. Matchs pour la journée ouverte</h2>
     <div class="prono-day-nav">
@@ -2203,6 +1917,73 @@ SANITY V18
   </div>
 </section>
 
+<section id="scores">
+  <h2>📊 Mes scores</h2>
+
+  <div class="card scores-main-card">
+    <h2>Bilan</h2>
+    <div class="summary">
+      <div class="tile">✅ Bons pronos<strong id="dayGood">0</strong></div>
+      <div class="tile">🎯 Scores exacts<strong id="dayExact">0</strong></div>
+      <div class="tile">💰 Gain jour<strong id="dayGain">+0 FID</strong></div>
+      <div class="tile">📈 Rang<strong id="dayRank">+0 place</strong></div>
+    </div>
+
+    <h2>Bilan compétition</h2>
+    <div class="summary">
+      <div class="tile">✅ Bons pronos<strong id="compGood">0</strong></div>
+      <div class="tile">🎯 Scores exacts<strong id="compExact">0</strong></div>
+      <div class="tile">💰 Gain cumulé<strong id="compGain">+0 FID</strong></div>
+      <div class="tile">📈 Évolution<strong id="compRank">+0 place</strong></div>
+    </div>
+
+    <div class="help">
+      Les résultats sont saisis dans Admin. Les exports CSV peuvent être ouverts dans Excel.
+    </div>
+  </div>
+
+  <h2>Récapitulatif par journée</h2>
+  <table class="daily-recap-table">
+    <thead>
+      <tr>
+        <th>Journée</th>
+        <th>Match</th>
+        <th>Pronostic</th>
+        <th>Mise</th>
+        <th>Gain / perte</th>
+        <th>Score exact</th>
+        <th>Solde net</th>
+      </tr>
+    </thead>
+    <tbody id="personalLog">
+      <tr><td colspan="7" class="muted">Aucun pronostic validé à afficher.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:28px">🔒 Bonus secrets</h2>
+  <div class="card secret-panel">
+    <div class="secret-field">
+      <label>🏆 Vainqueur final (+50 FID)</label>
+      <input id="secretWinner" placeholder="Ex. France">
+    </div>
+
+    <div class="secret-field">
+      <label>🌟 Meilleur joueur (+25 FID)</label>
+      <input id="secretBestPlayer" placeholder="Ex. Kylian Mbappé">
+    </div>
+
+    <div class="secret-field">
+      <label>⚽ Meilleur buteur (+25 FID)</label>
+      <input id="secretTopScorer" placeholder="Ex. Harry Kane">
+    </div>
+
+    <button class="action" onclick="sealSecrets()">Sceller mes choix</button>
+    <div class="muted" id="secretInfo" style="margin-top:16px">
+      Les choix seront sauvegardés après validation et visibles par l’admin.
+    </div>
+  </div>
+</section>
+
 
 <section id="scores">
   <h2>📊 Mes scores</h2>
@@ -2210,7 +1991,7 @@ SANITY V18
   <div class="card scores-block">
     <h2>1. Bilan</h2>
 
-    <h3>Bilan journée</h3>
+    <h3>Bilan</h3>
     <div class="summary">
       <div class="tile">✅ Bons pronos<strong id="dayGood">0</strong></div>
       <div class="tile">🎯 Scores exacts<strong id="dayExact">0</strong></div>
@@ -2444,52 +2225,7 @@ SANITY V18
       <div class="workflow-steps" id="workflowSteps"></div>
       <button id="workflowNextBtn" class="action workflow-main-action" onclick="workflowNextStep()">Étape suivante</button>
     </div>
-    
-    <div class="card special-events-admin-card">
-      <h2>🎉 Événements spéciaux de la journée</h2>
-      <div class="muted">
-        Active les bonus au moment d’ouvrir une journée. Ils seront visibles par les joueurs et appliqués au calcul des gains.
-      </div>
-
-      <div class="special-events-grid">
-        <label><input type="checkbox" id="evtDoubleGains"> 🚀 Gains doublés</label>
-        <label><input type="checkbox" id="evtDoubleExact"> 🎯 Scores parfaits doublés</label>
-        <label><input type="checkbox" id="evtCashDay"> 💰 Cash Day</label>
-        <label><input type="checkbox" id="evtKingDay"> 👑 King of the Day</label>
-        <label><input type="checkbox" id="evtJackpot"> 🔥 Jackpot</label>
-        <label><input type="checkbox" id="evtFestival"> ⚽ Festival offensif</label>
-      </div>
-
-      <div class="special-events-settings">
-        <label>🍀 Lucky Match
-          <select id="evtLuckyMatch"></select>
-        </label>
-        <label>Multiplicateur Lucky Match
-          <select id="evtLuckyMultiplier">
-            <option value="2">x2</option>
-            <option value="3">x3</option>
-            <option value="4">x4</option>
-          </select>
-        </label>
-        <label>Cash Day bonus
-          <input type="number" id="evtCashAmount" min="0" value="10">
-        </label>
-        <label>King of the Day bonus
-          <input type="number" id="evtKingAmount" min="0" value="20">
-        </label>
-        <label>Jackpot bonus
-          <input type="number" id="evtJackpotAmount" min="0" value="50">
-        </label>
-        <label>Festival offensif : bonus
-          <input type="number" id="evtFestivalAmount" min="0" value="3">
-        </label>
-      </div>
-
-      <button class="action" onclick="saveSpecialEventsFromAdmin()">Enregistrer les événements</button>
-      <button class="action secondary" onclick="clearSpecialEventsForCurrentDay()">Désactiver les événements</button>
-      <div id="specialEventsAdminPreview" class="help"></div>
-    </div>
-<div class="grid">
+    <div class="grid">
       <div class="card">
         <h2>Paramètres financiers</h2>
         <label>Budget total calculé automatiquement</label>
@@ -2557,9 +2293,148 @@ SANITY V18
 
     <div class="card">
       <h2>Joueurs</h2><div class="help">Les utilisateurs créés sont sauvegardés. Chaque joueur reçoit un code aléatoire à 4 chiffres. Le code ADMIN reste toujours <b>1573</b>.</div>
-      <div class="admin-row muted players-header"><b>Joueur</b><b>Pseudo</b><b>Code</b><b>FID départ</b><b>Solde</b><b>Détail</b><b>Action</b></div><div id="adminPlayers" class="admin-players-list"></div>
-      <button class="action" onclick="addPlayer()">Ajouter utilisateur</button>
-      <button class="action secondary" onclick="restoreBeforeUserChangeBackup()">Restaurer utilisateurs</button>
+      <div class="admin-row muted players-header"><b>Joueur</b><b>Pseudo</b><b>Code</b><b>FID départ</b><b>Solde</b><b>Détail</b><b>Action</b></div><div id="adminPlayers" class="admin-players-list"><div class="admin-player-card">
+    <label>Joueur
+      <input value="Sandrine" onchange="state.players[0].name=this.value;if(!state.players[0].pseudo) state.players[0].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="Nouveau joueur" maxlength="20" onchange="state.players[0].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">3835</span>
+    </label>
+    <label>FID départ
+      <input type="number" value="50" onchange="state.players[0].startFid=Number(this.value);renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="50" onchange="state.players[0].balance=Number(this.value);renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(0)">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(0,1);renderAdmin()">Suppr.</button>
+    </div>
+  </div><div class="admin-player-card">
+    <label>Joueur
+      <input value="Elie" onchange="state.players[1].name=this.value;if(!state.players[1].pseudo) state.players[1].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="Nouveau joueur" maxlength="20" onchange="state.players[1].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">1062</span>
+    </label>
+    <label>FID départ
+      <input type="number" value="50" onchange="state.players[1].startFid=Number(this.value);renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="50" onchange="state.players[1].balance=Number(this.value);renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(1)">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(1,1);renderAdmin()">Suppr.</button>
+    </div>
+  </div><div class="admin-player-card">
+    <label>Joueur
+      <input value="Merveille" onchange="state.players[2].name=this.value;if(!state.players[2].pseudo) state.players[2].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="Nouveau joueur" maxlength="20" onchange="state.players[2].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">5277</span>
+    </label>
+    <label>FID départ
+      <input type="number" value="50" onchange="state.players[2].startFid=Number(this.value);renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="50" onchange="state.players[2].balance=Number(this.value);renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(2)">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(2,1);renderAdmin()">Suppr.</button>
+    </div>
+  </div><div class="admin-player-card">
+    <label>Joueur
+      <input value="Tojo" onchange="state.players[3].name=this.value;if(!state.players[3].pseudo) state.players[3].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="Nouveau joueur" maxlength="20" onchange="state.players[3].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">4856</span>
+    </label>
+    <label>FID départ
+      <input type="number" value="50" onchange="state.players[3].startFid=Number(this.value);renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="50" onchange="state.players[3].balance=Number(this.value);renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(3)">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(3,1);renderAdmin()">Suppr.</button>
+    </div>
+  </div><div class="admin-player-card">
+    <label>Joueur
+      <input value="Marcel" onchange="state.players[4].name=this.value;if(!state.players[4].pseudo) state.players[4].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="Nouveau joueur" maxlength="20" onchange="state.players[4].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">5829</span>
+    </label>
+    <label>FID départ
+      <input type="number" value="50" onchange="state.players[4].startFid=Number(this.value);renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="50" onchange="state.players[4].balance=Number(this.value);renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(4)">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(4,1);renderAdmin()">Suppr.</button>
+    </div>
+  </div><div class="admin-player-card">
+    <label>Joueur
+      <input value="Achraf" onchange="state.players[5].name=this.value;if(!state.players[5].pseudo) state.players[5].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="Nouveau joueur" maxlength="20" onchange="state.players[5].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">6172</span>
+    </label>
+    <label>FID départ
+      <input type="number" value="50" onchange="state.players[5].startFid=Number(this.value);renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="50" onchange="state.players[5].balance=Number(this.value);renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(5)">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(5,1);renderAdmin()">Suppr.</button>
+    </div>
+  </div><div class="admin-player-card">
+    <label>Joueur
+      <input value="Hassan" onchange="state.players[6].name=this.value;if(!state.players[6].pseudo) state.players[6].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="Nouveau joueur" maxlength="20" onchange="state.players[6].pseudo=this.value;renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">2834</span>
+    </label>
+    <label>FID départ
+      <input type="number" value="50" onchange="state.players[6].startFid=Number(this.value);renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="50" onchange="state.players[6].balance=Number(this.value);renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(6)">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(6,1);renderAdmin()">Suppr.</button>
+    </div>
+  </div></div>
+      <button class="action" onclick="addPlayer()">Ajouter joueur</button>
       <button class="action" onclick="savePlayersAdmin()">Sauvegarder utilisateurs</button>
       <button class="action secondary" onclick="applyDefaultFid()">Appliquer FID défaut à tous</button>
       <div id="adminUserDetail"></div>
@@ -2812,58 +2687,32 @@ SANITY V18
   </div>
 </section>
 
-
 <section id="backup">
   <h2>💾 Excel / Backup</h2>
   <div class="grid">
     <div class="card">
       <h3>Exports compatibles Excel</h3>
-      <button class="action" onclick="exportCSV('players')">Exporter joueurs CSV</button>
-      <button class="action" onclick="exportCSV('bets')">Exporter tous les pronostics CSV</button>
-      <button class="action" onclick="exportCSV('validated_report')">Exporter pronostics validés + gains CSV</button>
-      <button class="action" onclick="exportCSV('results')">Exporter résultats CSV</button>
-      <button class="action" onclick="exportCSV('logs')">Exporter journal FID CSV</button>
-      <button class="action" onclick="exportCSV('secrets')">Exporter questions secrètes CSV</button>
-      <button class="action" onclick="exportCSV('events')">Exporter événements CSV</button>
+      <button class="action" onclick="exportCSV(&#39;players&#39;)">Exporter joueurs CSV</button>
+      <button class="action" onclick="exportCSV(&#39;bets&#39;)">Exporter tous les pronostics CSV</button>
+      <button class="action" onclick="exportCSV(&#39;validated_report&#39;)">Exporter pronostics validés + gains CSV</button>
+      <button class="action" onclick="exportCSV(&#39;results&#39;)">Exporter résultats CSV</button>
+      <button class="action" onclick="exportCSV(&#39;logs&#39;)">Exporter journal FID CSV</button>
       <button class="action secondary" onclick="downloadJSON()">Exporter sauvegarde JSON complète</button>
-      <p class="muted">
-        Les CSV utilisent le séparateur point-virgule et s’ouvrent directement dans Excel.
-        Le JSON permet de restaurer toute l’application.
-      </p>
+      <p class="muted">Les CSV s’ouvrent dans Excel. Le JSON permet de restaurer toute l’application.</p>
     </div>
-
     <div class="card">
-      <h3>Imports / restauration</h3>
-
+      <h3>Imports en cas de crash</h3>
       <label>Importer sauvegarde JSON complète</label>
-      <input type="file" accept=".json,application/json" onchange="importJSON(event)">
-
-      <div class="help">
-        <b>Imports CSV Excel</b><br>
-        Utilise de préférence les fichiers exportés depuis cette application, sans changer les noms de colonnes.
-      </div>
-
-      <label>Importer pronostics CSV</label>
-      <input type="file" accept=".csv,text/csv" onchange="importCSV('bets',event)">
-      <p class="muted">Colonnes attendues : day, matchId, player, scoreA, scoreB, stake, status, validatedAt.</p>
-
+      <input type="file" accept=".json" onchange="importJSON(event)">
+      <hr style="border-color:#333">
       <label>Importer résultats CSV</label>
-      <input type="file" accept=".csv,text/csv" onchange="importCSV('results',event)">
-      <p class="muted">Colonnes attendues : day, matchId, scoreA, scoreB ou officialScore.</p>
-
-      <label>Importer questions secrètes CSV</label>
-      <input type="file" accept=".csv,text/csv" onchange="importCSV('secrets',event)">
-
-      <label>Importer événements CSV</label>
-      <input type="file" accept=".csv,text/csv" onchange="importCSV('events',event)">
-      <p class="muted">Colonnes attendues : player, winner, bestPlayer, topScorer, sealed, validatedAt.</p>
-
-      <button class="action secondary" onclick="migrateCalendar();renderAll();alert('Calendrier réparé / mis à jour.')">Réparer calendrier</button>
+      <input type="file" accept=".csv" onchange="importResultsCSV(event)">
+      <p class="muted">Format résultats CSV attendu : day,matchId,scoreA,scoreB</p>
+      <button class="action secondary" onclick="migrateCalendar();renderAll();alert(&#39;Calendrier réparé / mis à jour.&#39;)">Réparer calendrier</button>
       <button class="action danger" onclick="resetApp()">Réinitialiser démo</button>
     </div>
   </div>
 </section>
-
 </main>
 
 <script>
@@ -4535,36 +4384,19 @@ const starterMatches=[
     "status": "open"
   }
 ];
-const defaultPlayers=[]; // V24: joueurs démo supprimés
+const defaultPlayers=["Sarah","Karim","Nadia","Hassan","Mehdi","Youssef","Amina","Rachid","Leila","Sofia","Omar","Samir","Meryem","Anas","Imane"];
 let state;
-function readEmbeddedState(){
-  try{
-    const el=document.getElementById("bpEmbeddedState");
-    if(!el) return null;
-    const txt=(el.textContent||"").trim();
-    if(!txt || txt==="null") return null;
-    return JSON.parse(txt);
-  }catch(e){ console.warn("État embarqué illisible", e); return null; }
-}
 try {
-  const rawState = localStorage.getItem("bp_wc_dev");
-  state = rawState ? JSON.parse(rawState) : (readEmbeddedState() || initState());
+  state = JSON.parse(localStorage.getItem("bp_wc_dev") || "null") || initState();
 } catch(e) {
-  const corrupted = localStorage.getItem("bp_wc_dev");
-  if(corrupted){
-    localStorage.setItem("bp_wc_dev_CORRUPTED_BACKUP_" + new Date().toISOString(), corrupted);
-  }
-  state = readEmbeddedState() || initState();
+  localStorage.removeItem("bp_wc_dev");
+  state = initState();
 }
 
 let currentUserIndex = null;
 let currentRole = null;
 let calendarDayDisplayed = null;
 let pronoDayDisplayed = null;
-
-
-function escapeHtml(v){return String(v ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function escapeAttr(v){return escapeHtml(v).replace(/`/g,'&#96;');}
 
 function generateUniqueCode(existingPlayers=null){
   const list = existingPlayers || state?.players || [];
@@ -4577,20 +4409,15 @@ function generateUniqueCode(existingPlayers=null){
 function ensurePlayerCodes(){
   let changed=false;
   const seen=new Set();
-  if(!Array.isArray(state.players)) state.players=[];
   state.players.forEach(p=>{
     const code=String(p.code||"");
-    if(!/^\d{4}$/.test(code) || code==="1573" || seen.has(code)){
+    const legacy=/^24\d{2}$/.test(code);
+    if(!/^\d{4}$/.test(code) || code==="1573" || seen.has(code) || legacy){
       p.code=generateUniqueCode(state.players);
       changed=true;
     }
     seen.add(String(p.code));
-    if(!p.pseudo){p.pseudo=p.name;changed=true;}
-    if(p.startFid===undefined){p.startFid=Number(p.balance||50);changed=true;}
-    if(p.balance===undefined){p.balance=Number(p.startFid||50);changed=true;}
-    if(p.evolution===undefined){p.evolution=0;changed=true;}
-    if(p.good===undefined){p.good=0;changed=true;}
-    if(p.exact===undefined){p.exact=0;changed=true;}
+    if(!p.pseudo) { p.pseudo=p.name; changed=true; }
   });
   if(changed) save();
 }
@@ -4641,7 +4468,7 @@ function logout(){
 function initState(){
   return {
     budget:1250,reserveTarget:500,currentDay:1,closed:false,closedDays:{},
-    players:[],
+    players:defaultPlayers.map((n,i,arr)=>({name:n,pseudo:n,code:generateUniqueCode(arr.slice(0,i).map(x=>({code:x.code}))),avatar:null,startFid:50,balance:50,evolution:0,good:0,exact:0,secrets:null})),
     matches:starterMatches,
     bets:[],
     logs:[],
@@ -4650,15 +4477,19 @@ function initState(){
   };
 }
 function migrateCalendar(){
-  if(!confirm("Réparer uniquement le calendrier ? Les utilisateurs seront conservés.")) return;
-  try{localStorage.setItem("bp_wc_dev_backup_before_calendar_repair",JSON.stringify(state));}catch(e){}
-  const oldById=new Map((state.matches||[]).map(m=>[m.id,m]));
-  state.matches=starterMatches.map(base=>{
-    const old=oldById.get(base.id)||{};
-    return {...base,scoreA:old.scoreA!==undefined?old.scoreA:base.scoreA,scoreB:old.scoreB!==undefined?old.scoreB:base.scoreB,status:old.status||base.status};
-  });
-  state.scheduleVersion="official-fifa-2026-v1";
-  save();renderAll();alert("Calendrier réparé sans modifier les utilisateurs.");
+  const version = "official-fifa-2026-v1";
+  if(state.scheduleVersion !== version){
+    state.matches = starterMatches.map(m => ({...m}));
+    state.bets = [];
+    state.settlementDetails = [];
+    state.summaries = {day:{good:0,exact:0,gain:0,rank:0},comp:{good:0,exact:0,gain:0,rank:0}};
+    state.currentDay = 1;
+    state.closed = false;
+    state.closedDays = {}; starterMatches.forEach(m=>{ state.closedDays[m.day] = Number(m.day)!==1; });
+    calendarDayDisplayed = 1;
+    state.scheduleVersion = version;
+    save();
+  }
 }
 function save(){localStorage.setItem("bp_wc_dev",JSON.stringify(state));}
 function f(team){let c=flagCodes[team];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${team}`:`<span class="muted">${team}</span>`;}
@@ -5198,410 +5029,6 @@ function betOutcomeHTML(b,m){
   </div>`;
 }
 
-
-function matchInfoHTML(m){
-  const venue = [m.venue, m.city].filter(Boolean).join(" · ");
-  const paris = m.time ? `${m.time} — heure de Paris` : "Heure à confirmer";
-  const parts = [
-    m.date ? `📅 ${m.date}` : "",
-    paris ? `🕒 ${paris}` : "",
-    venue ? `🏟️ ${venue}` : "",
-    m.group ? `🏷️ ${m.group}` : ""
-  ].filter(Boolean).join('<span class="match-info-sep">•</span>');
-  return `<div class="match-info-panel">
-    <div>${parts || "Informations du match à confirmer"}</div>
-    <div>Dernier face-à-face officiel : <b>à compléter</b></div>
-  </div>`;
-}
-
-
-const H2H_DATA = {
-  "Mexico|South Africa": {
-    score: "1-1",
-    date: "11 juin 2010",
-    competition: "Coupe du Monde FIFA 2010 — match d'ouverture, Groupe A",
-    venue: "Soccer City",
-    city: "Johannesburg"
-  },
-  "Korea Republic|Czechia": {
-    score: "2-1 pour la Corée du Sud",
-    date: "5 juin 2016",
-    competition: "Match amical international",
-    venue: "Eden Arena",
-    city: "Prague"
-  },
-  "Brazil|Morocco": {
-    score: "3-0 pour le Brésil",
-    date: "16 juin 1998",
-    competition: "Coupe du Monde FIFA 1998 — Groupe A",
-    venue: "Stade de la Beaujoire",
-    city: "Nantes"
-  },
-  "France|Senegal": {
-    score: "1-0 pour le Sénégal",
-    date: "31 mai 2002",
-    competition: "Coupe du Monde FIFA 2002 — match d'ouverture, Groupe A",
-    venue: "Seoul World Cup Stadium",
-    city: "Séoul"
-  },
-  "England|Croatia": {
-    score: "1-0 pour l’Angleterre",
-    date: "13 juin 2021",
-    competition: "UEFA Euro 2020 — Groupe D",
-    venue: "Wembley Stadium",
-    city: "Londres"
-  },
-  "Germany|Côte d’Ivoire": {
-    score: "2-2",
-    date: "18 novembre 2009",
-    competition: "Match amical international",
-    venue: "Veltins-Arena",
-    city: "Gelsenkirchen"
-  },
-  "Ecuador|Germany": {
-    score: "3-0 pour l’Allemagne",
-    date: "20 juin 2006",
-    competition: "Coupe du Monde FIFA 2006 — Groupe A",
-    venue: "Olympiastadion",
-    city: "Berlin"
-  },
-  "Spain|Saudi Arabia": {
-    score: "3-2 pour l’Espagne",
-    date: "29 mai 2010",
-    competition: "Match amical international",
-    venue: "Tivoli-Neu",
-    city: "Innsbruck"
-  },
-  "Saudi Arabia|Uruguay": {
-    score: "1-0 pour l’Uruguay",
-    date: "20 juin 2018",
-    competition: "Coupe du Monde FIFA 2018 — Groupe A",
-    venue: "Rostov Arena",
-    city: "Rostov-sur-le-Don"
-  },
-  "Uruguay|Spain": {
-    score: "2-1 pour l’Espagne",
-    date: "16 juin 2013",
-    competition: "Coupe des Confédérations FIFA 2013 — Groupe B",
-    venue: "Arena Pernambuco",
-    city: "Recife"
-  },
-  "Netherlands|Japan": {
-    score: "2-2",
-    date: "16 novembre 2013",
-    competition: "Match amical international",
-    venue: "Cristal Arena",
-    city: "Genk"
-  },
-  "Tunisia|Japan": {
-    score: "3-0 pour la Tunisie",
-    date: "14 juin 2022",
-    competition: "Kirin Cup Soccer 2022",
-    venue: "Panasonic Stadium Suita",
-    city: "Osaka"
-  },
-  "Netherlands|Sweden": {
-    score: "2-0 pour les Pays-Bas",
-    date: "10 octobre 2017",
-    competition: "Qualifications Coupe du Monde FIFA 2018 — UEFA",
-    venue: "Johan Cruyff Arena",
-    city: "Amsterdam"
-  },
-  "Canada|Qatar": {
-    score: "2-0 pour le Canada",
-    date: "23 septembre 2022",
-    competition: "Match amical international",
-    venue: "Generali Arena",
-    city: "Vienne"
-  },
-  "Qatar|Switzerland": {
-    score: "1-0 pour le Qatar",
-    date: "14 novembre 2018",
-    competition: "Match amical international",
-    venue: "Cornaredo Stadium",
-    city: "Lugano"
-  },
-  "Mexico|Korea Republic": {
-    score: "3-2 pour le Mexique",
-    date: "14 novembre 2020",
-    competition: "Match amical international",
-    venue: "Wiener Neustadt Stadion",
-    city: "Wiener Neustadt"
-  },
-  "Argentina|Austria": {
-    score: "1-0 pour l’Argentine",
-    date: "13 juin 1990",
-    competition: "Coupe du Monde FIFA 1990 — Groupe B",
-    venue: "Stadio Olimpico",
-    city: "Rome"
-  },
-  "Belgium|Egypt": {
-    score: "2-1 pour l’Égypte",
-    date: "18 novembre 2022",
-    competition: "Match amical international",
-    venue: "Jaber Al-Ahmad International Stadium",
-    city: "Koweït"
-  },
-  "Brazil|Scotland": {
-    score: "2-0 pour le Brésil",
-    date: "27 mars 2011",
-    competition: "Match amical international",
-    venue: "Emirates Stadium",
-    city: "Londres"
-  },
-  "France|Norway": {
-    score: "2-1 pour la France",
-    date: "27 mai 2014",
-    competition: "Match amical international",
-    venue: "Stade de France",
-    city: "Saint-Denis"
-  },
-  "Argentina|Algeria": {
-    score: "4-3 pour l’Argentine",
-    date: "5 juin 2007",
-    competition: "Match amical international",
-    venue: "Camp Nou",
-    city: "Barcelone"
-  },
-  "Portugal|Colombia": {
-    score: "0-0",
-    date: "14 novembre 2017",
-    competition: "Match amical international",
-    venue: "Estádio Dr. Magalhães Pessoa",
-    city: "Leiria"
-  },
-  "Croatia|Ghana": {
-    score: "1-0 pour la Croatie",
-    date: "11 juin 2014",
-    competition: "Match amical international",
-    venue: "Estádio Rei Pelé",
-    city: "Maceió"
-  }
-};
-
-function normalizeTeamNameForH2H(v){
-  return String(v || "")
-    .replace(/’/g,"'")
-    .replace(/\s+/g," ")
-    .trim();
-}
-
-function getH2H(m){
-  const a = normalizeTeamNameForH2H(m.teamA);
-  const b = normalizeTeamNameForH2H(m.teamB);
-  const variants = [
-    `${a}|${b}`,
-    `${b}|${a}`,
-    `${a.replace(/'/g,"’")}|${b.replace(/'/g,"’")}`,
-    `${b.replace(/'/g,"’")}|${a.replace(/'/g,"’")}`
-  ];
-  for(const k of variants){
-    if(H2H_DATA[k]) return H2H_DATA[k];
-  }
-  return null;
-}
-
-function matchInfoHTML(m){
-  const h = getH2H(m);
-  const venue = [m.venue, m.city].filter(Boolean).join(" · ");
-  const matchBits = [
-    m.date ? `📅 ${m.date}` : "",
-    m.time ? `🕒 ${m.time} — heure de Paris` : "🕒 Heure de Paris : à confirmer",
-    venue ? `🏟️ ${venue}` : "",
-    m.group ? `🏷️ ${m.group}` : "",
-    m.phase ? `🏆 ${m.phase}` : ""
-  ].filter(Boolean).join('<span class="match-info-sep">•</span>');
-
-  const h2h = h
-    ? `<b>${h.score}</b><br><span>📅 ${h.date}</span><br><span>🏆 ${h.competition}</span><br><span>🏟️ ${[h.venue,h.city].filter(Boolean).join(" · ")}</span>`
-    : `<b>NA</b><br><span class="muted">Aucun dernier face-à-face fiable intégré pour cette affiche.</span>`;
-
-  return `<div class="match-info-panel">
-    <div>
-      <div class="match-info-title">Infos match</div>
-      <div>${matchBits}</div>
-    </div>
-    <div>
-      <div class="match-info-title">Dernier face-à-face officiel</div>
-      <div>${h2h}</div>
-    </div>
-  </div>`;
-}
-
-
-function ensureSpecialEvents(){
-  if(!state.specialEvents) state.specialEvents={};
-  const days=[...new Set((state.matches||[]).map(m=>Number(m.day)))];
-  days.forEach(d=>{
-    if(!state.specialEvents[d]){
-      state.specialEvents[d]={
-        doubleGains:false,
-        doubleExact:false,
-        cashDay:false,
-        cashAmount:10,
-        luckyMatchId:"",
-        luckyMultiplier:2,
-        kingDay:false,
-        kingAmount:20,
-        jackpot:false,
-        jackpotAmount:50,
-        festival:false,
-        festivalAmount:3
-      };
-    }
-  });
-}
-function currentDayEvents(day){
-  ensureSpecialEvents();
-  return state.specialEvents[Number(day)] || {};
-}
-function activeEventsList(day){
-  const e=currentDayEvents(day);
-  const list=[];
-  if(e.doubleGains) list.push("🚀 Vos gains sont doublés");
-  if(e.doubleExact) list.push("🎯 Vos scores parfaits sont récompensés x2");
-  if(e.cashDay) list.push(`💰 Cash Day : +${Number(e.cashAmount||10)} FID si tous les pronostics du jour sont validés`);
-  if(e.luckyMatchId){
-    const m=state.matches.find(x=>x.id===e.luckyMatchId);
-    list.push(`🍀 Lucky Match ${m ? m.teamA+" - "+m.teamB : e.luckyMatchId} : gains x${Number(e.luckyMultiplier||2)}`);
-  }
-  if(e.kingDay) list.push(`👑 King of the Day : +${Number(e.kingAmount||20)} FID au meilleur joueur du jour`);
-  if(e.jackpot) list.push(`🔥 Jackpot : +${Number(e.jackpotAmount||50)} FID en cas de sans-faute`);
-  if(e.festival) list.push(`⚽ Festival offensif : +${Number(e.festivalAmount||3)} FID sur les matchs à 4 buts ou plus`);
-  return list;
-}
-function renderSpecialEventsBanner(){
-  const box=document.getElementById("specialEventsBanner");
-  if(!box) return;
-  const day=typeof currentPronoDay==="function" ? currentPronoDay() : state.currentDay;
-  const list=activeEventsList(day);
-  if(!list.length){ box.innerHTML=""; return; }
-  box.innerHTML=`<div class="special-events-banner">
-    <div class="special-events-banner-title">🔥 ÉVÉNEMENTS DE LA JOURNÉE</div>
-    <div class="special-events-banner-list">${list.map(x=>`<span>${x}</span>`).join("")}</div>
-  </div>`;
-}
-function renderSpecialEventsAdmin(){
-  ensureSpecialEvents();
-  const day=Number(state.currentDay||1);
-  const e=currentDayEvents(day);
-  const lucky=document.getElementById("evtLuckyMatch");
-  if(lucky){
-    const matches=state.matches.filter(m=>Number(m.day)===day);
-    lucky.innerHTML=`<option value="">Aucun</option>`+matches.map(m=>`<option value="${m.id}">${m.id} · ${m.teamA} - ${m.teamB}</option>`).join("");
-    lucky.value=e.luckyMatchId||"";
-  }
-  const set=(id,val)=>{const el=document.getElementById(id); if(el){ if(el.type==="checkbox") el.checked=!!val; else el.value=val; }};
-  set("evtDoubleGains",e.doubleGains);
-  set("evtDoubleExact",e.doubleExact);
-  set("evtCashDay",e.cashDay);
-  set("evtCashAmount",e.cashAmount ?? 10);
-  set("evtLuckyMultiplier",e.luckyMultiplier ?? 2);
-  set("evtKingDay",e.kingDay);
-  set("evtKingAmount",e.kingAmount ?? 20);
-  set("evtJackpot",e.jackpot);
-  set("evtJackpotAmount",e.jackpotAmount ?? 50);
-  set("evtFestival",e.festival);
-  set("evtFestivalAmount",e.festivalAmount ?? 3);
-  const preview=document.getElementById("specialEventsAdminPreview");
-  if(preview){
-    const list=activeEventsList(day);
-    preview.innerHTML=list.length ? `<b>Actifs J${day}</b><br>${list.join("<br>")}` : `<b>J${day}</b> · Aucun événement actif.`;
-  }
-}
-function saveSpecialEventsFromAdmin(){
-  ensureSpecialEvents();
-  const day=Number(state.currentDay||1);
-  const val=id=>document.getElementById(id)?.value;
-  const chk=id=>!!document.getElementById(id)?.checked;
-  state.specialEvents[day]={
-    doubleGains:chk("evtDoubleGains"),
-    doubleExact:chk("evtDoubleExact"),
-    cashDay:chk("evtCashDay"),
-    cashAmount:Number(val("evtCashAmount")||10),
-    luckyMatchId:val("evtLuckyMatch")||"",
-    luckyMultiplier:Number(val("evtLuckyMultiplier")||2),
-    kingDay:chk("evtKingDay"),
-    kingAmount:Number(val("evtKingAmount")||20),
-    jackpot:chk("evtJackpot"),
-    jackpotAmount:Number(val("evtJackpotAmount")||50),
-    festival:chk("evtFestival"),
-    festivalAmount:Number(val("evtFestivalAmount")||3)
-  };
-  log("SYSTEM",`Événements spéciaux enregistrés J${day}`,0);
-  save(); renderAll();
-  alert("Événements spéciaux enregistrés.");
-}
-function clearSpecialEventsForCurrentDay(){
-  ensureSpecialEvents();
-  const day=Number(state.currentDay||1);
-  state.specialEvents[day]={
-    doubleGains:false,doubleExact:false,cashDay:false,cashAmount:10,luckyMatchId:"",luckyMultiplier:2,
-    kingDay:false,kingAmount:20,jackpot:false,jackpotAmount:50,festival:false,festivalAmount:3
-  };
-  log("SYSTEM",`Événements spéciaux désactivés J${day}`,0);
-  save(); renderAll();
-}
-function eventMultiplierForBet(day,matchId,isExact){
-  const e=currentDayEvents(day);
-  let mult=1;
-  if(e.doubleGains) mult*=2;
-  if(isExact && e.doubleExact) mult*=2;
-  if(e.luckyMatchId && e.luckyMatchId===matchId) mult*=Number(e.luckyMultiplier||2);
-  return mult;
-}
-function applySpecialEventBonuses(targetDay, todays){
-  const e=currentDayEvents(targetDay);
-  if(!e) return;
-  const dayMatches=todays || state.matches.filter(m=>Number(m.day)===Number(targetDay));
-  const dayMatchIds=dayMatches.map(m=>m.id);
-  const validated=state.bets.filter(b=>Number(b.day)===Number(targetDay) && (b.status||"DRAFT")==="VALIDATED");
-  const players=state.players || [];
-
-  if(e.cashDay){
-    players.forEach(p=>{
-      const count=validated.filter(b=>b.player===p.name && dayMatchIds.includes(b.matchId)).length;
-      if(count===dayMatchIds.length && dayMatchIds.length>0){
-        const amount=Number(e.cashAmount||10);
-        p.balance+=amount; p.evolution+=amount;
-        log(p.name,`Bonus Cash Day J${targetDay}`,amount);
-        state.settlementDetails.push({day:targetDay,matchId:"EVENT_CASH_DAY",match:"Cash Day",player:p.name,stake:0,prediction:"",predictedScore:"",officialScore:"",result:"",status:"BONUS CASH DAY",baseGain:0,exactBonus:0,netGain:amount});
-      }
-    });
-  }
-
-  if(e.jackpot){
-    players.forEach(p=>{
-      const det=(state.settlementDetails||[]).filter(d=>Number(d.day)===Number(targetDay)&&d.player===p.name&&dayMatchIds.includes(d.matchId));
-      if(det.length===dayMatchIds.length && det.length>0 && det.every(d=>String(d.status||"").startsWith("GAGNÉ"))){
-        const amount=Number(e.jackpotAmount||50);
-        p.balance+=amount; p.evolution+=amount;
-        log(p.name,`Bonus Jackpot J${targetDay}`,amount);
-        state.settlementDetails.push({day:targetDay,matchId:"EVENT_JACKPOT",match:"Jackpot",player:p.name,stake:0,prediction:"",predictedScore:"",officialScore:"",result:"",status:"BONUS JACKPOT SANS-FAUTE",baseGain:0,exactBonus:0,netGain:amount});
-      }
-    });
-  }
-
-  if(e.kingDay){
-    const scores={};
-    players.forEach(p=>scores[p.name]=0);
-    (state.settlementDetails||[]).forEach(d=>{
-      if(Number(d.day)===Number(targetDay) && scores[d.player]!==undefined && !String(d.matchId||"").startsWith("EVENT_")){
-        scores[d.player]+=Number(d.netGain||0);
-      }
-    });
-    const max=Math.max(...Object.values(scores));
-    const winners=Object.keys(scores).filter(name=>scores[name]===max && max>0);
-    winners.forEach(name=>{
-      const p=players.find(x=>x.name===name); if(!p) return;
-      const amount=Number(e.kingAmount||20);
-      p.balance+=amount; p.evolution+=amount;
-      log(p.name,`Bonus King of the Day J${targetDay}`,amount);
-      state.settlementDetails.push({day:targetDay,matchId:"EVENT_KING_DAY",match:"King of the Day",player:p.name,stake:0,prediction:"",predictedScore:"",officialScore:"",result:"",status:"BONUS KING OF THE DAY",baseGain:0,exactBonus:0,netGain:amount});
-    });
-  }
-}
-
 function renderBets(){
   const day=currentPronoDay();
 
@@ -5639,23 +5066,19 @@ function renderBets(){
         <h3 style="margin:0">${f(m.teamA)} vs ${f(m.teamB)}</h3>
         ${!available ? `<span class="badge closed">Mise non disponible</span>` : isValidated ? '<span class="badge ok">✅ Validée</span>' : '<span class="badge">Brouillon</span>'}
       </div>
-      ${matchInfoHTML(m)}
 
       <div class="bet-form score-only">
 <label style="width:100%">
-<span class="score-main-label">Score pronostiqué</span>
+<span>Score pronostiqué</span>
 <div class="bet-inline-row">
-  <div class="flag-wrap">${flagOnly(m.teamA)}</div>
-  <input type="number" min="0" max="99" aria-label="Score ${m.teamA}" data-match="${m.id}" class="scoreA" value="${b.scoreA??splitScore(b.score)[0]}" ${locked?'disabled':''}>
-  <span class="score-dash">-</span>
-  <input type="number" min="0" max="99" aria-label="Score ${m.teamB}" data-match="${m.id}" class="scoreB" value="${b.scoreB??splitScore(b.score)[1]}" ${locked?'disabled':''}>
-  <div class="flag-wrap">${flagOnly(m.teamB)}</div>
+<div class="flag-wrap">${flagOnly(m.teamA)}</div>
+<input type="number" min="0" max="99" aria-label="Score ${m.teamA}" data-match="${m.id}" class="scoreA" value="${b.scoreA??splitScore(b.score)[0]}" ${locked?'disabled':''}>
+<span class="score-dash">-</span>
+<input type="number" min="0" max="99" aria-label="Score ${m.teamB}" data-match="${m.id}" class="scoreB" value="${b.scoreB??splitScore(b.score)[1]}" ${locked?'disabled':''}>
+<div class="flag-wrap">${flagOnly(m.teamB)}</div>
+<select data-match="${m.id}" class="stake" ${locked?'disabled':''}>${stakeOptions(b.stake||1)}</select>
 </div>
-<div class="team-label-row"><span>${m.teamA}</span><span>${m.teamB}</span></div>
-<div class="stake-container">
-  <div class="stake-label">Mise</div>
-  <select data-match="${m.id}" class="stake" ${locked?'disabled':''}>${stakeOptions(b.stake||1)}</select>
-</div>
+<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:#bbb"><span>${m.teamA}</span><span>${m.teamB}</span></div>
 <div class="score-helper">Le résultat est déduit automatiquement du score choisi.</div>
 </label>
 </div>
@@ -6618,55 +6041,60 @@ async function workflowNextStep(){
 
 
 function renderAdmin(){
-  ensurePlayerCodes();
-  if(typeof renderWorkflow==="function") renderWorkflow();
-  if(typeof renderSimulation==="function") renderSimulation();
-  if(typeof renderAdminSecrets==="function") renderAdminSecrets();
-  if(typeof renderSpecialEventsAdmin==="function") renderSpecialEventsAdmin();
-  if(typeof renderReserveExposure==="function") renderReserveExposure();
-  if(typeof renderAdminBetsTable==="function") renderAdminBetsTable();
-
-  let cr=calcReserve();
-  if(document.getElementById("budget")) budget.value=cr.budget;
-  if(document.getElementById("reserveInput")) reserveInput.value=state.reserveTarget ?? cr.reserve;
-  if(document.getElementById("defaultFid")) defaultFid.value=state.players[0]?.startFid ?? 50;
-  if(document.getElementById("adminDay")) adminDay.textContent=state.currentDay;
-  if(document.getElementById("adminDayDate")) adminDayDate.textContent=dayDate(state.currentDay)||"—";
-  if(document.getElementById("adminStatus")) adminStatus.innerHTML=isDayClosed(state.currentDay)?'<span class="day-status-closed">Fermée</span>':'<span class="day-status-open">Ouverte</span>';
-
-  const todaysCount=state.matches.filter(m=>Number(m.day)===Number(state.currentDay)).length;
-  const dayBets=state.bets.filter(b=>Number(b.day)===Number(state.currentDay));
+  renderWorkflow();
+  renderSimulation();
+  const ri=document.getElementById('reserveInput'); if(ri && !ri.value) ri.value=500; renderReserveExposure();
+  renderAdminSecrets();
+  let cr=calcReserve(); budget.value=cr.budget; if(document.getElementById('reserveInput')) reserveInput.value=state.reserveTarget ?? cr.reserve; if(document.getElementById('defaultFid')) defaultFid.value=state.players[0]?.startFid ?? 50; adminDay.textContent=state.currentDay; if(document.getElementById("adminDayDate")) adminDayDate.textContent=dayDate(state.currentDay)||"—"; adminStatus.innerHTML=isDayClosed(state.currentDay)
+    ? '<span class="day-status-closed">Fermée</span>'
+    : '<span class="day-status-open">Ouverte</span>';
+  let todaysCount=state.matches.filter(m=>m.day===state.currentDay).length;
+  let dayBets=state.bets.filter(b=>b.day===state.currentDay);
   if(document.getElementById("adminBetCount")){
     adminBetCount.textContent=dayBets.length;
     adminExpectedBets.textContent=state.players.length*todaysCount;
     adminValidatedBets.textContent=dayBets.filter(b=>b.status==="VALIDATED").length;
     adminDraftBets.textContent=dayBets.filter(b=>(b.status||"DRAFT")==="DRAFT").length;
   }
-  if(document.getElementById("allocatedView")) allocatedView.textContent=cr.allocated;
-  if(document.getElementById("reserveView")) reserveView.textContent=cr.reserve;
-  if(document.getElementById("minReserveView")) minReserveView.textContent=cr.min;
-  if(document.getElementById("budgetStatus")) budgetStatus.innerHTML=cr.valid?`<span class="good">Configuration valide</span>`:`<span class="bad">Réserve insuffisante</span>`;
-  if(document.getElementById("saveAdminBtn")) saveAdminBtn.disabled=!cr.valid;
-
-  const container=document.getElementById("adminPlayers");
-  if(container){
-    container.innerHTML=(state.players||[]).map((p,i)=>`
-      <div class="admin-player-card" data-player-index="${i}">
-        <label>Joueur<input value="${escapeAttr(p.name||'')}" onchange="adminUpdatePlayer(${i},'name',this.value)"></label>
-        <label>Pseudo<input value="${escapeAttr(p.pseudo||p.name||'')}" maxlength="20" onchange="adminUpdatePlayer(${i},'pseudo',this.value)"></label>
-        <label>Code<span class="user-code">${escapeHtml(p.code||'')}</span><button class="action secondary admin-mini-btn" type="button" onclick="regeneratePlayerCode(${i})">Nouveau code</button></label>
-        <label>FID départ<input type="number" value="${Number(p.startFid||0)}" onchange="adminUpdatePlayer(${i},'startFid',this.value)"></label>
-        <label>Solde<input type="number" value="${Number(p.balance||0)}" onchange="adminUpdatePlayer(${i},'balance',this.value)"></label>
-        <div class="admin-player-actions"><button class="action secondary" type="button" onclick="showAdminUserDetail(${i})">Voir détail</button><button class="action danger" type="button" onclick="safeDeletePlayer(${i})">Suppr.</button></div>
-      </div>`).join("");
+  let r=calcReserve(); budget.value=r.budget; allocatedView.textContent=r.allocated; reserveView.textContent=r.reserve; minReserveView.textContent=r.min;
+  budgetStatus.innerHTML=r.valid?`<span class="good">Configuration valide</span>`:`<span class="bad">Réserve insuffisante</span>`;
+  saveAdminBtn.disabled=!r.valid;
+  ensurePlayerCodes();
+  adminPlayers.innerHTML=state.players.map((p,i)=>`<div class="admin-player-card">
+    <label>Joueur
+      <input value="${p.name}" onchange="state.players[${i}].name=this.value;if(!state.players[${i}].pseudo||state.players[${i}].pseudo==="Nouveau joueur") state.players[${i}].pseudo=this.value;save();renderAdmin()">
+    </label>
+    <label>Pseudo
+      <input value="${p.pseudo||p.name}" maxlength="20" onchange="state.players[${i}].pseudo=this.value;save();renderAdmin()">
+    </label>
+    <label>Code
+      <span class="user-code">${p.code}</span>
+      <button class="action secondary admin-mini-btn" type="button" onclick="regeneratePlayerCode(${i})">Nouveau code</button>
+    </label>
+    <label>FID départ
+      <input type="number" value="${p.startFid}" onchange="state.players[${i}].startFid=Number(this.value);save();renderAdmin()">
+    </label>
+    <label>Solde
+      <input type="number" value="${p.balance}" onchange="state.players[${i}].balance=Number(this.value);save();renderAdmin()">
+    </label>
+    <div class="admin-player-actions">
+      <button class="action secondary" onclick="showAdminUserDetail(${i})">Voir détail</button>
+      <button class="action danger" onclick="state.players.splice(${i},1);save();renderAdmin()">Suppr.</button>
+    </div>
+  </div>`).join("");
+  const scoreDay = scoreEntryDay();
+  const scoreTitle = document.getElementById("scoreEntryTitle");
+  if(scoreTitle){
+    scoreTitle.innerHTML = `Scores attendus pour la <b>journée ${scoreDay}</b>${scoreDay !== Number(state.currentDay) ? ` <span class="muted">(journée précédente)</span>` : ""}`;
   }
-
-  const scoreDay=scoreEntryDay();
-  if(document.getElementById("scoreEntryTitle")) scoreEntryTitle.innerHTML=`Scores attendus pour la <b>journée ${scoreDay}</b>${scoreDay!==Number(state.currentDay)?` <span class="muted">(journée précédente)</span>`:""}`;
-  const todays=state.matches.filter(m=>Number(m.day)===Number(scoreDay));
-  if(document.getElementById("scoreInputs")){
-    scoreInputs.innerHTML=todays.map(m=>`<div class="score-row"><div>${f(m.teamA)} vs ${f(m.teamB)} <span class="muted">(${m.id})</span></div><div class="score-selects"><select id="sa_${m.id}">${scoreOptions(m.scoreA??0)}</select><span class="score-dash">-</span><select id="sb_${m.id}">${scoreOptions(m.scoreB??0)}</select></div></div>`).join("");
-  }
+  let todays=state.matches.filter(m=>Number(m.day)===Number(scoreDay));
+  scoreInputs.innerHTML=todays.map(m=>`<div class="score-row"><div>${f(m.teamA)} vs ${f(m.teamB)} <span class="muted">(${m.id})</span></div>
+  <div class="score-selects">
+    <select id="sa_${m.id}">${scoreOptions(m.scoreA??0)}</select>
+    <span class="score-dash">-</span>
+    <select id="sb_${m.id}">${scoreOptions(m.scoreB??0)}</select>
+  </div>
+</div>`).join("");
 }
 
 async function resetAllGameData(){
@@ -6757,66 +6185,25 @@ function regeneratePlayerCode(index){
   renderAdmin();
 }
 
-
-function backupUsers(reason){
-  try{
-    localStorage.setItem("bp_wc_dev_backup_users_last",JSON.stringify(state));
-    localStorage.setItem("bp_wc_dev_backup_users_"+reason+"_"+new Date().toISOString(),JSON.stringify(state));
-  }catch(e){}
+function addPlayer(){
+  const i = state.players.length + 1;
+  const name = "Joueur " + i;
+  const fid = Number(document.getElementById("defaultFid")?.value || 50);
+  state.players.push({
+    name,
+    pseudo:name,
+    code:generateUniqueCode(state.players),
+    avatar:null,
+    startFid:fid,
+    balance:fid,
+    evolution:0,
+    good:0,
+    exact:0,
+    secrets:null
+  });
+  save();
+  renderAdmin();
 }
-function makeUniquePlayerName(base="Nouveau joueur"){
-  const existing=new Set((state.players||[]).map(p=>String(p.name||"").toLowerCase()));
-  let i=(state.players||[]).length+1, name=`${base} ${i}`;
-  while(existing.has(name.toLowerCase())){i++;name=`${base} ${i}`;}
-  return name;
-}
-function adminUpdatePlayer(index,field,value){
-  if(!state.players || !state.players[index]) return;
-  backupUsers("update");
-  const p=state.players[index];
-  if(field==="name"){
-    const old=p.name;
-    const val=String(value||"").trim()||old||"Nouveau joueur";
-    if(state.players.some((x,j)=>j!==index && String(x.name||"").toLowerCase()===val.toLowerCase())){
-      alert("Ce nom existe déjà."); renderAdmin(); return;
-    }
-    p.name=val;
-    if(!p.pseudo || p.pseudo===old) p.pseudo=val;
-    (state.bets||[]).forEach(b=>{if(b.player===old)b.player=val;});
-    (state.logs||[]).forEach(l=>{if(l.player===old)l.player=val;});
-    (state.settlementDetails||[]).forEach(d=>{if(d.player===old)d.player=val;});
-  }
-  if(field==="pseudo") p.pseudo=String(value||p.name||"").trim()||p.name;
-  if(field==="startFid") p.startFid=Number(value||0);
-  if(field==="balance") p.balance=Number(value||0);
-  save();renderAll();
-}
-async function addPlayer(){
-  if(!Array.isArray(state.players)){await bpAlert("Liste utilisateurs introuvable.",{icon:"⚠️"});return;}
-  backupUsers("add");
-  const fid=Number(document.getElementById("defaultFid")?.value||state.players[0]?.startFid||50);
-  const name=makeUniquePlayerName("Nouveau joueur");
-  state.players.push({name,pseudo:name,code:generateUniqueCode(state.players),avatar:null,startFid:fid,balance:fid,evolution:0,good:0,exact:0,secrets:null});
-  save();renderAll();
-  await bpAlert(`Utilisateur ajouté : ${name}. Les autres utilisateurs sont conservés.`,{icon:"✅"});
-}
-async function safeDeletePlayer(index){
-  if(!state.players || !state.players[index]) return;
-  const name=state.players[index].name;
-  if(!confirm(`Supprimer uniquement "${name}" ?\n\nLes autres utilisateurs seront conservés.`)) return;
-  backupUsers("delete");
-  state.players.splice(index,1);
-  save();renderAll();
-  await bpAlert(`Utilisateur supprimé : ${name}.`,{icon:"✅"});
-}
-async function restoreBeforeUserChangeBackup(){
-  const raw=localStorage.getItem("bp_wc_dev_backup_users_last");
-  if(!raw){await bpAlert("Aucune sauvegarde utilisateurs trouvée.",{icon:"ℹ️"});return;}
-  if(!confirm("Restaurer la dernière sauvegarde utilisateurs ?")) return;
-  state=JSON.parse(raw);save();renderAll();
-  await bpAlert("Sauvegarde utilisateurs restaurée.",{icon:"✅"});
-}
-
 function applyDefaultFid(){let v=Number(defaultFid.value||50);state.players.forEach(p=>{p.startFid=v;p.balance=v;p.evolution=0});renderAdmin();}
 async function closeBets(){
   if(isDayClosed(state.currentDay)){
@@ -6999,14 +6386,10 @@ async function calculateGains(showAlert=true){
       let stake=Number(b.stake||0);
       let exact=(Number(b.scoreA)===Number(m.scoreA) && Number(b.scoreB)===Number(m.scoreB));
       let multiplier=exact ? 3 : 2;
-      let eventMult=eventMultiplierForBet(targetDay,m.id,exact);
-      let net=stake * multiplier * eventMult;
-      let baseGain=stake * 2 * eventMult;
-      let exactBonus=exact ? stake * eventMult : 0;
-      if(currentDayEvents(targetDay).festival && (Number(m.scoreA)+Number(m.scoreB))>=4){
-        const fest=Number(currentDayEvents(targetDay).festivalAmount||3);
-        net += fest; payoutTotal += fest; baseGain += fest;
-      }
+      let net=stake * multiplier;
+      let baseGain=stake * 2;
+      let exactBonus=exact ? stake : 0;
+      payoutTotal += net;
 
       pl.balance+=net;pl.evolution+=net;pl.good++;totalGood++;
       if(exact){pl.exact++;totalExact++;}
@@ -7016,7 +6399,7 @@ async function calculateGains(showAlert=true){
       state.settlementDetails.push({
         day:targetDay, matchId:m.id, match:`${m.teamA} - ${m.teamB}`,
         player:b.player, stake, prediction:outcomeLabel(b.predictedOutcome,m), predictedScore:scoreText(b.scoreA,b.scoreB),
-        officialScore:scoreText(m.scoreA,m.scoreB), result:actualLabel, status:(exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)") + (eventMult>1 ? " · BONUS x"+eventMult : ""),
+        officialScore:scoreText(m.scoreA,m.scoreB), result:actualLabel, status:exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)",
         baseGain, exactBonus, netGain:net
       });
     });
@@ -7031,8 +6414,6 @@ async function calculateGains(showAlert=true){
       baseGain:payoutTotal, exactBonus:0, netGain:reserveSurplus-reserveNeed
     });
   });
-
-  applySpecialEventBonuses(targetDay,todays);
 
   state.players.forEach(p=>{
     if(p.balance<=0 && calcReserve().reserve>0){
@@ -7112,9 +6493,6 @@ function exportCSV(type){
   })];
   if(type==="results") rows=[["day","matchId","officialScore","scoreA","scoreB"],...state.matches.filter(m=>m.scoreA!==null).map(m=>[m.day,m.id,excelScore(m.scoreA,m.scoreB),m.scoreA,m.scoreB])];
   if(type==="logs") rows=[["day","player","text","amount","date"],...state.logs.map(l=>[l.day,l.player,l.text,l.amount,l.date])];
-  if(type==="secrets") rows=[["player","winner","bestPlayer","topScorer","sealed","validatedAt"],...state.players.map(p=>[p.name,p.secrets?.winner||"",p.secrets?.bestPlayer||"",p.secrets?.topScorer||"",p.secrets?.sealed?"YES":"NO",p.secrets?.validatedAt||""])];
-  if(type==="events"){ensureSpecialEvents(); rows=[["day","doubleGains","doubleExact","cashDay","cashAmount","luckyMatchId","luckyMultiplier","kingDay","kingAmount","jackpot","jackpotAmount","festival","festivalAmount"],...Object.keys(state.specialEvents||{}).sort((a,b)=>Number(a)-Number(b)).map(day=>{const e=state.specialEvents[day]||{};return [day,e.doubleGains?"YES":"NO",e.doubleExact?"YES":"NO",e.cashDay?"YES":"NO",e.cashAmount||10,e.luckyMatchId||"",e.luckyMultiplier||2,e.kingDay?"YES":"NO",e.kingAmount||20,e.jackpot?"YES":"NO",e.jackpotAmount||50,e.festival?"YES":"NO",e.festivalAmount||3];})];}
-
   if(type==="settlement" || type==="validated_report") rows=buildValidatedReportRows();
   if(type==="simulation") rows=[
     ["section","day","matchId","match","player","stake","prediction","score","officialScore","status","netGain"],
@@ -7129,129 +6507,6 @@ function exportCSV(type){
   download(`bp_worldcup_${type}.csv`, rows.map(r=>r.map(csvEscape).join(";")).join("\n"));
 }
 function downloadJSON(){download("bp_worldcup_backup.json",JSON.stringify(state,null,2),"application/json;charset=utf-8");}
-
-function parseCSVText(text){
-  const rows=[]; let row=[], cell="", q=false;
-  for(let i=0;i<text.length;i++){
-    const ch=text[i], next=text[i+1];
-    if(q){
-      if(ch==='"' && next==='"'){ cell+='"'; i++; }
-      else if(ch==='"'){ q=false; }
-      else cell+=ch;
-    }else{
-      if(ch==='"') q=true;
-      else if(ch===';' || ch===','){ row.push(cell); cell=""; }
-      else if(ch==='\n'){ row.push(cell); rows.push(row); row=[]; cell=""; }
-      else if(ch!=='\r') cell+=ch;
-    }
-  }
-  if(cell!=="" || row.length){ row.push(cell); rows.push(row); }
-  return rows.filter(r=>r.some(c=>String(c).trim()!==""));
-}
-function csvRowsToObjects(rows){
-  if(!rows.length) return [];
-  const headers=rows[0].map(h=>String(h).trim());
-  return rows.slice(1).map(r=>{
-    const o={};
-    headers.forEach((h,i)=>o[h]=r[i] ?? "");
-    return o;
-  });
-}
-function importCSV(type,e){
-  const file=e.target.files && e.target.files[0];
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=()=>{
-    try{
-      const rows=parseCSVText(String(reader.result||""));
-      const data=csvRowsToObjects(rows);
-      let imported=0, skipped=0;
-      if(type==="bets"){
-        data.forEach(o=>{
-          const day=Number(o.day), matchId=String(o.matchId||"").trim(), player=String(o.player||"").trim();
-          const m=state.matches.find(x=>String(x.id)===matchId && Number(x.day)===day);
-          const p=state.players.find(x=>x.name===player);
-          if(!day || !m || !p){ skipped++; return; }
-          const scoreA=Number(o.scoreA ?? splitScore(o.predictedScore||"0 - 0")[0]);
-          const scoreB=Number(o.scoreB ?? splitScore(o.predictedScore||"0 - 0")[1]);
-          const stake=Math.max(1, Math.min(4, Number(o.stake||1)));
-          const status=String(o.status||"DRAFT").toUpperCase()==="VALIDATED" ? "VALIDATED" : "DRAFT";
-          state.bets=state.bets.filter(b=>!(Number(b.day)===day && b.matchId===matchId && b.player===player));
-          state.bets.push({
-            day, matchId, player,
-            prediction:outcomeFromScore(scoreA,scoreB),
-            predictedOutcome:outcomeFromScore(scoreA,scoreB),
-            score:scoreText(scoreA,scoreB), scoreA, scoreB, stake, status,
-            validatedAt:status==="VALIDATED" ? (o.validatedAt || new Date().toISOString()) : null
-          });
-          imported++;
-        });
-      }
-      if(type==="results"){
-        data.forEach(o=>{
-          const day=Number(o.day), matchId=String(o.matchId||"").trim();
-          const m=state.matches.find(x=>String(x.id)===matchId && Number(x.day)===day);
-          if(!m){ skipped++; return; }
-          let a=o.scoreA, b=o.scoreB;
-          if((a==="" || a===undefined) && o.officialScore){
-            const sp=splitScore(o.officialScore); a=sp[0]; b=sp[1];
-          }
-          if(a==="" || b==="" || a===undefined || b===undefined){ skipped++; return; }
-          m.scoreA=Number(a); m.scoreB=Number(b); m.status="done";
-          imported++;
-        });
-      }
-      if(type==="secrets"){
-        data.forEach(o=>{
-          const player=String(o.player||"").trim();
-          const p=state.players.find(x=>x.name===player);
-          if(!p){ skipped++; return; }
-          const sealed=String(o.sealed||"YES").toUpperCase();
-          p.secrets={
-            winner:o.winner||"",
-            bestPlayer:o.bestPlayer||"",
-            topScorer:o.topScorer||"",
-            sealed: sealed==="YES" || sealed==="TRUE" || sealed==="1",
-            validatedAt:o.validatedAt || new Date().toISOString()
-          };
-          imported++;
-        });
-      }
-      if(type==="events"){
-        ensureSpecialEvents();
-        data.forEach(o=>{
-          const day=Number(o.day);
-          if(!day){ skipped++; return; }
-          const yes=v=>["YES","TRUE","1","OUI"].includes(String(v||"").toUpperCase());
-          state.specialEvents[day]={
-            doubleGains:yes(o.doubleGains),
-            doubleExact:yes(o.doubleExact),
-            cashDay:yes(o.cashDay),
-            cashAmount:Number(o.cashAmount||10),
-            luckyMatchId:o.luckyMatchId||"",
-            luckyMultiplier:Number(o.luckyMultiplier||2),
-            kingDay:yes(o.kingDay),
-            kingAmount:Number(o.kingAmount||20),
-            jackpot:yes(o.jackpot),
-            jackpotAmount:Number(o.jackpotAmount||50),
-            festival:yes(o.festival),
-            festivalAmount:Number(o.festivalAmount||3)
-          };
-          imported++;
-        });
-      }
-      save(); renderAll();
-      alert(`${imported} ligne(s) importée(s). ${skipped} ligne(s) ignorée(s).`);
-    }catch(err){
-      console.error(err);
-      alert("Import impossible : fichier CSV invalide ou colonnes non reconnues.");
-    }finally{
-      e.target.value="";
-    }
-  };
-  reader.readAsText(file, "utf-8");
-}
-
 function importJSON(e){let file=e.target.files[0];if(!file)return;let r=new FileReader();r.onload=()=>{state=JSON.parse(r.result);save();renderAll();alert("Sauvegarde restaurée.");};r.readAsText(file);}
 function importResultsCSV(e){
   let file=e.target.files[0];if(!file)return;let r=new FileReader();r.onload=()=>{
@@ -7275,210 +6530,11 @@ function repairState(){
   save();
 }
 
-function renderAll(){if(!state.closedDays) state.closedDays={}; if(Object.keys(state.closedDays).length===0){state.matches.forEach(m=>state.closedDays[m.day]=Number(m.day)!==Number(state.currentDay||1));} state.closed=isDayClosed(state.currentDay); ensurePlayerCodes();applyRoleUI();renderHeader();ensureSpecialEvents(); renderCalendar();renderBets();renderSpecialEventsBanner();renderRanking(); if(adminPanel.style.display!=="none"){ renderAdmin(); renderSpecialEventsAdmin(); if(typeof renderAdminBetsTable==="function") renderAdminBetsTable(); }}
+function renderAll(){if(!state.closedDays) state.closedDays={}; if(Object.keys(state.closedDays).length===0){state.matches.forEach(m=>state.closedDays[m.day]=Number(m.day)!==Number(state.currentDay||1));} state.closed=isDayClosed(state.currentDay); ensurePlayerCodes();applyRoleUI();renderHeader();renderCalendar();renderBets();renderRanking(); if(adminPanel.style.display!=="none") renderAdmin();}
 repairState();
+migrateCalendar();
 renderAll();
-
-function runSanityCheck(){
-  const issues=[];
-  const requiredSections=["calendar","bets","scores","ranking","admin","backup"];
-  requiredSections.forEach(id=>{ if(!document.getElementById(id)) issues.push("Section manquante: "+id); });
-  ["activePlayer","betRows","secretWinner","secretBestPlayer","secretTopScorer","adminSecretsBody","adminBetsBody","scoreInputs","personalLog"].forEach(id=>{
-    if(!document.getElementById(id)) issues.push("ID manquant: "+id);
-  });
-  if(typeof saveBets!=="function") issues.push("saveBets manquant");
-  if(typeof validateSingleBet!=="function") issues.push("validateSingleBet manquant");
-  if(typeof sealSecrets!=="function") issues.push("sealSecrets manquant");
-  if(typeof exportCSV!=="function") issues.push("exportCSV manquant");
-  if(typeof importCSV!=="function") issues.push("importCSV manquant");
-  return {ok:issues.length===0, issues};
-}
-
 </script>
 
-
-
-<script>
-/* V13 — enrichissement cartes pronostics : stade, heure Paris, contexte match */
-(function(){
-  function esc(v){return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-  function getMatches(){
-    try{
-      if(Array.isArray(window.MATCHES)) return window.MATCHES;
-      if(Array.isArray(window.matches)) return window.matches;
-      if(Array.isArray(window.MATCH_LIST)) return window.MATCH_LIST;
-    }catch(e){}
-    return [];
-  }
-  function parisTimeFromMatch(m){
-    const raw = m.time || m.hour || m.kickoff || m.dateTime || m.datetime || '';
-    const date = m.date || m.dayDate || '';
-    if(!raw && !date) return '';
-    // If only HH:mm is stored, display as Paris reference instead of guessing timezone.
-    if(/^\d{1,2}:\d{2}$/.test(String(raw))) return raw + ' — heure de Paris';
-    try{
-      const d = new Date(raw || date);
-      if(!isNaN(d.getTime())){
-        return new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit'}).format(d) + ' — heure de Paris';
-      }
-    }catch(e){}
-    return esc(raw) + ' — heure de Paris';
-  }
-  function matchLabel(m){
-    const bits = [];
-    const d = m.date || m.dayDate || '';
-    const t = parisTimeFromMatch(m);
-    const stadium = m.stadium || m.venue || m.location || '';
-    if(d) bits.push('📅 ' + esc(d));
-    if(t) bits.push('🕒 ' + esc(t));
-    if(stadium) bits.push('🏟️ ' + esc(stadium));
-    if(m.group) bits.push('🏷️ ' + esc(m.group));
-    return bits.join('<span class="match-info-sep">•</span>');
-  }
-  function h2hLabel(m){
-    // Optional data can be added later in the match object:
-    // lastH2H:{score:'2-1', date:'21 juin 1986', context:'Quart de finale Coupe du Monde 1986'}
-    const h = m.lastH2H || m.lastHeadToHead || m.h2h || null;
-    if(!h) return 'Dernier face-à-face officiel : <b>à compléter</b>';
-    const score = h.score || '';
-    const date = h.date || '';
-    const ctx = h.context || h.competition || '';
-    return 'Dernier face-à-face officiel : <b>' + esc(score) + '</b>' +
-      (date ? ' — ' + esc(date) : '') +
-      (ctx ? ' · ' + esc(ctx) : '');
-  }
-  function enhance(){
-    const matches = getMatches();
-    document.querySelectorAll('#bets .bet-card').forEach(card => {
-      if(card.dataset.v13Enhanced === '1') return;
-      const id = (card.id || '').replace('betCard_','');
-      const m = matches.find(x => String(x.id || x.matchId || x.code || '') === id) || {};
-      const title = card.querySelector('.bet-title');
-      if(title && !card.querySelector('.match-info-panel')){
-        const panel = document.createElement('div');
-        panel.className = 'match-info-panel';
-        panel.innerHTML = '<div>' + (matchLabel(m) || '📅 Journée ouverte') + '</div><div>' + h2hLabel(m) + '</div>';
-        title.insertAdjacentElement('afterend', panel);
-      }
-      card.dataset.v13Enhanced = '1';
-    });
-  }
-  document.addEventListener('DOMContentLoaded', enhance);
-  const oldRenderAll = window.renderAll;
-  if(typeof oldRenderAll === 'function'){
-    window.renderAll = function(){
-      const r = oldRenderAll.apply(this, arguments);
-      setTimeout(enhance, 0);
-      return r;
-    };
-  }
-  setInterval(enhance, 1200);
-})();
-</script>
-
-
-<script>
-/* V25 — Forcer l'écran de connexion au chargement */
-(function(){
-  function forceLoginOnLoad(){
-    try{
-      window.currentRole = null;
-      window.currentUserIndex = null;
-    }catch(e){}
-
-    const login = document.getElementById("loginScreen");
-    if(login) login.style.display = "flex";
-
-    const code = document.getElementById("loginCode");
-    if(code) code.value = "";
-
-    document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
-    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
-
-    const adminPanel = document.getElementById("adminPanel");
-    if(adminPanel) adminPanel.style.display = "none";
-
-    const adminLock = document.getElementById("adminLock");
-    if(adminLock) adminLock.style.display = "block";
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", forceLoginOnLoad);
-  }else{
-    forceLoginOnLoad();
-  }
-})();
-</script>
-
-
-<script>
-/* V28 — Export HTML autonome avec utilisateurs embarqués */
-(function(){
-  function getCurrentState(){
-    try{
-      const raw=localStorage.getItem("bp_wc_dev");
-      if(raw) return JSON.parse(raw);
-    }catch(e){}
-    return typeof state !== "undefined" ? state : null;
-  }
-  function htmlEscapeJson(json){
-    return JSON.stringify(json)
-      .replace(/</g,"\\u003C")
-      .replace(/>/g,"\\u003E")
-      .replace(/&/g,"\\u0026");
-  }
-  window.downloadStandaloneHTMLWithUsers = function(){
-    const current=getCurrentState();
-    if(!current || !Array.isArray(current.players) || current.players.length===0){
-      alert("Aucun utilisateur local trouvé. Crée ou restaure les utilisateurs avant de générer le HTML GitHub.");
-      return;
-    }
-
-    const doc = document.documentElement.outerHTML;
-    const full = "<!DOCTYPE html>\n" + doc.replace(
-      /<script id="bpEmbeddedState" type="application\/json">[\s\S]*?<\/script>/,
-      `<script id="bpEmbeddedState" type="application/json">${htmlEscapeJson(current)}<\/script>`
-    );
-
-    const blob=new Blob([full],{type:"text/html;charset=utf-8"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download="BPartner_FIFA_WorldCup_2026_GitHub_USERS_EMBEDDED.html";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
-  };
-
-  window.forceLoadEmbeddedState = function(){
-    try{
-      const el=document.getElementById("bpEmbeddedState");
-      const txt=(el?.textContent||"").trim();
-      if(!txt || txt==="null"){ alert("Aucun état embarqué dans ce HTML."); return; }
-      const embedded=JSON.parse(txt);
-      if(!confirm("Charger les utilisateurs embarqués dans ce HTML ? Cela remplace le localStorage actuel.")) return;
-      localStorage.setItem("bp_wc_dev", JSON.stringify(embedded));
-      location.reload();
-    }catch(e){
-      alert("Impossible de charger l’état embarqué.");
-    }
-  };
-
-  document.addEventListener("DOMContentLoaded",()=>{
-    const backup=document.getElementById("backup");
-    if(backup && !document.getElementById("downloadStandaloneHTMLBtn")){
-      backup.insertAdjacentHTML("afterbegin", `
-        <div class="help">
-          <b>Déploiement GitHub Pages</b><br>
-          Les utilisateurs enregistrés dans ton navigateur ne partent pas automatiquement sur GitHub.
-          Clique ici pour générer un HTML autonome contenant les utilisateurs actuels.
-          <br>
-          <button id="downloadStandaloneHTMLBtn" class="action" onclick="downloadStandaloneHTMLWithUsers()">Télécharger HTML avec utilisateurs embarqués</button>
-          <button class="action secondary" onclick="forceLoadEmbeddedState()">Charger état embarqué</button>
-        </div>
-      `);
-    }
-  });
-})();
-</script>
 
 </body></html>
