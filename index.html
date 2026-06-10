@@ -8693,4 +8693,63 @@ function bpModalClose(){
 })();
 </script>
 
+
+<script>
+/* V47 — Fix navigation Admin / Backup */
+(function(){
+  function activateSection(id, btn){
+    document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+    document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+    const sec=document.getElementById(id);
+    if(sec) sec.classList.add("active");
+    if(btn) btn.classList.add("active");
+    if(typeof renderAll==="function"){
+      try{ renderAll(); }catch(e){ console.warn("renderAll after tab failed", e); }
+    }
+  }
+
+  window.bpAdminTab = function(id, btn){
+    if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+      const login=document.getElementById("loginScreen");
+      if(login) login.style.display="flex";
+      return false;
+    }
+    activateSection(id, btn);
+    return true;
+  };
+
+  // Force les boutons Admin et Backup à utiliser la navigation admin sécurisée.
+  function patchAdminButtons(){
+    const adminBtn=document.getElementById("navAdmin");
+    const backupBtn=document.getElementById("navBackup");
+
+    if(adminBtn){
+      adminBtn.onclick=function(){ return window.bpAdminTab("admin", adminBtn); };
+      adminBtn.style.display = window.currentRole==="admin" ? "inline-flex" : "none";
+    }
+    if(backupBtn){
+      backupBtn.onclick=function(){ return window.bpAdminTab("backup", backupBtn); };
+      backupBtn.style.display = window.currentRole==="admin" ? "inline-flex" : "none";
+    }
+  }
+
+  // Remet les boutons après chaque rendu, car d'anciens scripts peuvent les réécrire.
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV47Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(patchAdminButtons,50);
+      return r;
+    };
+    window.renderAll.__bpV47Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(patchAdminButtons,300);
+    setTimeout(patchAdminButtons,1000);
+  });
+  setInterval(patchAdminButtons,1000);
+})();
+</script>
+
 </body></html>
