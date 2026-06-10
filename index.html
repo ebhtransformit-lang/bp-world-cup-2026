@@ -2100,6 +2100,30 @@ body.bp-admin #activePlayerCard{display:none!important;}
 }
 #pronoCountdownPanel .countdown-sub{margin-top:6px;color:#e6e6e6;font-size:13px}
 
+
+/* V49 — Admin clean + data safety */
+body.bp-admin #navBets,
+body.bp-admin #navScores,
+body.bp-admin #navCalendar,
+body.bp-admin #navRanking,
+body.bp-admin .user-nav{
+  display:none!important;
+}
+body.bp-admin #activePlayerCard,
+body.bp-admin #pronoCountdownPanel{
+  display:none!important;
+}
+body.bp-admin #adminPanel,
+body.bp-admin #admin,
+body.bp-admin #backup{
+  filter:none!important;
+}
+body.bp-user .admin-only,
+body.bp-user #navAdmin,
+body.bp-user #navBackup{
+  display:none!important;
+}
+
 </style>
 
 <!--
@@ -8749,6 +8773,412 @@ function bpModalClose(){
     setTimeout(patchAdminButtons,1000);
   });
   setInterval(patchAdminButtons,1000);
+})();
+</script>
+
+
+<script>
+/* V48 — Supabase restore robuste : ne pas perdre les données cloud */
+(function(){
+  window.bpCloudRestoreInProgress = false;
+
+  function sbClientV48(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
+      throw new Error("Supabase non configuré.");
+    }
+    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+  }
+
+  function stateSummary(st){
+    const players = Array.isArray(st?.players) ? st.players.length : 0;
+    const bets = Array.isArray(st?.bets) ? st.bets.length : 0;
+    const hassan = (st?.players||[]).find(p => String(p.code||"") === "4533" || /hassan/i.test(String(p.name||"")));
+    return {players,bets,hassan:hassan ? `${hassan.name||hassan.pseudo||"Hassan"} / code ${hassan.code||"?"}` : "Hassan non trouvé"};
+  }
+
+  window.bpForceLoadSupabase = async function(){
+    try{
+      window.bpCloudRestoreInProgress = true;
+
+      const sb = sbClientV48();
+      const {data,error} = await sb
+        .from("app_state")
+        .select("id,data,updated_at")
+        .eq("id", window.BP_SUPABASE_APP_ID || "bp-world-cup-2026")
+        .maybeSingle();
+
+      if(error) throw error;
+      if(!data || !data.data) {
+        alert("Aucune donnée trouvée dans Supabase pour bp-world-cup-2026.");
+        return false;
+      }
+
+      const cloudState = data.data;
+      const s = stateSummary(cloudState);
+
+      if(!Array.isArray(cloudState.players) || cloudState.players.length === 0){
+        alert("Supabase a répondu, mais la sauvegarde ne contient aucun utilisateur.");
+        return false;
+      }
+
+      state = cloudState;
+
+      try{
+        localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+        localStorage.setItem("bp_wc_dev_last_successful_cloud_restore", JSON.stringify({
+          restoredAt:new Date().toISOString(),
+          updatedAt:data.updated_at,
+          summary:s
+        }));
+      }catch(e){ console.warn(e); }
+
+      if(typeof repairState === "function") repairState();
+
+      // On remet en mode login propre après restauration, pour éviter de rester sur un ancien user local.
+      if(typeof bpLockApp === "function") bpLockApp();
+      else if(typeof logout === "function") logout();
+
+      if(typeof renderAll === "function"){
+        try{ renderAll(); }catch(e){ console.warn("renderAll après restauration", e); }
+      }
+
+      const msg = `Données Supabase restaurées.\n\nJoueurs : ${s.players}\nPronostics : ${s.bets}\nHassan : ${s.hassan}\n\nRecharge la page puis connecte-toi avec le code 4533.`;
+      alert(msg);
+
+      setTimeout(()=>location.reload(), 500);
+      return true;
+    }catch(e){
+      console.error(e);
+      alert("Erreur chargement Supabase : " + (e.message || e));
+      return false;
+    }finally{
+      setTimeout(()=>{ window.bpCloudRestoreInProgress = false; }, 1500);
+    }
+  };
+
+  // Remplace l’ancien bouton Charger depuis Supabase par le chargement robuste.
+  window.bpCloudLoad = async function(showAlert=true){
+    return window.bpForceLoadSupabase();
+  };
+
+  // Empêche l’auto-save pendant une restauration cloud.
+  const oldDebounced = window.bpCloudSaveDebounced;
+  if(typeof oldDebounced === "function" && !oldDebounced.__bpV48Wrapped){
+    window.bpCloudSaveDebounced = function(){
+      if(window.bpCloudRestoreInProgress) return;
+      return oldDebounced.apply(this, arguments);
+    };
+    window.bpCloudSaveDebounced.__bpV48Wrapped = true;
+  }
+
+  const oldSave = window.bpCloudSave;
+  if(typeof oldSave === "function" && !oldSave.__bpV48Wrapped){
+    window.bpCloudSave = async function(showAlert=true){
+      if(window.bpCloudRestoreInProgress) return false;
+      return oldSave.apply(this, arguments);
+    };
+    window.bpCloudSave.__bpV48Wrapped = true;
+  }
+
+  // Ajoute un bouton explicite dans Backup/Admin.
+  document.addEventListener("DOMContentLoaded",()=>{
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpForceLoadSupabasePanel")){
+      backup.insertAdjacentHTML("afterbegin", `
+        <div id="bpForceLoadSupabasePanel" class="card" style="border-color:rgba(59,130,246,.45)">
+          <h2>🔄 Restauration Supabase forcée</h2>
+          <div class="muted">
+            À utiliser si les données locales ne correspondent pas à Supabase. 
+            Cela remplace le navigateur par la sauvegarde cloud <b>bp-world-cup-2026</b>.
+          </div>
+          <button class="action" onclick="bpForceLoadSupabase()">Forcer chargement Supabase</button>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
+
+<script>
+/* V49 — Admin clean + Supabase data safety */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
+  let loadingCloud = false;
+
+  function isAdmin(){ return window.bpIsAuthenticated === true && window.currentRole === "admin"; }
+  function isUser(){ return window.bpIsAuthenticated === true && window.currentRole === "user"; }
+
+  function hideUserTabsForAdmin(){
+    document.body.classList.toggle("bp-admin", isAdmin());
+    document.body.classList.toggle("bp-user", isUser());
+    ["navBets","navScores","navCalendar","navRanking"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display = isAdmin() ? "none" : "";
+    });
+    ["navAdmin","navBackup"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display = isAdmin() ? "inline-flex" : "none";
+    });
+  }
+
+  // 1) No login/onboarding notifications for Admin
+  function guardAdminNotification(fnName){
+    const fn=window[fnName];
+    if(typeof fn!=="function" || fn.__bpV49AdminGuard) return;
+    window[fnName]=function(){
+      if(isAdmin()) return false;
+      return fn.apply(this,arguments);
+    };
+    window[fnName].__bpV49AdminGuard=true;
+  }
+
+  function installNotificationGuards(){
+    [
+      "bpV40ShowLoginMessage",
+      "bpShowLoginOnboarding",
+      "bpV36ShowLoginOnboarding",
+      "showFirstLoginOnboarding",
+      "showReturningLoginMessage",
+      "bpSmartLoginMessage"
+    ].forEach(guardAdminNotification);
+  }
+
+  // 2) Admin does not see Prono/Scores; force admin landing to Admin
+  const oldLogin=window.loginWithCode;
+  if(typeof oldLogin==="function" && !oldLogin.__bpV49Wrapped){
+    window.loginWithCode=function(){
+      const code=String(document.getElementById("loginCode")?.value||"").trim();
+      const result=oldLogin.apply(this,arguments);
+      setTimeout(()=>{
+        installNotificationGuards();
+        hideUserTabsForAdmin();
+        if(code==="1573" && isAdmin()){
+          const modalIds=["bpV40Modal","bpOnboardingBackdrop","bpModalBackdrop","bpV40Modal"];
+          modalIds.forEach(id=>{
+            const el=document.getElementById(id);
+            if(el){
+              if(id==="bpModalBackdrop") el.style.display="none";
+              else el.remove();
+            }
+          });
+          if(typeof tab==="function") tab("admin",document.getElementById("navAdmin"));
+        }
+      },200);
+      return result;
+    };
+    window.loginWithCode.__bpV49Wrapped=true;
+  }
+
+  // 3) Admin detail does not require any code; it opens directly by index
+  window.showAdminUserDetail = function(index){
+    if(!isAdmin()){
+      alert("Accès réservé à l'admin.");
+      return false;
+    }
+    const p=(state.players||[])[Number(index)];
+    if(!p) return false;
+
+    let panel=document.getElementById("adminUserDetailPanel");
+    if(!panel){
+      panel=document.createElement("div");
+      panel.id="adminUserDetailPanel";
+      panel.className="admin-detail-panel";
+      const target=document.getElementById("adminPlayers") || document.getElementById("admin");
+      if(target) target.insertAdjacentElement("afterend",panel);
+      else document.body.appendChild(panel);
+    }
+
+    const bets=(state.bets||[]).filter(b=>b.player===p.name);
+    const validated=bets.filter(b=>String(b.status||"").toUpperCase()==="VALIDATED");
+    const secrets=p.secrets||{};
+    panel.innerHTML=`
+      <div class="admin-detail-head">
+        <div class="admin-detail-user">
+          <span class="admin-detail-avatar">${p.avatar?`<img src="${p.avatar}" class="admin-detail-avatar">`:(String(p.pseudo||p.name||"?").charAt(0).toUpperCase())}</span>
+          <div>
+            <h3>${p.pseudo||p.name}</h3>
+            <div class="muted">${p.name} · Code ${p.code||"—"}</div>
+          </div>
+        </div>
+        <button class="action secondary" onclick="document.getElementById('adminUserDetailPanel').remove()">Fermer</button>
+      </div>
+      <div class="admin-detail-grid">
+        <div class="admin-detail-kpi">Solde <b>${Number(p.balance||0)} FID</b></div>
+        <div class="admin-detail-kpi">Bons pronos <b>${Number(p.good||0)}</b></div>
+        <div class="admin-detail-kpi">Scores exacts <b>${Number(p.exact||0)}</b></div>
+        <div class="admin-detail-kpi">Pronos validés <b>${validated.length}</b></div>
+      </div>
+      <h3>Questions secrètes</h3>
+      <table>
+        <tr><th>Vainqueur</th><td>${secrets.winner||"—"}</td></tr>
+        <tr><th>Meilleur joueur</th><td>${secrets.bestPlayer||"—"}</td></tr>
+        <tr><th>Meilleur buteur</th><td>${secrets.topScorer||"—"}</td></tr>
+        <tr><th>Validées</th><td>${secrets.sealed?"Oui":"Non"}</td></tr>
+      </table>
+      <h3>Pronostics</h3>
+      <div class="muted">${bets.length} pronostic(s) au total.</div>
+    `;
+    panel.scrollIntoView({behavior:"smooth",block:"start"});
+    return true;
+  };
+
+  // Data safety: normalize/merge model, preserve secrets and bets
+  function deepClone(x){ return JSON.parse(JSON.stringify(x||{})); }
+
+  function playerKey(p){
+    return String(p?.code||"").trim() || String(p?.name||"").trim().toLowerCase();
+  }
+
+  function mergePlayers(localPlayers, cloudPlayers){
+    const byKey=new Map();
+    (localPlayers||[]).forEach(p=>{
+      const k=playerKey(p);
+      if(k) byKey.set(k, deepClone(p));
+    });
+    (cloudPlayers||[]).forEach(cp=>{
+      const k=playerKey(cp);
+      if(!k) return;
+      const lp=byKey.get(k)||{};
+      // Cloud wins, but never lose existing secrets/avatar if cloud field is empty.
+      const merged={...lp,...cp};
+      if((!cp.secrets || !Object.keys(cp.secrets||{}).length) && lp.secrets) merged.secrets=lp.secrets;
+      if(!cp.avatar && lp.avatar) merged.avatar=lp.avatar;
+      if(!cp.pseudo && lp.pseudo) merged.pseudo=lp.pseudo;
+      byKey.set(k,merged);
+    });
+    return [...byKey.values()];
+  }
+
+  window.bpValidateStateModel = function(st){
+    const issues=[];
+    if(!st || typeof st!=="object") issues.push("state absent");
+    if(!Array.isArray(st.players)) issues.push("players absent");
+    if(!Array.isArray(st.bets)) issues.push("bets absent");
+    if(!Array.isArray(st.matches)) issues.push("matches absent");
+    const hassan=(st.players||[]).find(p=>String(p.code||"")==="4533" || /hassan/i.test(String(p.name||"")));
+    if(!hassan) issues.push("Hassan/code 4533 introuvable");
+    if(hassan && !hassan.secrets) issues.push("Questions secrètes Hassan absentes");
+    return {ok:issues.length===0,issues,hassan,players:(st.players||[]).length,bets:(st.bets||[]).length};
+  };
+
+  async function fetchCloudState(){
+    const sb=window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
+    const {data,error}=await sb.from("app_state").select("data,updated_at").eq("id",APP_ID).maybeSingle();
+    if(error) throw error;
+    if(!data || !data.data) throw new Error("Aucune donnée cloud trouvée.");
+    return data;
+  }
+
+  window.bpForceLoadSupabase = async function(){
+    try{
+      loadingCloud=true;
+      const local=deepClone(state);
+      const cloud=await fetchCloudState();
+      const cloudState=deepClone(cloud.data);
+
+      const report=window.bpValidateStateModel(cloudState);
+      if(!Array.isArray(cloudState.players) || cloudState.players.length===0){
+        alert("Cloud chargé mais aucun utilisateur trouvé. Restauration annulée.");
+        return false;
+      }
+
+      // Merge safety: cloud is source of truth, local secrets retained only if cloud missing.
+      cloudState.players=mergePlayers(local.players,cloudState.players);
+
+      state=cloudState;
+      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+      localStorage.setItem("bp_wc_dev_last_restore_report",JSON.stringify({
+        at:new Date().toISOString(),
+        updated_at:cloud.updated_at,
+        report:window.bpValidateStateModel(state)
+      }));
+
+      if(typeof repairState==="function") repairState();
+
+      const finalReport=window.bpValidateStateModel(state);
+      alert(`Données Supabase restaurées.\n\nJoueurs: ${finalReport.players}\nPronostics: ${finalReport.bets}\nHassan: ${finalReport.hassan ? "trouvé" : "non trouvé"}\nQuestions Hassan: ${finalReport.hassan?.secrets ? "présentes" : "absentes"}\n\nLa page va se recharger.`);
+
+      setTimeout(()=>location.reload(),400);
+      return true;
+    }catch(e){
+      console.error(e);
+      alert("Erreur restauration Supabase : "+(e.message||e));
+      return false;
+    }finally{
+      setTimeout(()=>{loadingCloud=false;},1500);
+    }
+  };
+
+  window.bpAuditSupabaseData = async function(){
+    try{
+      const cloud=await fetchCloudState();
+      const report=window.bpValidateStateModel(cloud.data);
+      alert(`Audit Supabase\n\nOK: ${report.ok?"Oui":"Non"}\nJoueurs: ${report.players}\nPronostics: ${report.bets}\nHassan: ${report.hassan ? "trouvé" : "non trouvé"}\nQuestions Hassan: ${report.hassan?.secrets ? JSON.stringify(report.hassan.secrets,null,2) : "absentes"}\n\nProblèmes:\n${report.issues.join("\n")||"Aucun"}`);
+    }catch(e){
+      alert("Audit impossible : "+(e.message||e));
+    }
+  };
+
+  // Prevent autosave overwriting cloud during restore
+  const oldDebounced=window.bpCloudSaveDebounced;
+  if(typeof oldDebounced==="function" && !oldDebounced.__bpV49Wrapped){
+    window.bpCloudSaveDebounced=function(){
+      if(loadingCloud) return;
+      return oldDebounced.apply(this,arguments);
+    };
+    window.bpCloudSaveDebounced.__bpV49Wrapped=true;
+  }
+
+  // Ensure secret saving writes to player object and cloud
+  const oldSeal=window.sealSecrets;
+  if(typeof oldSeal==="function" && !oldSeal.__bpV49Wrapped){
+    window.sealSecrets=function(){
+      const result=oldSeal.apply(this,arguments);
+      try{
+        const idx=typeof currentUserIndex!=="undefined" && currentUserIndex!==null ? Number(currentUserIndex) : Number(document.getElementById("activePlayer")?.value||0);
+        const p=(state.players||[])[idx];
+        if(p && p.secrets){
+          p.secrets.sealed=true;
+          p.secrets.validatedAt=p.secrets.validatedAt||new Date().toISOString();
+        }
+        if(typeof save==="function") save();
+        if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
+      }catch(e){ console.warn(e); }
+      return result;
+    };
+    window.sealSecrets.__bpV49Wrapped=true;
+  }
+
+  function addAdminBackupButtons(){
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV49DataSafetyPanel")){
+      backup.insertAdjacentHTML("afterbegin",`
+        <div id="bpV49DataSafetyPanel" class="card" style="border-color:rgba(59,130,246,.45)">
+          <h2>🧯 Sécurité données Supabase</h2>
+          <div class="muted">Vérifie et restaure les données cloud : utilisateurs, pronostics, mises, questions secrètes.</div>
+          <button class="action" onclick="bpAuditSupabaseData()">Auditer Supabase</button>
+          <button class="action secondary" onclick="bpForceLoadSupabase()">Forcer chargement Supabase</button>
+        </div>
+      `);
+    }
+  }
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV49Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(()=>{hideUserTabsForAdmin(); addAdminBackupButtons();},80);
+      return r;
+    };
+    window.renderAll.__bpV49Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    installNotificationGuards();
+    setTimeout(()=>{hideUserTabsForAdmin(); addAdminBackupButtons();},300);
+    setTimeout(()=>{hideUserTabsForAdmin(); addAdminBackupButtons();},1200);
+  });
 })();
 </script>
 
