@@ -1998,6 +1998,20 @@ header button.action.secondary{
 .bp-onboarding-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
 .bp-onboarding-list{margin:12px 0 0;padding-left:18px;line-height:1.6}
 
+
+/* V40 — Notifications, profil enrichi, classement live, backup quotidien */
+.smart-login-card .smart-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}
+.smart-login-card .smart-kpi{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px}
+.smart-login-card .smart-kpi b{display:block;font-size:18px;margin-top:4px}
+.smart-event-pill{display:inline-block;margin:4px 4px 0 0;padding:6px 9px;border-radius:999px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.25);font-weight:800}
+.profile-extra-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.profile-extra-grid label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:13px;font-weight:800}
+.live-rank-delta.up{color:var(--ok);font-weight:900}
+.live-rank-delta.down{color:var(--bad);font-weight:900}
+.live-rank-delta.same{color:var(--muted);font-weight:900}
+#dailyBackupPanel{border-color:rgba(74,222,128,.45)!important}
+@media(max-width:750px){.smart-login-card .smart-kpis,.profile-extra-grid{grid-template-columns:1fr}}
+
 </style>
 
 <!--
@@ -8304,6 +8318,226 @@ function bpModalClose(){
   setTimeout(patchLogin,500);
   setTimeout(patchLogin,1500);
   setTimeout(observeLoginScreen,500);
+})();
+</script>
+
+
+<script>
+/* V40 — Notifications intelligentes, profil enrichi, classement live, backup quotidien */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
+
+  function getPlayerIndex(){
+    try{
+      if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null) return Number(currentUserIndex);
+      const sel=document.getElementById("activePlayer");
+      return sel ? Number(sel.value||0) : 0;
+    }catch(e){ return 0; }
+  }
+  function getPlayer(){ return (state.players||[])[getPlayerIndex()] || null; }
+  function getDay(){ return typeof currentPronoDay==="function" ? Number(currentPronoDay()) : Number(state.currentDay||1); }
+  function getMatches(d){ return (state.matches||[]).filter(m=>Number(m.day)===Number(d)); }
+  function getValidated(p,d){
+    return (state.bets||[]).filter(b=>b.player===p.name && Number(b.day)===Number(d) && String(b.status||"").toUpperCase()==="VALIDATED");
+  }
+  function getMissingCount(p,d){
+    const ids=new Set(getValidated(p,d).map(b=>b.matchId));
+    return getMatches(d).filter(m=>!ids.has(m.id)).length;
+  }
+  function isDayOpen(d){
+    if(typeof isDayClosed==="function") return !isDayClosed(d);
+    return !(state.closedDays && state.closedDays[d]);
+  }
+  function eventList(d){
+    if(typeof activeEventsList==="function") return activeEventsList(d);
+    return [];
+  }
+  function secretsDone(p){
+    const s=p?.secrets||{};
+    return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed);
+  }
+  function saveState(){
+    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
+    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
+  }
+  function closeModal(){
+    const el=document.getElementById("bpV40Modal");
+    if(el) el.remove();
+  }
+  window.bpV40Close=closeModal;
+  window.bpV40Go=function(tabId){
+    closeModal();
+    const btn=document.getElementById(tabId==="bets"?"navBets":tabId==="scores"?"navScores":tabId==="ranking"?"navRanking":"");
+    if(typeof tab==="function") tab(tabId,btn||undefined);
+  };
+  function modal(title,body,icon){
+    closeModal();
+    const el=document.createElement("div");
+    el.id="bpV40Modal";
+    el.className="bp-modal-backdrop";
+    el.style.display="flex";
+    el.innerHTML=`<div class="bp-modal" role="dialog" aria-modal="true">
+      <div class="bp-modal-head"><div class="bp-modal-icon">${icon||"👋"}</div><div><div class="bp-modal-title">${title}</div><div class="muted">B Partner World Cup</div></div></div>
+      <div class="bp-modal-body">${body}</div>
+      <div class="bp-modal-actions"><button class="bp-modal-ok" onclick="bpV40Close()">OK</button></div>
+    </div>`;
+    document.body.appendChild(el);
+  }
+
+  // 1) Notifications intelligentes, avec pseudo complet
+  window.bpV40ShowLoginMessage=function(){
+    const p=getPlayer(); if(!p) return;
+    const d=getDay(), miss=getMissingCount(p,d), open=isDayOpen(d), ev=eventList(d);
+    const pseudo=String(p.pseudo||p.name||"champion").trim();
+    const first=!p.firstLoginDone;
+    let body=`<div class="smart-login-card">`;
+    if(first){
+      body+=`<p><b>Bienvenue ${pseudo} !</b></p>
+      <p>Avant de commencer, personnalise ton espace et réponds aux questions secrètes.</p>`;
+    }else{
+      body+=`<p><b>Bonjour ${pseudo}.</b></p>`;
+    }
+    body+=`<div class="smart-kpis">
+      <div class="smart-kpi">🏆 Journée<b>${d} ${open?"ouverte":"fermée"}</b></div>
+      <div class="smart-kpi">⚽ Matchs restants<b>${miss}</b></div>
+      <div class="smart-kpi">💰 Solde<b>${Number(p.balance||0)} FID</b></div>
+      <div class="smart-kpi">🎯 Questions secrètes<b>${secretsDone(p)?"OK":"À compléter"}</b></div>
+    </div>`;
+    if(ev.length){
+      body+=`<p><b>🔥 Évènement(s) actif(s)</b></p>${ev.map(x=>`<span class="smart-event-pill">${x}</span>`).join("")}`;
+    }
+    if(miss>0 && open){
+      body+=`<div class="bp-onboarding-actions"><button class="action" onclick="bpV40Go('bets')">Aller à Mes Pronos</button></div>`;
+    }else{
+      body+=`<div class="bp-onboarding-actions"><button class="action" onclick="bpV40Go('scores')">Voir Mes scores</button></div>`;
+    }
+    if(!secretsDone(p)){
+      body+=`<div class="help">Rappel : réponds aux questions secrètes dans <b>Mes scores</b>.</div>`;
+    }
+    body+=`</div>`;
+    p.firstLoginDone=true; p.lastLoginAt=new Date().toISOString(); saveState();
+    modal(first?"Bienvenue dans la compétition":"Connexion réussie",body,first?"🏆":"👋");
+  };
+
+  function patchLogin(){
+    if(typeof window.loginWithCode!=="function" || window.loginWithCode.__bpV40Wrapped) return;
+    const old=window.loginWithCode;
+    window.loginWithCode=function(){
+      const r=old.apply(this,arguments);
+      setTimeout(()=> {
+        const login=document.getElementById("loginScreen");
+        const hidden=login && (getComputedStyle(login).display==="none" || login.offsetParent===null);
+        if(hidden) bpV40ShowLoginMessage();
+      },700);
+      return r;
+    };
+    window.loginWithCode.__bpV40Wrapped=true;
+  }
+
+  // 3) Profil enrichi : ville + équipe favorite
+  function renderProfileExtras(){
+    const card=document.querySelector("#bets .profile-card");
+    const p=getPlayer();
+    if(!card || !p) return;
+    if(document.getElementById("profileExtraGrid")) return;
+    const wrap=document.createElement("div");
+    wrap.id="profileExtraGrid";
+    wrap.className="profile-extra-grid";
+    wrap.innerHTML=`<label>📍 Ville
+      <input id="profileCityInput" placeholder="Ex. Bruxelles" value="${String(p.city||"").replace(/"/g,'&quot;')}">
+    </label>
+    <label>❤️ Équipe favorite
+      <input id="profileFavTeamInput" placeholder="Ex. Maroc" value="${String(p.favoriteTeam||"").replace(/"/g,'&quot;')}">
+    </label>
+    <button class="action secondary" style="grid-column:1/-1" onclick="bpV40SaveProfileExtras()">Sauver profil enrichi</button>`;
+    card.appendChild(wrap);
+  }
+  window.bpV40SaveProfileExtras=function(){
+    const p=getPlayer(); if(!p) return;
+    p.city=document.getElementById("profileCityInput")?.value||"";
+    p.favoriteTeam=document.getElementById("profileFavTeamInput")?.value||"";
+    saveState();
+    alert("Profil enrichi sauvegardé.");
+  };
+
+  // 6) Classement live avec évolution
+  function snapshotRanks(){
+    const sorted=[...(state.players||[])].sort((a,b)=>Number(b.balance||0)-Number(a.balance||0));
+    sorted.forEach((p,i)=>{
+      if(!p.previousRank) p.previousRank=i+1;
+      p.currentRank=i+1;
+    });
+  }
+  function delta(p){
+    if(!p.previousRank || !p.currentRank) return `<span class="live-rank-delta same">➖</span>`;
+    const diff=p.previousRank-p.currentRank;
+    if(diff>0) return `<span class="live-rank-delta up">⬆️ +${diff}</span>`;
+    if(diff<0) return `<span class="live-rank-delta down">⬇️ ${diff}</span>`;
+    return `<span class="live-rank-delta same">➖ stable</span>`;
+  }
+  function enhanceRanking(){
+    snapshotRanks();
+    document.querySelectorAll("#ranking tbody tr").forEach(tr=>{
+      const cells=[...tr.children];
+      const name=(cells[1]?.textContent||cells[0]?.textContent||"").trim();
+      const p=(state.players||[]).find(x=>String(x.pseudo||x.name).trim()===name || String(x.name).trim()===name);
+      if(p && !tr.querySelector(".live-rank-delta")){
+        const td=document.createElement("td");
+        td.innerHTML=delta(p);
+        tr.appendChild(td);
+      }
+    });
+  }
+
+  // 14) Backup quotidien Supabase
+  window.bpDailyCloudBackup=async function(showAlert=true){
+    if(typeof window.supabase==="undefined" || typeof window.BP_SUPABASE_URL==="undefined") return false;
+    if(typeof window.bpCloudSave==="function") await window.bpCloudSave(false);
+    try{
+      const sb=window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+      const today=new Date().toISOString().slice(0,10);
+      const payload={id:`${APP_ID}-backup-${today}`,data:JSON.parse(JSON.stringify(state)),updated_at:new Date().toISOString()};
+      const {error}=await sb.from("app_state").upsert(payload,{onConflict:"id"});
+      if(error) throw error;
+      localStorage.setItem("bp_last_daily_backup",today);
+      const s=document.getElementById("dailyBackupStatus");
+      if(s) s.innerHTML=`<span class="good">Backup du ${today} OK</span>`;
+      if(showAlert) alert("Backup quotidien Supabase OK.");
+      return true;
+    }catch(e){
+      console.error(e);
+      const s=document.getElementById("dailyBackupStatus");
+      if(s) s.innerHTML=`<span class="bad">Erreur backup : ${e.message||e}</span>`;
+      if(showAlert) alert("Erreur backup quotidien : "+(e.message||e));
+      return false;
+    }
+  };
+  function autoDailyBackup(){
+    const today=new Date().toISOString().slice(0,10);
+    if(localStorage.getItem("bp_last_daily_backup")!==today){
+      setTimeout(()=>bpDailyCloudBackup(false),2500);
+    }
+  }
+  function addBackupPanel(){
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("dailyBackupPanel")){
+      backup.insertAdjacentHTML("afterbegin",`<div id="dailyBackupPanel" class="card">
+        <h2>🛡️ Backup quotidien Supabase</h2>
+        <div class="muted">Une copie quotidienne est créée automatiquement pour pouvoir restaurer l’état en cas d’erreur.</div>
+        <button class="action" onclick="bpDailyCloudBackup()">Créer backup maintenant</button>
+        <div id="dailyBackupStatus" class="help">Statut : en attente.</div>
+      </div>`);
+    }
+  }
+
+  // Hooks render/login
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV40Wrapped){
+    window.renderAll=function(){ const r=oldRenderAll.apply(this,arguments); setTimeout(renderProfileExtras,100); setTimeout(enhanceRanking,150); return r; };
+    window.renderAll.__bpV40Wrapped=true;
+  }
+  document.addEventListener("DOMContentLoaded",()=>{patchLogin(); addBackupPanel(); setTimeout(renderProfileExtras,500); setTimeout(enhanceRanking,700); autoDailyBackup();});
+  setTimeout(patchLogin,800);
 })();
 </script>
 
