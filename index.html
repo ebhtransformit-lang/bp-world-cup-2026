@@ -1964,6 +1964,10 @@ header button.action.secondary{
 .special-events-banner-list span{padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);font-weight:800}
 @media(max-width:900px){.special-events-grid,.special-events-settings{grid-template-columns:1fr}}
 
+
+/* V32 — GitHub persistence panel */
+#githubPersistPanel h2{margin-bottom:8px}
+
 </style>
 
 <!--
@@ -1979,6 +1983,18 @@ SANITY V18
 
 <script id="bpEmbeddedState" type="application/json">null</script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+/* V33 — CONFIG SUPABASE
+   1) Crée le projet Supabase
+   2) Colle ici ton Project URL et ta anon public key
+*/
+window.BP_SUPABASE_URL = "PASTE_SUPABASE_PROJECT_URL_HERE";
+window.BP_SUPABASE_ANON_KEY = "PASTE_SUPABASE_ANON_PUBLIC_KEY_HERE";
+window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
+</script>
+
 </head>
 <body>
 
@@ -7695,6 +7711,267 @@ function openBackupFilePicker(kind){
   input.onchange=e=>importSmartFile(kind,e);
   input.click();
 }
+</script>
+
+
+<script>
+/* V32 — GitHub Pages persistence : générer HTML après import utilisateurs */
+(function(){
+  function cloneState(){
+    try{
+      const raw=localStorage.getItem("bp_wc_dev");
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    try{ return JSON.parse(JSON.stringify(state)); }catch(e){ return state; }
+  }
+
+  function hasPlayers(st){
+    return st && Array.isArray(st.players) && st.players.length > 0;
+  }
+
+  function safeJsonForHtml(obj){
+    return JSON.stringify(obj)
+      .replace(/</g,"\\u003C")
+      .replace(/>/g,"\\u003E")
+      .replace(/&/g,"\\u0026");
+  }
+
+  window.downloadHTMLWithEmbeddedState = function(){
+    const st=cloneState();
+    if(!hasPlayers(st)){
+      alert("Aucun utilisateur à embarquer. Importe d’abord le fichier utilisateurs.");
+      return;
+    }
+
+    let doc="<!DOCTYPE html>\n"+document.documentElement.outerHTML;
+    if(!/<script id="bpEmbeddedState" type="application\/json">[\s\S]*?<\/script>/.test(doc)){
+      doc=doc.replace("</head>", `<script id="bpEmbeddedState" type="application/json">null<\/script>\n</head>`);
+    }
+
+    doc=doc.replace(
+      /<script id="bpEmbeddedState" type="application\/json">[\s\S]*?<\/script>/,
+      `<script id="bpEmbeddedState" type="application/json">${safeJsonForHtml(st)}<\/script>`
+    );
+
+    const blob=new Blob([doc],{type:"text/html;charset=utf-8"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="index.html";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+
+    alert("HTML généré : remplace le fichier index.html de GitHub par ce fichier pour conserver les utilisateurs sur l’URL publique.");
+  };
+
+  window.showGithubPersistenceNotice = function(){
+    const st=cloneState();
+    const n=hasPlayers(st) ? st.players.length : 0;
+    const msg = `Utilisateurs importés : ${n}.\n\nImportant : GitHub Pages ne sauvegarde pas dans le fichier en ligne. Pour que les utilisateurs restent sur l’URL GitHub et soient visibles par tous, télécharge le HTML embarqué puis redéploie-le comme index.html.`;
+    if(confirm(msg + "\n\nTélécharger maintenant le HTML prêt pour GitHub ?")){
+      downloadHTMLWithEmbeddedState();
+    }
+  };
+
+  // Patch import function: after users import, propose HTML generation.
+  const oldBpImportObjects = window.bpImportObjects;
+  if(typeof oldBpImportObjects === "function"){
+    window.bpImportObjects = function(kind,data){
+      const before = (state.players||[]).length;
+      const result = oldBpImportObjects.apply(this, arguments);
+      if(kind==="players"){
+        try{ localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
+        setTimeout(showGithubPersistenceNotice, 300);
+      }
+      return result;
+    };
+  }
+
+  // Patch generic importObjects if present.
+  const oldImportObjects = window.importObjects;
+  if(typeof oldImportObjects === "function"){
+    window.importObjects = function(kind,data){
+      const result = oldImportObjects.apply(this, arguments);
+      if(kind==="players"){
+        try{ localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
+        setTimeout(showGithubPersistenceNotice, 300);
+      }
+      return result;
+    };
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("githubPersistPanel")){
+      backup.insertAdjacentHTML("afterbegin", `
+        <div id="githubPersistPanel" class="card" style="border-color:rgba(250,204,21,.45)">
+          <h2>🌐 Sauvegarde GitHub Pages</h2>
+          <div class="muted">
+            Après avoir importé les utilisateurs, clique ici pour générer un <b>index.html</b> contenant les utilisateurs.
+            Ensuite, remplace le fichier sur GitHub par ce nouveau HTML.
+          </div>
+          <button class="action" onclick="downloadHTMLWithEmbeddedState()">Télécharger index.html avec utilisateurs intégrés</button>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
+
+<script>
+/* V33 — Supabase cloud sync */
+(function(){
+  let bpSb = null;
+  let bpSyncTimer = null;
+  let bpIsCloudLoading = false;
+
+  function configured(){
+    return window.BP_SUPABASE_URL &&
+      window.BP_SUPABASE_ANON_KEY &&
+      !String(window.BP_SUPABASE_URL).includes("PASTE_") &&
+      !String(window.BP_SUPABASE_ANON_KEY).includes("PASTE_");
+  }
+
+  function client(){
+    if(!configured()) return null;
+    if(!bpSb){
+      bpSb = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    }
+    return bpSb;
+  }
+
+  function cloudStatus(msg, ok=true){
+    const el=document.getElementById("bpCloudStatus");
+    if(el){
+      el.innerHTML = ok ? `<span class="good">${msg}</span>` : `<span class="bad">${msg}</span>`;
+    }
+    console.log("[Supabase]", msg);
+  }
+
+  function getCleanState(){
+    const st = JSON.parse(JSON.stringify(state || {}));
+    st.cloudUpdatedAt = new Date().toISOString();
+    return st;
+  }
+
+  window.bpCloudSave = async function(showAlert=true){
+    const sb = client();
+    if(!sb){
+      const msg="Supabase non configuré : colle l’URL et la clé anon dans le HTML.";
+      cloudStatus(msg,false);
+      if(showAlert) alert(msg);
+      return false;
+    }
+    try{
+      const payload = {
+        id: window.BP_SUPABASE_APP_ID || "bp-world-cup-2026",
+        data: getCleanState(),
+        updated_at: new Date().toISOString()
+      };
+      const {error} = await sb.from("app_state").upsert(payload, {onConflict:"id"});
+      if(error) throw error;
+      cloudStatus("Sauvegarde cloud OK");
+      if(showAlert) alert("Sauvegarde Supabase OK.");
+      return true;
+    }catch(e){
+      console.error(e);
+      cloudStatus("Erreur sauvegarde cloud : " + (e.message || e), false);
+      if(showAlert) alert("Erreur sauvegarde Supabase : " + (e.message || e));
+      return false;
+    }
+  };
+
+  window.bpCloudLoad = async function(showAlert=true){
+    const sb = client();
+    if(!sb){
+      const msg="Supabase non configuré : colle l’URL et la clé anon dans le HTML.";
+      cloudStatus(msg,false);
+      if(showAlert) alert(msg);
+      return false;
+    }
+    try{
+      bpIsCloudLoading = true;
+      const {data,error} = await sb.from("app_state")
+        .select("data,updated_at")
+        .eq("id", window.BP_SUPABASE_APP_ID || "bp-world-cup-2026")
+        .maybeSingle();
+      if(error) throw error;
+      if(!data || !data.data){
+        cloudStatus("Aucune donnée cloud trouvée", false);
+        if(showAlert) alert("Aucune donnée cloud trouvée. Fais d’abord une sauvegarde cloud.");
+        return false;
+      }
+      state = data.data;
+      localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+      if(typeof repairState === "function") repairState();
+      if(typeof renderAll === "function") renderAll();
+      cloudStatus("Chargement cloud OK — " + new Date(data.updated_at).toLocaleString("fr-FR"));
+      if(showAlert) alert("Données Supabase chargées.");
+      return true;
+    }catch(e){
+      console.error(e);
+      cloudStatus("Erreur chargement cloud : " + (e.message || e), false);
+      if(showAlert) alert("Erreur chargement Supabase : " + (e.message || e));
+      return false;
+    }finally{
+      bpIsCloudLoading = false;
+    }
+  };
+
+  window.bpCloudSaveDebounced = function(){
+    if(bpIsCloudLoading) return;
+    if(!configured()) return;
+    clearTimeout(bpSyncTimer);
+    bpSyncTimer = setTimeout(()=>bpCloudSave(false), 900);
+  };
+
+  // Patch save(): every local save is also sent to Supabase, once configured.
+  const oldSave = window.save;
+  if(typeof oldSave === "function"){
+    window.save = function(){
+      const r = oldSave.apply(this, arguments);
+      window.bpCloudSaveDebounced();
+      return r;
+    };
+  }
+
+  // Auto-load cloud on GitHub/new browser if local storage is empty or has no players.
+  async function autoLoadIfNeeded(){
+    if(!configured()) return;
+    try{
+      const raw = localStorage.getItem("bp_wc_dev");
+      const local = raw ? JSON.parse(raw) : null;
+      const hasPlayers = local && Array.isArray(local.players) && local.players.length > 0;
+      if(!hasPlayers){
+        await window.bpCloudLoad(false);
+      }else{
+        cloudStatus("Mode local actif — Supabase prêt");
+      }
+    }catch(e){
+      await window.bpCloudLoad(false);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", ()=>{
+    const backup = document.getElementById("backup");
+    if(backup && !document.getElementById("bpSupabasePanel")){
+      backup.insertAdjacentHTML("afterbegin", `
+        <div id="bpSupabasePanel" class="card" style="border-color:rgba(74,222,128,.45)">
+          <h2>🟢 Supabase — Base de données cloud</h2>
+          <div class="muted">
+            La base cloud évite de réimporter les utilisateurs/résultats après déploiement GitHub.
+            Configure <b>BP_SUPABASE_URL</b> et <b>BP_SUPABASE_ANON_KEY</b> dans le HTML.
+          </div>
+          <button class="action" onclick="bpCloudLoad()">Charger depuis Supabase</button>
+          <button class="action" onclick="bpCloudSave()">Sauvegarder vers Supabase</button>
+          <div id="bpCloudStatus" class="help">Statut : en attente de configuration.</div>
+        </div>
+      `);
+    }
+    autoLoadIfNeeded();
+  });
+})();
 </script>
 
 </body></html>
