@@ -1977,6 +1977,7 @@ SANITY V18
 - Import JSON conservé.
 -->
 
+<script id="bpEmbeddedState" type="application/json">null</script>
 </head>
 <body>
 
@@ -4536,16 +4537,24 @@ const starterMatches=[
 ];
 const defaultPlayers=[]; // V24: joueurs démo supprimés
 let state;
+function readEmbeddedState(){
+  try{
+    const el=document.getElementById("bpEmbeddedState");
+    if(!el) return null;
+    const txt=(el.textContent||"").trim();
+    if(!txt || txt==="null") return null;
+    return JSON.parse(txt);
+  }catch(e){ console.warn("État embarqué illisible", e); return null; }
+}
 try {
   const rawState = localStorage.getItem("bp_wc_dev");
-  state = rawState ? JSON.parse(rawState) : initState();
+  state = rawState ? JSON.parse(rawState) : (readEmbeddedState() || initState());
 } catch(e) {
   const corrupted = localStorage.getItem("bp_wc_dev");
   if(corrupted){
     localStorage.setItem("bp_wc_dev_CORRUPTED_BACKUP_" + new Date().toISOString(), corrupted);
   }
-  alert("Sauvegarde locale corrompue : une copie de secours a été créée. Redémarrage en mode démo.");
-  state = initState();
+  state = readEmbeddedState() || initState();
 }
 
 let currentUserIndex = null;
@@ -4576,14 +4585,12 @@ function ensurePlayerCodes(){
       changed=true;
     }
     seen.add(String(p.code));
-    if(!p.pseudo){ p.pseudo=p.name; changed=true; }
-    if(p.startFid===undefined || p.startFid===null){ p.startFid=Number(p.balance||50); changed=true; }
-    if(p.balance===undefined || p.balance===null){ p.balance=Number(p.startFid||50); changed=true; }
-    if(p.evolution===undefined || p.evolution===null){ p.evolution=0; changed=true; }
-    if(p.good===undefined || p.good===null){ p.good=0; changed=true; }
-    if(p.exact===undefined || p.exact===null){ p.exact=0; changed=true; }
-    if(p.avatar===undefined){ p.avatar=null; changed=true; }
-    if(p.secrets===undefined){ p.secrets=null; changed=true; }
+    if(!p.pseudo){p.pseudo=p.name;changed=true;}
+    if(p.startFid===undefined){p.startFid=Number(p.balance||50);changed=true;}
+    if(p.balance===undefined){p.balance=Number(p.startFid||50);changed=true;}
+    if(p.evolution===undefined){p.evolution=0;changed=true;}
+    if(p.good===undefined){p.good=0;changed=true;}
+    if(p.exact===undefined){p.exact=0;changed=true;}
   });
   if(changed) save();
 }
@@ -4643,30 +4650,15 @@ function initState(){
   };
 }
 function migrateCalendar(){
-  const ok = confirm("Réparer uniquement le calendrier ?\n\nLes utilisateurs, pronostics, questions secrètes, événements et soldes seront conservés.");
-  if(!ok) return;
-  try{ localStorage.setItem("bp_wc_dev_backup_before_calendar_repair", JSON.stringify(state)); }catch(e){}
-  const existingMatches = Array.isArray(state.matches) ? state.matches : [];
-  const byId = new Map(existingMatches.map(m=>[m.id,m]));
-  state.matches = starterMatches.map(base=>{
-    const old = byId.get(base.id) || {};
-    return {
-      ...base,
-      scoreA: old.scoreA !== undefined ? old.scoreA : base.scoreA,
-      scoreB: old.scoreB !== undefined ? old.scoreB : base.scoreB,
-      status: old.status || base.status
-    };
+  if(!confirm("Réparer uniquement le calendrier ? Les utilisateurs seront conservés.")) return;
+  try{localStorage.setItem("bp_wc_dev_backup_before_calendar_repair",JSON.stringify(state));}catch(e){}
+  const oldById=new Map((state.matches||[]).map(m=>[m.id,m]));
+  state.matches=starterMatches.map(base=>{
+    const old=oldById.get(base.id)||{};
+    return {...base,scoreA:old.scoreA!==undefined?old.scoreA:base.scoreA,scoreB:old.scoreB!==undefined?old.scoreB:base.scoreB,status:old.status||base.status};
   });
-  if(!state.closedDays) state.closedDays={};
-  starterMatches.forEach(m=>{
-    if(state.closedDays[m.day] === undefined){
-      state.closedDays[m.day] = Number(m.day)!==Number(state.currentDay||1);
-    }
-  });
-  state.scheduleVersion = "official-fifa-2026-v1";
-  save();
-  renderAll();
-  alert("Calendrier réparé sans modifier les utilisateurs.");
+  state.scheduleVersion="official-fifa-2026-v1";
+  save();renderAll();alert("Calendrier réparé sans modifier les utilisateurs.");
 }
 function save(){localStorage.setItem("bp_wc_dev",JSON.stringify(state));}
 function f(team){let c=flagCodes[team];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${team}`:`<span class="muted">${team}</span>`;}
@@ -7420,190 +7412,71 @@ function runSanityCheck(){
 
 
 <script>
-/* V26 USERS SAFE MODULE — conserve les utilisateurs déjà sauvegardés */
+/* V28 — Export HTML autonome avec utilisateurs embarqués */
 (function(){
-  function esc(v){
-    return String(v ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
-  }
-  function list(){
-    if(!Array.isArray(state.players)) state.players=[];
-    return state.players;
-  }
-  function persist(){
+  function getCurrentState(){
     try{
-      localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+      const raw=localStorage.getItem("bp_wc_dev");
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return typeof state !== "undefined" ? state : null;
+  }
+  function htmlEscapeJson(json){
+    return JSON.stringify(json)
+      .replace(/</g,"\\u003C")
+      .replace(/>/g,"\\u003E")
+      .replace(/&/g,"\\u0026");
+  }
+  window.downloadStandaloneHTMLWithUsers = function(){
+    const current=getCurrentState();
+    if(!current || !Array.isArray(current.players) || current.players.length===0){
+      alert("Aucun utilisateur local trouvé. Crée ou restaure les utilisateurs avant de générer le HTML GitHub.");
+      return;
+    }
+
+    const doc = document.documentElement.outerHTML;
+    const full = "<!DOCTYPE html>\n" + doc.replace(
+      /<script id="bpEmbeddedState" type="application\/json">[\s\S]*?<\/script>/,
+      `<script id="bpEmbeddedState" type="application/json">${htmlEscapeJson(current)}<\/script>`
+    );
+
+    const blob=new Blob([full],{type:"text/html;charset=utf-8"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="BPartner_FIFA_WorldCup_2026_GitHub_USERS_EMBEDDED.html";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+  };
+
+  window.forceLoadEmbeddedState = function(){
+    try{
+      const el=document.getElementById("bpEmbeddedState");
+      const txt=(el?.textContent||"").trim();
+      if(!txt || txt==="null"){ alert("Aucun état embarqué dans ce HTML."); return; }
+      const embedded=JSON.parse(txt);
+      if(!confirm("Charger les utilisateurs embarqués dans ce HTML ? Cela remplace le localStorage actuel.")) return;
+      localStorage.setItem("bp_wc_dev", JSON.stringify(embedded));
+      location.reload();
     }catch(e){
-      console.error("Sauvegarde localStorage impossible", e);
-      alert("Erreur : impossible d’enregistrer dans le navigateur.");
-      return false;
+      alert("Impossible de charger l’état embarqué.");
     }
-    return true;
-  }
-  function backup(reason){
-    try{
-      localStorage.setItem("bp_wc_dev_backup_users_last", JSON.stringify(state));
-      localStorage.setItem("bp_wc_dev_backup_users_" + reason + "_" + new Date().toISOString(), JSON.stringify(state));
-    }catch(e){ console.warn("Backup utilisateurs impossible", e); }
-  }
-  function newCode(){
-    const used=new Set(list().map(p=>String(p.code||"")));
-    let code;
-    do{ code=String(Math.floor(1000+Math.random()*9000)); }
-    while(code==="1573" || used.has(code));
-    return code;
-  }
-  function normalize(p){
-    p.name=String(p.name||"").trim() || "Nouvel utilisateur";
-    p.pseudo=String(p.pseudo||p.name).trim() || p.name;
-    if(!/^\d{4}$/.test(String(p.code||"")) || p.code==="1573") p.code=newCode();
-    if(p.startFid===undefined || p.startFid===null) p.startFid=Number(p.balance||50);
-    if(p.balance===undefined || p.balance===null) p.balance=Number(p.startFid||50);
-    if(p.evolution===undefined || p.evolution===null) p.evolution=0;
-    if(p.good===undefined || p.good===null) p.good=0;
-    if(p.exact===undefined || p.exact===null) p.exact=0;
-    if(p.avatar===undefined) p.avatar=null;
-    if(p.secrets===undefined) p.secrets=null;
-    return p;
-  }
-  function uniqueName(base="Nouvel utilisateur"){
-    const existing=new Set(list().map(p=>String(p.name||"").toLowerCase()));
-    let i=list().length+1, name=`${base} ${i}`;
-    while(existing.has(name.toLowerCase())){ i++; name=`${base} ${i}`; }
-    return name;
-  }
-
-  window.ensurePlayerCodes=function(){
-    const seen=new Set();
-    list().forEach(p=>{
-      normalize(p);
-      if(seen.has(String(p.code))){
-        p.code=newCode();
-      }
-      seen.add(String(p.code));
-    });
-    persist();
   };
 
-  window.addPlayer=async function(){
-    backup("before_add");
-    const fid=Number(document.getElementById("defaultFid")?.value || 50);
-    const name=uniqueName();
-    list().push(normalize({
-      name,
-      pseudo:name,
-      code:newCode(),
-      avatar:null,
-      startFid:fid,
-      balance:fid,
-      evolution:0,
-      good:0,
-      exact:0,
-      secrets:null
-    }));
-    persist();
-    if(typeof renderAll==="function") renderAll();
-    if(typeof bpAlert==="function") await bpAlert(`Utilisateur ajouté et enregistré : ${name}`,{icon:"✅"});
-  };
-
-  window.adminUpdatePlayer=function(index,field,value){
-    if(!list()[index]) return;
-    backup("before_update");
-    const p=list()[index];
-    if(field==="name"){
-      const old=p.name;
-      const val=String(value||"").trim() || old || "Nouvel utilisateur";
-      if(list().some((x,i)=>i!==index && String(x.name||"").toLowerCase()===val.toLowerCase())){
-        alert("Ce nom existe déjà.");
-        renderAdminUsersSafe();
-        return;
-      }
-      p.name=val;
-      if(!p.pseudo || p.pseudo===old) p.pseudo=val;
-      (state.bets||[]).forEach(b=>{ if(b.player===old) b.player=val; });
-      (state.logs||[]).forEach(l=>{ if(l.player===old) l.player=val; });
-      (state.settlementDetails||[]).forEach(d=>{ if(d.player===old) d.player=val; });
-    }
-    if(field==="pseudo") p.pseudo=String(value||p.name).trim() || p.name;
-    if(field==="startFid") p.startFid=Number(value||0);
-    if(field==="balance") p.balance=Number(value||0);
-    normalize(p);
-    persist();
-    if(typeof renderAll==="function") renderAll();
-  };
-
-  window.safeDeletePlayer=async function(index){
-    if(!list()[index]) return;
-    const name=list()[index].name;
-    if(!confirm(`Supprimer uniquement "${name}" ?\n\nLes autres utilisateurs restent inchangés.`)) return;
-    backup("before_delete");
-    list().splice(index,1);
-    persist();
-    if(typeof renderAll==="function") renderAll();
-    if(typeof bpAlert==="function") await bpAlert(`Utilisateur supprimé et enregistré : ${name}`,{icon:"✅"});
-  };
-
-  window.restoreBeforeUserChangeBackup=async function(){
-    const raw=localStorage.getItem("bp_wc_dev_backup_users_last");
-    if(!raw){ if(typeof bpAlert==="function") await bpAlert("Aucune sauvegarde utilisateurs trouvée.",{icon:"ℹ️"}); return; }
-    if(!confirm("Restaurer la dernière sauvegarde utilisateurs ?")) return;
-    state=JSON.parse(raw);
-    persist();
-    if(typeof renderAll==="function") renderAll();
-    if(typeof bpAlert==="function") await bpAlert("Sauvegarde utilisateurs restaurée.",{icon:"✅"});
-  };
-
-  window.renderAdminUsersSafe=function(){
-    const box=document.getElementById("adminPlayers");
-    if(!box) return;
-    box.innerHTML=list().map((p,i)=>`
-      <div class="admin-player-card" data-player-index="${i}">
-        <label>Utilisateur
-          <input value="${esc(p.name)}" onchange="adminUpdatePlayer(${i},'name',this.value)">
-        </label>
-        <label>Pseudo
-          <input value="${esc(p.pseudo||p.name)}" maxlength="20" onchange="adminUpdatePlayer(${i},'pseudo',this.value)">
-        </label>
-        <label>Code
-          <span class="user-code">${esc(p.code)}</span>
-          <button class="action secondary admin-mini-btn" type="button" onclick="regeneratePlayerCode(${i});persistUserStateAfterCodeChange()">Nouveau code</button>
-        </label>
-        <label>FID départ
-          <input type="number" value="${Number(p.startFid||0)}" onchange="adminUpdatePlayer(${i},'startFid',this.value)">
-        </label>
-        <label>Solde
-          <input type="number" value="${Number(p.balance||0)}" onchange="adminUpdatePlayer(${i},'balance',this.value)">
-        </label>
-        <div class="admin-player-actions">
-          <button class="action secondary" type="button" onclick="showAdminUserDetail(${i})">Voir détail</button>
-          <button class="action danger" type="button" onclick="safeDeletePlayer(${i})">Suppr.</button>
+  document.addEventListener("DOMContentLoaded",()=>{
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("downloadStandaloneHTMLBtn")){
+      backup.insertAdjacentHTML("afterbegin", `
+        <div class="help">
+          <b>Déploiement GitHub Pages</b><br>
+          Les utilisateurs enregistrés dans ton navigateur ne partent pas automatiquement sur GitHub.
+          Clique ici pour générer un HTML autonome contenant les utilisateurs actuels.
+          <br>
+          <button id="downloadStandaloneHTMLBtn" class="action" onclick="downloadStandaloneHTMLWithUsers()">Télécharger HTML avec utilisateurs embarqués</button>
+          <button class="action secondary" onclick="forceLoadEmbeddedState()">Charger état embarqué</button>
         </div>
-      </div>
-    `).join("") || `<div class="help">Aucun utilisateur enregistré. Clique sur <b>Ajouter utilisateur</b>.</div>`;
-  };
-
-  window.persistUserStateAfterCodeChange=function(){
-    persist();
-    if(typeof renderAll==="function") renderAll();
-  };
-
-  const oldRenderAdmin=window.renderAdmin;
-  window.renderAdmin=function(){
-    if(typeof oldRenderAdmin==="function") oldRenderAdmin.apply(this,arguments);
-    renderAdminUsersSafe();
-
-    const addBtn=[...document.querySelectorAll("button")].find(b=>b.getAttribute("onclick")==="addPlayer()");
-    if(addBtn){
-      addBtn.textContent="Ajouter utilisateur";
-      if(!document.getElementById("restoreUsersBtn")){
-        addBtn.insertAdjacentHTML("afterend", ` <button id="restoreUsersBtn" class="action secondary" onclick="restoreBeforeUserChangeBackup()">Restaurer utilisateurs</button>`);
-      }
+      `);
     }
-  };
-
-  // Clean static old HTML after load, without changing saved users.
-  document.addEventListener("DOMContentLoaded", ()=>{
-    ensurePlayerCodes();
-    renderAdminUsersSafe();
   });
 })();
 </script>
