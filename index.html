@@ -1,7 +1,7 @@
-<!doctype html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
+<!DOCTYPE html>
+<!-- saved from url=(0102)file:///C:/Users/Hassan%20EL%20BAKKALI/Downloads/BPartner_FIFA_WorldCup_2026_DEV_HallOfFame_Final.html -->
+<html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>B Partner FIFA World Cup 2026 - DEV</title>
 <style>
@@ -1035,17 +1035,958 @@ header button.action.secondary{
   white-space:nowrap;
 }
 
+
+.workflow-card{
+  border:1px solid rgba(250,204,21,.35);
+  background:linear-gradient(180deg,#18130a,#111);
+}
+.workflow-steps{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin:12px 0;
+}
+.workflow-step{
+  padding:10px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#101010;
+  color:var(--muted);
+  font-size:13px;
+}
+.workflow-step.active{
+  border-color:var(--warn);
+  color:#fff;
+  background:#241b08;
+  font-weight:800;
+}
+.workflow-step.done{
+  border-color:rgba(74,222,128,.45);
+  color:var(--ok);
+}
+.workflow-main-action{
+  width:100%;
+  min-height:52px;
+  font-size:16px;
+}
+@media(max-width:800px){
+  .workflow-steps{grid-template-columns:1fr}
+}
+
+
+.groups-standings-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:14px;
+}
+.group-standing-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:12px;
+  overflow:auto;
+}
+.group-standing-card h3{margin:0 0 10px;}
+.group-standing-card table{min-width:640px;}
+.group-standing-card th,.group-standing-card td{font-size:13px;padding:7px;}
+.group-team-cell{font-weight:800;white-space:nowrap;}
+.group-rank{font-weight:900;color:var(--warn);}
+@media(max-width:900px){.groups-standings-grid{grid-template-columns:1fr}}
+
+
+.worldcup-groups-board{
+  margin-top:14px;
+  padding:18px;
+  border-radius:18px;
+  border:1px solid rgba(122,16,32,.45);
+  background:
+    radial-gradient(circle at center, rgba(122,16,32,.25), transparent 35%),
+    linear-gradient(135deg,#070707 0%,#2a0710 42%,#7a1020 100%);
+}
+.worldcup-groups-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+}
+.worldcup-group-card{
+  background:#f7f7f7;
+  color:#111;
+  border-radius:10px;
+  overflow:hidden;
+  border:2px solid rgba(255,255,255,.45);
+  box-shadow:0 8px 22px rgba(0,0,0,.28);
+}
+.worldcup-group-title{
+  background:#7a1020;
+  color:#fff;
+  text-align:center;
+  font-weight:900;
+  padding:7px 8px;
+  text-transform:uppercase;
+  letter-spacing:.3px;
+}
+.worldcup-team-row{
+  display:grid;
+  grid-template-columns:28px 1fr repeat(7,34px);
+  align-items:center;
+  gap:4px;
+  padding:6px 7px;
+  border-bottom:1px solid #ddd;
+  font-size:12px;
+}
+.worldcup-team-row:last-child{border-bottom:0}
+.worldcup-team-row.head{
+  background:#e9e9e9;
+  color:#333;
+  font-weight:900;
+  font-size:11px;
+}
+.worldcup-team-name{
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.worldcup-team-row img.flag{
+  margin:0;
+  width:22px;
+  height:15px;
+}
+.worldcup-stat{
+  text-align:center;
+  font-weight:800;
+}
+.worldcup-pts{
+  color:#7a1020;
+  font-weight:900;
+}
+@media(max-width:1100px){
+  .worldcup-groups-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:700px){
+  .worldcup-groups-board{padding:10px}
+  .worldcup-groups-grid{grid-template-columns:1fr}
+  .worldcup-team-row{
+    grid-template-columns:24px minmax(90px,1fr) repeat(7,30px);
+    font-size:11px;
+    padding:6px 5px;
+  }
+}
+
+
+/* Vue Tableau final + Mes scores */
+.worldcup-hero-board{
+  margin-top:14px;
+  padding:18px;
+  border-radius:22px;
+  border:1px solid rgba(122,16,32,.50);
+  background:
+    radial-gradient(circle at top left, rgba(122,16,32,.38), transparent 34%),
+    linear-gradient(135deg,#050505 0%,#1a0509 35%,#7a1020 70%,#101010 100%);
+  box-shadow:0 24px 70px rgba(0,0,0,.45);
+}
+.final-board-header{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
+.final-board-title{font-size:28px;font-weight:900;margin:0}.final-board-sub{color:#e5e7eb;font-size:13px;margin-top:4px}
+.worldcup-trophy{display:flex;align-items:center;justify-content:center;min-height:180px;font-size:92px;text-shadow:0 12px 28px rgba(0,0,0,.45)}
+.knockout-board{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:16px;align-items:center}
+.knockout-round{display:flex;flex-direction:column;gap:10px}
+.knockout-round h3{text-align:center;margin:0 0 4px;font-size:14px;text-transform:uppercase;letter-spacing:.5px}
+.knockout-match{background:rgba(12,12,12,.88);border:1px solid rgba(122,16,32,.38);border-radius:12px;padding:8px;min-height:58px;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+.knockout-team{display:flex;justify-content:space-between;gap:8px;font-size:12px;line-height:1.4}.knockout-team b{font-size:13px}.knockout-placeholder{color:#d1d5db;font-weight:800}.score-page-grid{display:grid;grid-template-columns:1fr;gap:16px}.scores-summary-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+@media(max-width:1000px){.knockout-board{grid-template-columns:1fr 1fr}.worldcup-trophy{min-height:110px;font-size:64px}}
+@media(max-width:650px){.knockout-board{grid-template-columns:1fr}.final-board-title{font-size:22px}}
+
+
+.worldcup-group-card table{width:100%;table-layout:fixed;border-collapse:collapse}
+.worldcup-group-card th,.worldcup-group-card td{text-align:center;padding:8px 4px}
+.worldcup-group-card th:first-child,.worldcup-group-card td:first-child{width:34%;text-align:left}
+.worldcup-group-card th:not(:first-child),.worldcup-group-card td:not(:first-child){width:9.4%}
+.worldcup-team-name{display:flex;align-items:center;gap:6px;white-space:nowrap}
+
+
+/* Correctif alignement groupes — Pays / MJ / G / N / P / BM / BE / Pts */
+.worldcup-team-row,
+.worldcup-team-row.head{
+  display:grid!important;
+  grid-template-columns:minmax(42px,1.35fr) repeat(7, minmax(28px,.62fr))!important;
+  align-items:center!important;
+  column-gap:0!important;
+  width:100%!important;
+  padding:6px 8px!important;
+}
+
+.worldcup-team-row.head > *,
+.worldcup-team-row > *{
+  min-width:0!important;
+  text-align:center!important;
+}
+
+.worldcup-team-row.head > :first-child,
+.worldcup-team-row > :first-child{
+  text-align:left!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+}
+
+.worldcup-team-row img.flag,
+.worldcup-team-row .flag{
+  width:24px!important;
+  height:16px!important;
+  margin:0!important;
+  flex:0 0 24px!important;
+}
+
+.worldcup-team-name{
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+
+.worldcup-stat,
+.worldcup-pts{
+  text-align:center!important;
+  font-variant-numeric:tabular-nums!important;
+}
+
+@media(max-width:700px){
+  .worldcup-team-row,
+  .worldcup-team-row.head{
+    grid-template-columns:minmax(38px,1.25fr) repeat(7, minmax(24px,.58fr))!important;
+    padding:6px 5px!important;
+    font-size:11px!important;
+  }
+}
+
+
+/* V5 — Correctif définitif alignement + cases agrandies */
+.worldcup-groups-board{
+  padding:28px!important;
+  overflow-x:auto!important;
+}
+
+.worldcup-groups-grid{
+  grid-template-columns:repeat(3, minmax(330px, 1fr))!important;
+  gap:18px!important;
+}
+
+.worldcup-group-card{
+  min-width:330px!important;
+  border-radius:12px!important;
+}
+
+.worldcup-group-title{
+  padding:10px 8px!important;
+  font-size:18px!important;
+}
+
+.worldcup-team-row,
+.worldcup-team-row.head{
+  display:grid!important;
+  grid-template-columns:34px minmax(110px, 1.6fr) repeat(7, 34px)!important;
+  align-items:center!important;
+  column-gap:6px!important;
+  width:100%!important;
+  min-height:38px!important;
+  padding:8px 10px!important;
+  font-size:13px!important;
+}
+
+.worldcup-team-row.head{
+  grid-template-columns:minmax(150px, calc(34px + 1.6fr + 6px)) repeat(7, 34px)!important;
+  column-gap:6px!important;
+  font-size:12px!important;
+}
+
+.worldcup-team-row.head > :first-child{
+  text-align:left!important;
+  padding-left:0!important;
+}
+
+.worldcup-team-row > *,
+.worldcup-team-row.head > *{
+  min-width:0!important;
+  text-align:center!important;
+  line-height:1.15!important;
+}
+
+.worldcup-team-row > :first-child{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+}
+
+.worldcup-team-row img.flag,
+.worldcup-team-row .flag{
+  width:26px!important;
+  height:18px!important;
+  margin:0!important;
+  object-fit:cover!important;
+  flex:0 0 26px!important;
+}
+
+.worldcup-team-name{
+  display:block!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  text-align:left!important;
+  font-weight:900!important;
+}
+
+.worldcup-stat,
+.worldcup-pts{
+  display:block!important;
+  text-align:center!important;
+  font-variant-numeric:tabular-nums!important;
+  font-weight:900!important;
+}
+
+@media(max-width:1100px){
+  .worldcup-groups-grid{
+    grid-template-columns:repeat(2, minmax(330px, 1fr))!important;
+  }
+}
+
+@media(max-width:760px){
+  .worldcup-groups-grid{
+    grid-template-columns:minmax(330px, 1fr)!important;
+  }
+}
+
+
+/* V7 — Onglet Mes scores propre */
+#scores .summary{
+  grid-template-columns:repeat(4,1fr);
+}
+#scores .secret-panel{
+  margin-top:12px;
+}
+#scores .daily-recap-table{
+  margin-top:8px;
+}
+@media(max-width:900px){
+  #scores .summary{grid-template-columns:1fr 1fr}
+}
+@media(max-width:650px){
+  #scores .summary{grid-template-columns:1fr}
+}
+
+
+/* V8 — Mes scores complet et lisible */
+#scores .grid{
+  grid-template-columns:1.15fr .85fr;
+  gap:20px;
+}
+#scores .summary{
+  grid-template-columns:repeat(4,1fr);
+  margin-bottom:18px;
+}
+#scores .tile{
+  min-height:96px;
+}
+#scores .secret-panel{
+  padding:24px;
+}
+#scores .daily-recap-table{
+  margin-top:10px;
+}
+#scores .daily-recap-table th,
+#scores .daily-recap-table td{
+  white-space:nowrap;
+}
+@media(max-width:1000px){
+  #scores .grid{grid-template-columns:1fr}
+  #scores .summary{grid-template-columns:1fr 1fr}
+}
+@media(max-width:650px){
+  #scores .summary{grid-template-columns:1fr}
+  #scores .daily-recap-table{min-width:760px}
+}
+
+
+/* V9 — Mes scores restauré : Bilan + Récap + Bonus */
+#scores .scores-main-card{
+  padding:24px 14px 26px 14px;
+}
+#scores .scores-main-card h2{
+  margin-left:0;
+}
+#scores .summary{
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:10px!important;
+  margin-bottom:18px!important;
+}
+#scores .tile{
+  min-height:76px!important;
+}
+#scores .daily-recap-table{
+  margin-bottom:18px!important;
+}
+#scores .secret-panel{
+  max-width:none!important;
+  padding:24px!important;
+}
+@media(max-width:900px){
+  #scores .summary{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:650px){
+  #scores .summary{grid-template-columns:1fr!important}
+  #scores .daily-recap-table{min-width:760px}
+}
+
+
+/* V10 — Mes Scores = 3 blocs demandés */
+#scores{
+  max-width:1250px;
+  margin:auto;
+}
+#scores .scores-block{
+  margin-bottom:22px!important;
+  padding:22px!important;
+}
+#scores .scores-block > h2{
+  margin-top:0!important;
+  margin-bottom:18px!important;
+}
+#scores .scores-block h3{
+  margin:18px 0 10px!important;
+}
+#scores .summary{
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:10px!important;
+}
+#scores .tile{
+  min-height:78px!important;
+}
+#scores .daily-recap-table{
+  width:100%!important;
+}
+#scores .daily-recap-table th,
+#scores .daily-recap-table td{
+  white-space:nowrap!important;
+}
+#scores .secret-field{
+  margin-bottom:22px!important;
+}
+@media(max-width:900px){
+  #scores .summary{grid-template-columns:1fr 1fr!important}
+  #scores .daily-recap-table{min-width:760px!important}
+}
+@media(max-width:650px){
+  #scores .summary{grid-template-columns:1fr!important}
+}
+
+
+/* V11 — Mes Pronos réorganisé : Profil puis matchs */
+#bets .pronos-profile-block,
+#bets .pronos-matches-block{
+  padding:22px!important;
+  margin-bottom:22px!important;
+}
+#bets .pronos-profile-block > h2,
+#bets .pronos-matches-block > h2{
+  margin-top:0!important;
+}
+#bets #activePlayerCard{
+  margin-bottom:14px!important;
+}
+#bets .profile-card-horizontal{
+  align-items:center!important;
+}
+#bets .prono-day-nav{
+  margin-top:4px!important;
+}
+#bets #betRows{
+  margin-top:14px!important;
+}
+@media(max-width:750px){
+  #bets .profile-card-horizontal{
+    flex-direction:column!important;
+    align-items:flex-start!important;
+  }
+}
+
+
+/* V12 — Mes Pronos moderne : meilleure occupation de l'espace */
+#bets .bet-card{
+  padding:0!important;
+  overflow:hidden!important;
+  border-radius:18px!important;
+  background:linear-gradient(180deg,#171717,#101010)!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+}
+
+#bets .bet-title{
+  padding:18px 22px!important;
+  margin:0!important;
+  background:linear-gradient(90deg,rgba(122,16,32,.95),rgba(20,20,20,.95))!important;
+  border-bottom:1px solid rgba(255,255,255,.10)!important;
+}
+
+#bets .bet-title h3{
+  font-size:21px!important;
+  font-weight:900!important;
+  line-height:1.25!important;
+}
+
+#bets .bet-title .badge{
+  padding:7px 12px!important;
+  font-weight:800!important;
+}
+
+#bets .bet-form.score-only{
+  display:block!important;
+  padding:24px 22px 14px!important;
+  width:100%!important;
+}
+
+#bets .bet-form.score-only > label{
+  display:block!important;
+  width:100%!important;
+}
+
+#bets .bet-form.score-only > label > span{
+  display:block!important;
+  text-align:center!important;
+  font-size:15px!important;
+  color:#ddd!important;
+  margin-bottom:14px!important;
+}
+
+#bets .bet-inline-row{
+  width:100%!important;
+  display:grid!important;
+  grid-template-columns:1fr 120px 36px 120px 1fr 140px!important;
+  gap:16px!important;
+  align-items:center!important;
+}
+
+#bets .bet-inline-row .flag-wrap{
+  height:auto!important;
+  display:flex!important;
+  justify-content:center!important;
+  align-items:center!important;
+}
+
+#bets .bet-inline-row .flag-wrap .flag{
+  width:58px!important;
+  height:38px!important;
+  border-radius:6px!important;
+  box-shadow:0 0 0 1px rgba(255,255,255,.22)!important;
+}
+
+#bets .bet-inline-row .scoreA,
+#bets .bet-inline-row .scoreB{
+  width:120px!important;
+  height:64px!important;
+  border-radius:14px!important;
+  text-align:center!important;
+  font-size:28px!important;
+  font-weight:900!important;
+  background:#050505!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+}
+
+#bets .score-dash{
+  height:auto!important;
+  font-size:34px!important;
+  color:#fff!important;
+  font-weight:900!important;
+}
+
+#bets .bet-inline-row .stake{
+  width:140px!important;
+  height:58px!important;
+  border-radius:14px!important;
+  font-size:18px!important;
+  font-weight:900!important;
+  text-align:center!important;
+  background:#111!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+}
+
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:24px!important;
+  margin-top:14px!important;
+  padding:0 170px 0 80px!important;
+  font-size:14px!important;
+  color:#cfcfcf!important;
+}
+
+#bets .score-helper{
+  text-align:center!important;
+  margin-top:12px!important;
+}
+
+#bets .prediction-derived{
+  margin:4px 22px 18px!important;
+  padding:14px 18px!important;
+  text-align:center!important;
+  font-size:15px!important;
+  border-radius:14px!important;
+  background:rgba(255,255,255,.055)!important;
+}
+
+#bets .bet-actions{
+  padding:18px 22px!important;
+  margin:0!important;
+  background:rgba(255,255,255,.025)!important;
+  border-top:1px solid rgba(255,255,255,.08)!important;
+  display:grid!important;
+  grid-template-columns:1fr minmax(220px,320px)!important;
+  gap:16px!important;
+  align-items:center!important;
+}
+
+#bets .bet-actions .action{
+  min-height:54px!important;
+  border-radius:14px!important;
+  font-size:15px!important;
+}
+
+#bets .bet-status{
+  font-size:14px!important;
+  white-space:normal!important;
+}
+
+@media(max-width:900px){
+  #bets .bet-inline-row{
+    grid-template-columns:1fr 95px 28px 95px 1fr!important;
+  }
+  #bets .bet-inline-row .stake{
+    grid-column:1 / -1!important;
+    justify-self:center!important;
+    width:170px!important;
+  }
+  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+    padding:0!important;
+  }
+}
+
+@media(max-width:650px){
+  #bets .bet-title{
+    flex-direction:column!important;
+    align-items:flex-start!important;
+  }
+  #bets .bet-inline-row{
+    grid-template-columns:1fr 82px 22px 82px 1fr!important;
+    gap:8px!important;
+  }
+  #bets .bet-inline-row .flag-wrap .flag{
+    width:42px!important;
+    height:28px!important;
+  }
+  #bets .bet-inline-row .scoreA,
+  #bets .bet-inline-row .scoreB{
+    width:82px!important;
+    height:56px!important;
+    font-size:24px!important;
+  }
+  #bets .score-dash{
+    font-size:26px!important;
+  }
+  #bets .bet-actions{
+    grid-template-columns:1fr!important;
+  }
+}
+
+
+/* V13 — Carte prono enrichie : infos match + alignement score/mise */
+#bets .match-info-panel{
+  padding:14px 22px!important;
+  background:rgba(255,255,255,.035)!important;
+  border-bottom:1px solid rgba(255,255,255,.08)!important;
+  color:#d7d7d7!important;
+  display:grid!important;
+  grid-template-columns:1.2fr .8fr!important;
+  gap:12px!important;
+  font-size:13px!important;
+  line-height:1.45!important;
+}
+#bets .match-info-sep{
+  margin:0 10px!important;
+  color:#777!important;
+}
+#bets .bet-form.score-only > label > span{
+  margin-bottom:18px!important;
+}
+#bets .bet-inline-row{
+  grid-template-columns:minmax(120px,1fr) 120px 38px 120px minmax(120px,1fr) 140px!important;
+  align-items:end!important;
+}
+#bets .bet-inline-row .flag-wrap{
+  align-self:center!important;
+  padding-bottom:13px!important;
+}
+#bets .bet-inline-row .scoreA,
+#bets .bet-inline-row .scoreB,
+#bets .bet-inline-row .stake{
+  align-self:center!important;
+}
+#bets .score-dash{
+  align-self:center!important;
+  display:flex!important;
+  justify-content:center!important;
+  align-items:center!important;
+  padding-bottom:0!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+  grid-template-columns:1fr 1fr 140px!important;
+  padding:0!important;
+  margin-top:10px!important;
+  align-items:start!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(1){
+  text-align:center!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(2){
+  text-align:center!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{
+  content:"Mise";
+  text-align:center;
+  color:#cfcfcf;
+}
+#bets .prediction-derived{
+  margin-top:10px!important;
+}
+@media(max-width:900px){
+  #bets .match-info-panel{
+    grid-template-columns:1fr!important;
+  }
+  #bets .bet-inline-row{
+    grid-template-columns:1fr 96px 30px 96px 1fr!important;
+  }
+  #bets .bet-inline-row .stake{
+    grid-column:1 / -1!important;
+    justify-self:center!important;
+  }
+  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+    grid-template-columns:1fr 1fr!important;
+  }
+  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{
+    content:"";
+  }
+}
+
+
+/* V14 — infos match visibles et alignement score/mise */
+#bets .match-info-panel{
+  display:grid!important;
+  grid-template-columns:1.35fr .65fr!important;
+  gap:14px!important;
+  padding:14px 22px!important;
+  background:rgba(255,255,255,.045)!important;
+  border-bottom:1px solid rgba(255,255,255,.08)!important;
+  color:#e0e0e0!important;
+  font-size:13px!important;
+  line-height:1.45!important;
+}
+#bets .match-info-sep{
+  display:inline-block!important;
+  margin:0 10px!important;
+  color:#8e8e8e!important;
+}
+#bets .bet-form.score-only{
+  padding-top:24px!important;
+}
+#bets .bet-inline-row{
+  display:grid!important;
+  grid-template-columns:minmax(120px,1fr) 120px 38px 120px minmax(120px,1fr) 140px!important;
+  gap:16px!important;
+  align-items:center!important;
+}
+#bets .bet-inline-row .flag-wrap,
+#bets .bet-inline-row .scoreA,
+#bets .bet-inline-row .scoreB,
+#bets .bet-inline-row .stake,
+#bets .score-dash{
+  align-self:center!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+  display:grid!important;
+  grid-template-columns:minmax(120px,1fr) 120px 38px 120px minmax(120px,1fr) 140px!important;
+  gap:16px!important;
+  padding:0!important;
+  margin-top:10px!important;
+  color:#cfcfcf!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:first-child{
+  grid-column:1 / 3!important;
+  text-align:center!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(2){
+  grid-column:4 / 6!important;
+  text-align:center!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{
+  content:"Mise";
+  grid-column:6!important;
+  text-align:center!important;
+}
+@media(max-width:900px){
+  #bets .match-info-panel{grid-template-columns:1fr!important}
+  #bets .bet-inline-row{
+    grid-template-columns:1fr 96px 30px 96px 1fr!important;
+  }
+  #bets .bet-inline-row .stake{
+    grid-column:1 / -1!important;
+    justify-self:center!important;
+  }
+  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+    grid-template-columns:1fr 1fr!important;
+  }
+  #bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:first-child,
+  #bets .bet-form.score-only label > div[style*="justify-content:space-between"] span:nth-child(2){
+    grid-column:auto!important;
+  }
+  #bets .bet-form.score-only label > div[style*="justify-content:space-between"]::after{content:""!important}
+}
+
+
+/* V17 — H2H élargi + labels score/mise au-dessus */
+#bets .match-info-panel{
+  display:grid!important;
+  grid-template-columns:1.15fr .85fr!important;
+  gap:16px!important;
+  padding:16px 22px!important;
+  background:rgba(255,255,255,.05)!important;
+  border-bottom:1px solid rgba(255,255,255,.09)!important;
+  color:#e6e6e6!important;
+  font-size:13px!important;
+  line-height:1.55!important;
+}
+#bets .match-info-title{
+  font-weight:900!important;
+  color:#fff!important;
+  margin-bottom:6px!important;
+  text-transform:uppercase!important;
+  letter-spacing:.3px!important;
+}
+#bets .match-info-sep{
+  display:inline-block!important;
+  margin:0 10px!important;
+  color:#8e8e8e!important;
+}
+#bets .score-main-label{
+  display:block!important;
+  text-align:center!important;
+  font-weight:900!important;
+  color:#fff!important;
+  font-size:17px!important;
+  margin:4px 0 16px!important;
+  text-transform:uppercase!important;
+  letter-spacing:.3px!important;
+}
+#bets .bet-inline-row{
+  display:grid!important;
+  grid-template-columns:minmax(110px,1fr) 120px 38px 120px minmax(110px,1fr)!important;
+  gap:16px!important;
+  align-items:center!important;
+  width:100%!important;
+}
+#bets .team-label-row{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:20px!important;
+  margin:10px auto 18px!important;
+  max-width:720px!important;
+  color:#cfcfcf!important;
+  font-size:14px!important;
+  text-align:center!important;
+}
+#bets .stake-container{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:8px!important;
+  margin:0 auto 10px!important;
+}
+#bets .stake-label{
+  font-weight:900!important;
+  color:#fff!important;
+  font-size:15px!important;
+  text-transform:uppercase!important;
+  letter-spacing:.35px!important;
+}
+#bets .stake-container .stake{
+  width:150px!important;
+  height:58px!important;
+  border-radius:14px!important;
+  font-size:20px!important;
+  font-weight:900!important;
+  text-align:center!important;
+  background:#111!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+}
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+  display:none!important;
+}
+@media(max-width:900px){
+  #bets .match-info-panel{grid-template-columns:1fr!important}
+  #bets .bet-inline-row{
+    grid-template-columns:1fr 96px 30px 96px 1fr!important;
+  }
+}
+@media(max-width:650px){
+  #bets .bet-inline-row{
+    grid-template-columns:1fr 82px 24px 82px 1fr!important;
+    gap:8px!important;
+  }
+  #bets .team-label-row{font-size:12px!important}
+}
+
+
+/* V18 — Sanity check fixes */
+#scores .scores-block{margin-bottom:22px!important;padding:22px!important}
+#scores .summary{grid-template-columns:repeat(4,1fr)!important;gap:10px!important}
+#scores .tile{min-height:78px!important}
+#backup input[type="file"]{margin:6px 0 14px}
+#backup label{display:block;margin-top:10px;font-weight:900}
+@media(max-width:900px){#scores .summary{grid-template-columns:1fr 1fr!important}}
+@media(max-width:650px){#scores .summary{grid-template-columns:1fr!important}}
+
+
+/* V20 — Événements spéciaux */
+.special-events-admin-card{border:1px solid rgba(250,204,21,.35)!important;background:linear-gradient(180deg,#17110a,#111)!important}
+.special-events-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.special-events-grid label{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#101010;font-weight:800}
+.special-events-grid input{width:auto}
+.special-events-settings{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.special-events-settings label{font-weight:800;color:#eee}
+.special-events-banner{margin:0 0 18px;padding:18px 20px;border-radius:18px;border:1px solid rgba(250,204,21,.45);background:linear-gradient(90deg,#7a1020,#201006,#111);box-shadow:0 14px 32px rgba(0,0,0,.35)}
+.special-events-banner-title{font-size:18px;font-weight:900;margin-bottom:10px;color:#fff}
+.special-events-banner-list{display:flex;flex-wrap:wrap;gap:8px}
+.special-events-banner-list span{padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);font-weight:800}
+@media(max-width:900px){.special-events-grid,.special-events-settings{grid-template-columns:1fr}}
+
 </style>
+
+<!--
+SANITY V18
+- Correction doublon section Mes scores.
+- Correction fonctions avec await => async.
+- Admin refresh : renderAdminBetsTable appelé via renderAdmin/renderAll.
+- Secrets : sealSecrets sauvegarde dans state.players[].secrets, renderAdminSecrets les affiche.
+- Export CSV ajouté : secrets.
+- Import CSV ajouté : pronostics, résultats, questions secrètes.
+- Import JSON conservé.
+-->
+
 </head>
 <body>
 
-<div id="loginScreen" class="login-screen">
+<div id="loginScreen" class="login-screen" style="display: none;">
   <div class="login-card">
     <h2>🏆 B Partner FIFA World Cup 2026</h2>
     <p class="muted">Saisis ton code personnel à 4 chiffres pour accéder à ton espace.</p>
-    <input id="loginCode" class="code-input" type="password" maxlength="4" inputmode="numeric" placeholder="••••" onkeydown="if(event.key==='Enter') loginWithCode()">
+    <input id="loginCode" class="code-input" type="password" maxlength="4" inputmode="numeric" placeholder="••••" onkeydown="if(event.key===&#39;Enter&#39;) loginWithCode()">
     <button class="action" style="width:100%;margin-top:12px" onclick="loginWithCode()">Entrer</button>
-    <button class="action secondary" style="width:100%;margin-top:8px" onclick="localStorage.removeItem('bp_wc_dev'); location.reload();">Réparer / réinitialiser l’accès</button>
+    <button class="action secondary" style="width:100%;margin-top:8px" onclick="if(confirm(&#39;Réinitialiser uniquement l’écran de connexion ? Les données sont conservées.&#39;)){document.getElementById(&#39;loginCode&#39;).value=&#39;&#39;;location.reload();}">Réparer l’accès</button>
     <p id="loginError" class="bad" style="display:none">Code incorrect.</p>
     
   </div>
@@ -1093,98 +2034,79 @@ header button.action.secondary{
   </div>
   <div class="kpis">
     <div class="user-identity">
-      <span id="headerAvatar" class="avatar">?</span>
-      <span id="headerUserName">Utilisateur</span>
+      <span id="headerAvatar" class="avatar">S</span>
+      <span id="headerUserName">Admin · Peitt oiseau!</span>
     </div>
-    <div class="kpi">Solde: <span id="kpiBalance">0</span> FID</div>
-    <div class="kpi">Rang: <span id="kpiRank">-</span></div>
-    <div class="kpi">Réserve calculée: <span id="kpiReserve">0</span> FID</div>
+    <div class="kpi">Solde: <span id="kpiBalance">50</span> FID</div>
+    <div class="kpi">Rang: <span id="kpiRank">#1/15</span></div>
+    <div class="kpi">Réserve calculée: <span id="kpiReserve">500</span> FID</div>
     <div class="kpi">Journée: <span id="kpiDay">1</span></div>
-    <div class="kpi"><span id="kpiStatus">Pronos ouverts</span></div><div class="kpi admin-only"><span id="remoteStatus">SYNC</span></div><button class="action secondary" onclick="logout()">Sortir</button>
+    <div class="kpi"><span id="kpiStatus">🔓 Journée ouverte</span></div><button class="action secondary" onclick="logout()">Sortir</button>
   </div>
 </header>
 
 <nav>
-  <button id="navCalendar" class="active user-nav" onclick="tab('calendar',this)">📅 Calendrier</button>
-  <button id="navBets" class="user-nav" onclick="tab('bets',this)">🎯 Mes Pronos</button>
-  <button id="navRanking" class="user-nav" onclick="tab('ranking',this)">🏅 Hall of Fame</button>
-  <button id="navAdmin" class="admin-only" onclick="tab('admin',this)">🔐 Admin</button>
-  <button id="navBackup" class="admin-only" onclick="tab('backup',this)">💾 Excel / Backup</button>
+  <button id="navCalendar" class="user-nav" onclick="tab(&#39;calendar&#39;,this)">🏆 Tableau final</button>
+  <button id="navBets" class="user-nav" onclick="tab(&#39;bets&#39;,this)">🎯 Mes Pronos</button>
+  <button id="navScores" class="user-nav" onclick="tab(&#39;scores&#39;,this)">📊 Mes scores</button>
+  <button id="navRanking" class="user-nav" onclick="tab(&#39;ranking&#39;,this)">🏅 Hall of Fame</button>
+  <button id="navAdmin" class="admin-only active" onclick="tab(&#39;admin&#39;,this)">🔐 Admin</button>
+  <button id="navBackup" class="admin-only" onclick="tab(&#39;backup&#39;,this)">💾 Excel / Backup</button>
 </nav>
 
 <main>
-<section id="calendar" class="active">
-  <div class="grid">
-    <div>
-      <h2>📅 Matchs de la journée</h2>
-      <div class="day-nav">
-        <button id="prevDayBtn" onclick="changeCalendarDay(-1)">‹</button>
-        <div class="day-nav-center">
-          <div class="day-nav-title" id="calendarDayTitle">Journée 1</div>
-          <div class="day-nav-date" id="calendarDayDate">11 juin 2026</div><div class="day-nav-date" id="calendarDayStatus">Journée ouverte</div>
-          <div class="day-nav-stats" id="calendarDayStats"></div>
-        </div>
-        <button id="nextDayBtn" onclick="changeCalendarDay(1)">›</button>
+<section id="calendar" class="">
+  <div class="worldcup-hero-board">
+    <div class="final-board-header">
+      <div>
+        <h2 class="final-board-title">🏆 Coupe du Monde 2026 — Groupes & tableau final</h2>
+        <div class="final-board-sub">Vue synthétique des groupes, des qualifiés et du parcours vers la finale.</div>
       </div>
-      <div id="matchesToday"></div>
-      <h2>Derniers résultats (J-1)</h2>
-      <div id="lastResults"></div>
+      <div class="badge ok">Mise à jour selon les scores saisis dans Admin</div>
     </div>
-    <div>
-      <h2>Bilan</h2>
-      <div class="summary">
-        <div class="tile">✅ Bons pronos<strong id="dayGood">0</strong></div>
-        <div class="tile">🎯 Scores exacts<strong id="dayExact">0</strong></div>
-        <div class="tile">💰 Gain jour<strong id="dayGain">0</strong></div>
-        <div class="tile">📈 Rang<strong id="dayRank">0</strong></div>
-      </div>
-      <h2>Bilan compétition</h2>
-      <div class="summary">
-        <div class="tile">✅ Bons pronos<strong id="compGood">0</strong></div>
-        <div class="tile">🎯 Scores exacts<strong id="compExact">0</strong></div>
-        <div class="tile">💰 Gain cumulé<strong id="compGain">0</strong></div>
-        <div class="tile">📈 Évolution<strong id="compRank">0</strong></div>
-      </div>
-      <div class="help">
-        Les résultats sont saisis dans Admin. Les exports CSV peuvent être ouverts dans Excel.
-      </div>
+
+    <h2>Groupes</h2>
+    <div id="groupStandings" class="worldcup-groups-board"></div>
+
+
+    <h2>Tableau final</h2>
+    <div id="finalBracket" class="knockout-board"></div>
+
+    <div style="display:none">
+      <button id="prevDayBtn"></button><button id="nextDayBtn"></button>
+      <div id="calendarDayTitle"></div><div id="calendarDayDate"></div><div id="calendarDayStatus"></div><div id="calendarDayStats"></div>
+      <div id="matchesToday"></div><div id="lastResults"></div>
     </div>
   </div>
 </section>
 
+
 <section id="bets">
-  <div class="grid">
-    <div>
-      <h2>🎯 Mes pronostics</h2>
-      <div class="prono-day-nav">
-        <button id="prevPronoDayBtn" onclick="changePronoDay(-1)">‹</button>
-        <div class="prono-day-center">
-          <div class="prono-day-title" id="pronoDayTitle">Journée 1</div>
-          <div class="prono-day-sub" id="pronoDayDate">11 juin 2026</div>
-          <div class="prono-day-sub" id="pronoDayStatus">Journée ouverte</div>
-        </div>
-        <button id="nextPronoDayBtn" onclick="changePronoDay(1)">›</button>
-      </div>
-      <div class="card" id="activePlayerCard">
+  <h2>🎯 Mes pronostics</h2>
+
+  <div class="card pronos-profile-block">
+    <h2>1. Profil</h2>
+    <div class="card" id="activePlayerCard" style="display: block;">
         <label>Joueur actif</label>
-        <select id="activePlayer" onchange="renderAll()"></select>
+        <select id="activePlayer" onchange="renderAll()"><option value="0">Sarah</option><option value="1">Karim</option><option value="2">Nadia</option><option value="3">Hassan</option><option value="4">Mehdi</option><option value="5">Youssef</option><option value="6">Amina</option><option value="7">Rachid</option><option value="8">Leila</option><option value="9">Sofia</option><option value="10">Omar</option><option value="11">Samir</option><option value="12">Meryem</option><option value="13">Anas</option><option value="14">Imane</option></select>
       </div>
-      <div class="card">
+      
+    <div class="card">
         <h3>Mon profil</h3>
         <div class="profile-card profile-card-horizontal">
           <div class="profile-avatar-container">
-            <span id="profileAvatar" class="profile-avatar-large">?</span>
+            <span id="profileAvatar" class="profile-avatar-large">S</span>
           </div>
 
           <div class="profile-info">
-            <div id="profileName" class="profile-name">Utilisateur</div>
+            <div id="profileName" class="profile-name">Peitt oiseau!</div>
             <div class="avatar-upload" style="margin:8px 0 10px">
               <input id="profilePseudoInput" maxlength="20" placeholder="Ton pseudo" onchange="saveMyPseudo()">
               <button class="action secondary" onclick="saveMyPseudo()">Sauver pseudo</button>
             </div>
 
             <div class="profile-kpis">
-              <div class="mini-kpi">🏅 <b id="profileRankCard">#1</b></div>
+              <div class="mini-kpi">🏅 <b id="profileRankCard">#1 / 15</b></div>
               <div class="mini-kpi">💰 <b id="profileBalanceCard">50 FID</b></div>
               <div class="mini-kpi">🎯 <b id="profileGoodCard">0</b> pronos</div>
               <div class="mini-kpi">⚽ <b id="profileExactCard">0</b> scores</div>
@@ -1196,85 +2118,399 @@ header button.action.secondary{
             </div>
           </div>
         </div>
+      
+  </div>
+
+  <div id="specialEventsBanner"></div>
+
+  <div class="card pronos-matches-block">
+    <h2>2. Matchs pour la journée ouverte</h2>
+    <div class="prono-day-nav">
+        <button id="prevPronoDayBtn" onclick="changePronoDay(-1)" disabled="">‹</button>
+        <div class="prono-day-center">
+          <div class="prono-day-title" id="pronoDayTitle">Journée 1 / 34</div>
+          <div class="prono-day-sub" id="pronoDayDate">11 juin 2026</div>
+          <div class="prono-day-sub" id="pronoDayStatus"><span class="day-status-open">Journée ouverte aux mises</span></div>
+        </div>
+        <button id="nextPronoDayBtn" onclick="changePronoDay(1)">›</button>
       </div>
-      <div id="betRows"></div>
+      
+    <div id="betRows"><div class="card bet-card " id="betCard_M001">
+      <div class="bet-title">
+        <h3 style="margin:0"><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/mx.svg" alt="">Mexico vs <img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/za.svg" alt="">South Africa</h3>
+        <span class="badge">Brouillon</span>
+      </div>
+
+      <div class="bet-form score-only">
+<label style="width:100%">
+<span>Score pronostiqué</span>
+<div class="bet-inline-row">
+<div class="flag-wrap"><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/mx.svg" alt="Mexico"></div>
+<input type="number" min="0" max="99" aria-label="Score Mexico" data-match="M001" class="scoreA" value="0">
+<span class="score-dash">-</span>
+<input type="number" min="0" max="99" aria-label="Score South Africa" data-match="M001" class="scoreB" value="0">
+<div class="flag-wrap"><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/za.svg" alt="South Africa"></div>
+<select data-match="M001" class="stake"><option value="1" selected="">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+</div>
+<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:#bbb"><span>Mexico</span><span>South Africa</span></div>
+<div class="score-helper">Le résultat est déduit automatiquement du score choisi.</div>
+</label>
+</div>
+      <div class="prediction-derived">Résultat pronostiqué : <b>Nul</b></div>
+
+      
+
+      <div class="bet-actions">
+        <div class="bet-status muted">
+          À confirmer avant clôture.
+        </div>
+        <button class="action" onclick="validateSingleBet(&#39;M001&#39;)">Valider la mise</button>
+      </div>
+    </div><div class="card bet-card " id="betCard_M002">
+      <div class="bet-title">
+        <h3 style="margin:0"><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/kr.svg" alt="">Korea Republic vs <img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/cz.svg" alt="">Czechia</h3>
+        <span class="badge">Brouillon</span>
+      </div>
+
+      <div class="bet-form score-only">
+<label style="width:100%">
+<span>Score pronostiqué</span>
+<div class="bet-inline-row">
+<div class="flag-wrap"><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/kr.svg" alt="Korea Republic"></div>
+<input type="number" min="0" max="99" aria-label="Score Korea Republic" data-match="M002" class="scoreA" value="0">
+<span class="score-dash">-</span>
+<input type="number" min="0" max="99" aria-label="Score Czechia" data-match="M002" class="scoreB" value="0">
+<div class="flag-wrap"><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/cz.svg" alt="Czechia"></div>
+<select data-match="M002" class="stake"><option value="1" selected="">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+</div>
+<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:#bbb"><span>Korea Republic</span><span>Czechia</span></div>
+<div class="score-helper">Le résultat est déduit automatiquement du score choisi.</div>
+</label>
+</div>
+      <div class="prediction-derived">Résultat pronostiqué : <b>Nul</b></div>
+
+      
+
+      <div class="bet-actions">
+        <div class="bet-status muted">
+          À confirmer avant clôture.
+        </div>
+        <button class="action" onclick="validateSingleBet(&#39;M002&#39;)">Valider la mise</button>
+      </div>
+    </div></div>
       <button class="action" onclick="saveBets()">Enregistrer les brouillons</button><div class="muted">Mise max 4 FID. Bon résultat = mise ×2. Score exact = mise ×3.</div>
+  </div>
+</section>
+
+
+<section id="scores">
+  <h2>📊 Mes scores</h2>
+
+  <div class="card scores-block">
+    <h2>1. Bilan</h2>
+
+    <h3>Bilan journée</h3>
+    <div class="summary">
+      <div class="tile">✅ Bons pronos<strong id="dayGood">0</strong></div>
+      <div class="tile">🎯 Scores exacts<strong id="dayExact">0</strong></div>
+      <div class="tile">💰 Gain jour<strong id="dayGain">+0 FID</strong></div>
+      <div class="tile">📈 Rang<strong id="dayRank">+0 place</strong></div>
     </div>
-    <div>
-      <h2>🔒 Bonus secrets</h2>
-      <div class="card secret-panel">
-        <div class="secret-field">
-          <label>🏆 Vainqueur final (+50 FID)</label>
-          <input id="secretWinner" placeholder="Ex. France">
-        </div>
 
-        <div class="secret-field">
-          <label>🌟 Meilleur joueur (+25 FID)</label>
-          <input id="secretBestPlayer" placeholder="Ex. Kylian Mbappé">
-        </div>
+    <h3>Bilan compétition</h3>
+    <div class="summary">
+      <div class="tile">✅ Bons pronos<strong id="compGood">0</strong></div>
+      <div class="tile">🎯 Scores exacts<strong id="compExact">0</strong></div>
+      <div class="tile">💰 Gain cumulé<strong id="compGain">+0 FID</strong></div>
+      <div class="tile">📈 Évolution<strong id="compRank">+0 place</strong></div>
+    </div>
 
-        <div class="secret-field">
-          <label>⚽ Meilleur buteur (+25 FID)</label>
-          <input id="secretTopScorer" placeholder="Ex. Harry Kane">
-        </div>
+    <div class="help">
+      Les résultats sont saisis dans Admin. Les exports CSV peuvent être ouverts dans Excel.
+    </div>
+  </div>
 
-        <button class="action" onclick="sealSecrets()">Sceller mes choix</button>
-        <div class="muted" id="secretInfo" style="margin-top:16px">Les choix restent visibles uniquement pour le joueur actif dans cette maquette locale.</div>
-      </div>
-      <h2>Récapitulatif par journée</h2>
-      <table class="daily-recap-table">
-        <thead>
-          <tr>
-            <th>Journée</th>
-            <th>Match</th>
-            <th>Pronostic</th>
-            <th>Mise</th>
-            <th>Gain / perte</th>
-            <th>Score exact</th>
-            <th>Solde net</th>
-          </tr>
-        </thead>
-        <tbody id="personalLog"></tbody>
-      </table>
+  <div class="card scores-block">
+    <h2>2. Scores obtenus par journée</h2>
+    <table class="daily-recap-table">
+      <thead>
+        <tr>
+          <th>Journée</th>
+          <th>Match</th>
+          <th>Pronostic</th>
+          <th>Mise</th>
+          <th>Gain / perte</th>
+          <th>Score exact</th>
+          <th>Solde net</th>
+        </tr>
+      </thead>
+      <tbody id="personalLog">
+        <tr><td colspan="7" class="muted">Aucun pronostic validé à afficher.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card scores-block secret-panel">
+    <h2>3. Mes questions secrètes</h2>
+
+    <div class="secret-field">
+      <label>🏆 Vainqueur final (+50 FID)</label>
+      <input id="secretWinner" placeholder="Ex. France">
+    </div>
+
+    <div class="secret-field">
+      <label>🌟 Meilleur joueur (+25 FID)</label>
+      <input id="secretBestPlayer" placeholder="Ex. Kylian Mbappé">
+    </div>
+
+    <div class="secret-field">
+      <label>⚽ Meilleur buteur (+25 FID)</label>
+      <input id="secretTopScorer" placeholder="Ex. Harry Kane">
+    </div>
+
+    <button class="action" onclick="sealSecrets()">Sceller mes choix</button>
+    <div class="muted" id="secretInfo" style="margin-top:16px">
+      Les choix seront sauvegardés après validation et visibles par l’admin.
     </div>
   </div>
 </section>
 
 <section id="ranking">
   <h2>🏅 Hall of Fame 2026</h2>
-  <table><thead><tr><th>Rang</th><th>Joueur</th><th>Solde FID</th><th>Évolution</th><th>Bons pronos</th><th>Scores exacts</th></tr></thead><tbody id="rankingBody"></tbody></table>
+  <table><thead><tr><th>Rang</th><th>Joueur</th><th>Solde FID</th><th>Évolution</th><th>Bons pronos</th><th>Scores exacts</th></tr></thead><tbody id="rankingBody"><tr>
+    <td>🥇</td>
+    <td>Peitt oiseau!</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>🥈</td>
+    <td>Karim</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>🥉</td>
+    <td>Nadia</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>4</td>
+    <td>Hassan</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>5</td>
+    <td>Mehdi</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>6</td>
+    <td>Youssef</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>7</td>
+    <td>Amina</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>8</td>
+    <td>Rachid</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>9</td>
+    <td>Leila</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>10</td>
+    <td>Sofia</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>11</td>
+    <td>Omar</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>12</td>
+    <td>Samir</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>13</td>
+    <td>Meryem</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>14</td>
+    <td>Anas</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr><tr>
+    <td>15</td>
+    <td>Imane</td>
+    <td>50</td>
+    <td class="good">+0</td>
+    <td>0</td>
+    <td>0</td>
+  </tr></tbody></table>
 
   <div class="card" style="margin-top:16px">
     <h3>Objectifs secondaires — Prix spéciaux</h3>
-    <div id="awards"></div>
+    <div id="awards"><div class="award-card">
+    <div class="award-icon">⚽</div>
+    <div>
+      <div class="award-title">Striker</div>
+      <div class="award-desc">Plus longue série de pronostics gagnants</div>
+      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 victoire(s) d’affilée)</div>
+    </div>
+    <div class="award-prize">50 FID</div>
+  </div><div class="award-card">
+    <div class="award-icon">🪦</div>
+    <div>
+      <div class="award-title">Loser</div>
+      <div class="award-desc">Plus longue série de pronostics perdants</div>
+      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 défaite(s) d’affilée)</div>
+    </div>
+    <div class="award-prize">25 FID</div>
+  </div><div class="award-card">
+    <div class="award-icon">🎯</div>
+    <div>
+      <div class="award-title">Sniper</div>
+      <div class="award-desc">Nombre de scores exacts le plus important</div>
+      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 score(s) exact(s))</div>
+    </div>
+    <div class="award-prize">100 FID</div>
+  </div><div class="award-card">
+    <div class="award-icon">🦁</div>
+    <div>
+      <div class="award-title">Cannibale</div>
+      <div class="award-desc">Nombre de points pris à d’autres joueurs</div>
+      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 FID)</div>
+    </div>
+    <div class="award-prize">25 FID</div>
+  </div><div class="help">Les prix spéciaux sont attribués à la fin de la compétition. Le classement principal reste basé sur le total de FID.</div></div>
   </div>
 </section>
 
 
 
-<section id="admin">
-  <div id="adminLock" class="card">
+<section id="admin" class="active">
+  <div id="adminLock" class="card" style="display: none;">
     <h2>🔐 Accès Admin</h2>
     <input id="adminCode" type="password" placeholder="Code admin">
     <button class="action" onclick="checkAdmin()">Entrer</button>
     <div class="bad" id="adminError" style="display:none">Code incorrect.</div>
   </div>
 
-  <div id="adminPanel" style="display:none">
-    <div class="grid">
+  <div id="adminPanel" style="display: block;">
+
+    <div class="card workflow-card">
+      <h2>🧭 Workflow guidé</h2>
+      <div class="muted">
+        Suis les étapes dans l’ordre. Chaque action demande une confirmation pour éviter les erreurs.
+      </div>
+      <div id="workflowStatus" class="help"></div>
+      <div class="workflow-steps" id="workflowSteps"></div>
+      <button id="workflowNextBtn" class="action workflow-main-action" onclick="workflowNextStep()">Étape suivante</button>
+    </div>
+    
+    <div class="card special-events-admin-card">
+      <h2>🎉 Événements spéciaux de la journée</h2>
+      <div class="muted">
+        Active les bonus au moment d’ouvrir une journée. Ils seront visibles par les joueurs et appliqués au calcul des gains.
+      </div>
+
+      <div class="special-events-grid">
+        <label><input type="checkbox" id="evtDoubleGains"> 🚀 Gains doublés</label>
+        <label><input type="checkbox" id="evtDoubleExact"> 🎯 Scores parfaits doublés</label>
+        <label><input type="checkbox" id="evtCashDay"> 💰 Cash Day</label>
+        <label><input type="checkbox" id="evtKingDay"> 👑 King of the Day</label>
+        <label><input type="checkbox" id="evtJackpot"> 🔥 Jackpot</label>
+        <label><input type="checkbox" id="evtFestival"> ⚽ Festival offensif</label>
+      </div>
+
+      <div class="special-events-settings">
+        <label>🍀 Lucky Match
+          <select id="evtLuckyMatch"></select>
+        </label>
+        <label>Multiplicateur Lucky Match
+          <select id="evtLuckyMultiplier">
+            <option value="2">x2</option>
+            <option value="3">x3</option>
+            <option value="4">x4</option>
+          </select>
+        </label>
+        <label>Cash Day bonus
+          <input type="number" id="evtCashAmount" min="0" value="10">
+        </label>
+        <label>King of the Day bonus
+          <input type="number" id="evtKingAmount" min="0" value="20">
+        </label>
+        <label>Jackpot bonus
+          <input type="number" id="evtJackpotAmount" min="0" value="50">
+        </label>
+        <label>Festival offensif : bonus
+          <input type="number" id="evtFestivalAmount" min="0" value="3">
+        </label>
+      </div>
+
+      <button class="action" onclick="saveSpecialEventsFromAdmin()">Enregistrer les événements</button>
+      <button class="action secondary" onclick="clearSpecialEventsForCurrentDay()">Désactiver les événements</button>
+      <div id="specialEventsAdminPreview" class="help"></div>
+    </div>
+<div class="grid">
       <div class="card">
         <h2>Paramètres financiers</h2>
         <label>Budget total calculé automatiquement</label>
-        <input id="budget" type="number" readonly>
+        <input id="budget" type="number" readonly="">
         <label>Réserve cible</label>
         <input id="reserveInput" type="number" min="0" value="500" oninput="previewFinanceSettings()">
         <label>FID départ par défaut</label>
         <input id="defaultFid" type="number" value="50" oninput="previewFinanceSettings()">
-        <p>Alloué: <b id="allocatedView">0</b> FID</p>
-        <p>Réserve calculée: <b id="reserveView">0</b> FID</p>
-        <p>Réserve min. 5%: <b id="minReserveView">0</b> FID</p>
-        <p id="budgetStatus"></p>
-        <div id="reserveExposureView"></div>
+        <p>Alloué: <b id="allocatedView">350</b> FID</p>
+        <p>Réserve calculée: <b id="reserveView">500</b> FID</p>
+        <p>Réserve min. 5%: <b id="minReserveView">43</b> FID</p>
+        <p id="budgetStatus"><span class="good">Configuration valide</span></p>
+        <div id="reserveExposureView">
+    <div class="help">
+      <b>Exposition réserve — Journée 1</b><br>
+      Mises validées : <b>0</b><br>
+      Mises encaissables max : <b>0 FID</b><br>
+      Paiement max théorique : <b>0 FID</b> <span class="muted">(score exact = mise × 3)</span><br>
+      Besoin réserve max : <b class="good">0 FID</b><br>
+      Réserve actuelle : <b>500 FID</b> — <span class="good">OK</span>
+    </div>
+  </div>
         <div class="admin-finance-actions">
           <button class="action" id="saveAdminBtn" onclick="saveAdmin()">Enregistrer paramètres</button>
           <button class="action danger" onclick="resetAllGameData()">Tout remettre à zéro</button>
@@ -1283,23 +2519,35 @@ header button.action.secondary{
       <div class="card">
         <h2>Journée</h2>
         <p>Journée actuelle: <b id="adminDay">1</b></p>
-        <p>Date: <b id="adminDayDate">—</b></p>
-        <p>Statut: <b id="adminStatus">Ouvert</b></p><p>Pronostics reçus: <b id="adminBetCount">0</b> / <b id="adminExpectedBets">0</b></p><p>Validés: <b id="adminValidatedBets">0</b> · Brouillons: <b id="adminDraftBets">0</b></p>
+        <p>Date: <b id="adminDayDate">11 juin 2026</b></p>
+        <p>Statut: <b id="adminStatus"><span class="day-status-open">Ouverte</span></b></p><p>Pronostics reçus: <b id="adminBetCount">0</b> / <b id="adminExpectedBets">14</b></p><p>Validés: <b id="adminValidatedBets">0</b> · Brouillons: <b id="adminDraftBets">0</b></p>
         <div class="muted">Règle : une journée ne peut être ouverte que si la journée précédente est fermée.</div><button class="action secondary" onclick="previousDay()">← Journée précédente</button>
         <button class="action danger" onclick="closeBets()">Fermer la journée</button>
         <button class="action secondary" onclick="openBets()">Ouvrir la journée</button>
         <button class="action secondary" onclick="nextDay()">Journée suivante →</button>
 
         <div class="admin-day-score-panel">
-          <h3>⚽ Saisie des scores & calcul des gains</h3>
-          <div class="muted">Les scores attendus correspondent à la journée précédente dès qu’une nouvelle journée est ouverte.</div>
-          <div id="scoreEntryTitle" class="help" style="margin-top:12px"></div>
-          <div id="scoreInputs"></div>
+          <h3>⚽ Saisie des scores &amp; calcul des gains</h3>
+          <div class="muted">Workflow : quand JX+1 est ouverte, tu saisis ici les scores officiels de JX puis tu calcules les gains de JX.</div>
+          <div id="scoreEntryTitle" class="help" style="margin-top:12px">Scores attendus pour la <b>journée 1</b></div>
+          <div id="scoreInputs"><div class="score-row"><div><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/mx.svg" alt="">Mexico vs <img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/za.svg" alt="">South Africa <span class="muted">(M001)</span></div>
+  <div class="score-selects">
+    <select id="sa_M001"><option value="0" selected="">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option><option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option><option value="60">60</option><option value="61">61</option><option value="62">62</option><option value="63">63</option><option value="64">64</option><option value="65">65</option><option value="66">66</option><option value="67">67</option><option value="68">68</option><option value="69">69</option><option value="70">70</option><option value="71">71</option><option value="72">72</option><option value="73">73</option><option value="74">74</option><option value="75">75</option><option value="76">76</option><option value="77">77</option><option value="78">78</option><option value="79">79</option><option value="80">80</option><option value="81">81</option><option value="82">82</option><option value="83">83</option><option value="84">84</option><option value="85">85</option><option value="86">86</option><option value="87">87</option><option value="88">88</option><option value="89">89</option><option value="90">90</option><option value="91">91</option><option value="92">92</option><option value="93">93</option><option value="94">94</option><option value="95">95</option><option value="96">96</option><option value="97">97</option><option value="98">98</option><option value="99">99</option></select>
+    <span class="score-dash">-</span>
+    <select id="sb_M001"><option value="0" selected="">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option><option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option><option value="60">60</option><option value="61">61</option><option value="62">62</option><option value="63">63</option><option value="64">64</option><option value="65">65</option><option value="66">66</option><option value="67">67</option><option value="68">68</option><option value="69">69</option><option value="70">70</option><option value="71">71</option><option value="72">72</option><option value="73">73</option><option value="74">74</option><option value="75">75</option><option value="76">76</option><option value="77">77</option><option value="78">78</option><option value="79">79</option><option value="80">80</option><option value="81">81</option><option value="82">82</option><option value="83">83</option><option value="84">84</option><option value="85">85</option><option value="86">86</option><option value="87">87</option><option value="88">88</option><option value="89">89</option><option value="90">90</option><option value="91">91</option><option value="92">92</option><option value="93">93</option><option value="94">94</option><option value="95">95</option><option value="96">96</option><option value="97">97</option><option value="98">98</option><option value="99">99</option></select>
+  </div>
+</div><div class="score-row"><div><img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/kr.svg" alt="">Korea Republic vs <img class="flag" src="./B Partner FIFA World Cup 2026_v1_files/cz.svg" alt="">Czechia <span class="muted">(M002)</span></div>
+  <div class="score-selects">
+    <select id="sa_M002"><option value="0" selected="">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option><option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option><option value="60">60</option><option value="61">61</option><option value="62">62</option><option value="63">63</option><option value="64">64</option><option value="65">65</option><option value="66">66</option><option value="67">67</option><option value="68">68</option><option value="69">69</option><option value="70">70</option><option value="71">71</option><option value="72">72</option><option value="73">73</option><option value="74">74</option><option value="75">75</option><option value="76">76</option><option value="77">77</option><option value="78">78</option><option value="79">79</option><option value="80">80</option><option value="81">81</option><option value="82">82</option><option value="83">83</option><option value="84">84</option><option value="85">85</option><option value="86">86</option><option value="87">87</option><option value="88">88</option><option value="89">89</option><option value="90">90</option><option value="91">91</option><option value="92">92</option><option value="93">93</option><option value="94">94</option><option value="95">95</option><option value="96">96</option><option value="97">97</option><option value="98">98</option><option value="99">99</option></select>
+    <span class="score-dash">-</span>
+    <select id="sb_M002"><option value="0" selected="">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option><option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option><option value="60">60</option><option value="61">61</option><option value="62">62</option><option value="63">63</option><option value="64">64</option><option value="65">65</option><option value="66">66</option><option value="67">67</option><option value="68">68</option><option value="69">69</option><option value="70">70</option><option value="71">71</option><option value="72">72</option><option value="73">73</option><option value="74">74</option><option value="75">75</option><option value="76">76</option><option value="77">77</option><option value="78">78</option><option value="79">79</option><option value="80">80</option><option value="81">81</option><option value="82">82</option><option value="83">83</option><option value="84">84</option><option value="85">85</option><option value="86">86</option><option value="87">87</option><option value="88">88</option><option value="89">89</option><option value="90">90</option><option value="91">91</option><option value="92">92</option><option value="93">93</option><option value="94">94</option><option value="95">95</option><option value="96">96</option><option value="97">97</option><option value="98">98</option><option value="99">99</option></select>
+  </div>
+</div></div>
           <div class="admin-day-score-actions">
             <button class="action" onclick="calculateGains()">Calculer les gains de la journée</button>
             <button class="action secondary" onclick="recalculateDay()">Recalculer cette journée</button>
             <button class="action danger" onclick="resetOfficialScoresDay()">Remettre les scores à zéro</button>
-            <button class="action secondary" onclick="exportCSV('settlement')">Exporter détail gains Excel</button>
+            <button class="action secondary" onclick="exportCSV(&#39;settlement&#39;)">Exporter détail gains Excel</button>
           </div>
           <div id="calcInfo" class="help"></div>
         </div>
@@ -1307,9 +2555,11 @@ header button.action.secondary{
     </div>
 
     <div class="card">
-      <h2>Joueurs</h2>
+      <h2>Joueurs</h2><div class="help">Les utilisateurs créés sont sauvegardés. Chaque joueur reçoit un code aléatoire à 4 chiffres. Le code ADMIN reste toujours <b>1573</b>.</div>
       <div class="admin-row muted players-header"><b>Joueur</b><b>Pseudo</b><b>Code</b><b>FID départ</b><b>Solde</b><b>Détail</b><b>Action</b></div><div id="adminPlayers" class="admin-players-list"></div>
-      <button class="action" onclick="addPlayer()">Ajouter joueur</button>
+      <button class="action" onclick="addPlayer()">Ajouter utilisateur</button>
+      <button class="action secondary" onclick="restoreBeforeUserChangeBackup()">Restaurer utilisateurs</button>
+      <button class="action" onclick="savePlayersAdmin()">Sauvegarder utilisateurs</button>
       <button class="action secondary" onclick="applyDefaultFid()">Appliquer FID défaut à tous</button>
       <div id="adminUserDetail"></div>
     </div>
@@ -1322,7 +2572,56 @@ header button.action.secondary{
         <thead>
           <tr><th>Joueur</th><th>Vainqueur final</th><th>Meilleur joueur</th><th>Meilleur buteur</th><th>Statut</th><th>Date validation</th></tr>
         </thead>
-        <tbody id="adminSecretsBody"></tbody>
+        <tbody id="adminSecretsBody"><tr>
+      <td><b>Sandrine</b></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="badge">Non renseigné</span></td>
+      <td><span class="muted">—</span></td>
+    </tr><tr>
+      <td><b>Elie</b></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="badge">Non renseigné</span></td>
+      <td><span class="muted">—</span></td>
+    </tr><tr>
+      <td><b>Merveille</b></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="badge">Non renseigné</span></td>
+      <td><span class="muted">—</span></td>
+    </tr><tr>
+      <td><b>Tojo</b></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="badge">Non renseigné</span></td>
+      <td><span class="muted">—</span></td>
+    </tr><tr>
+      <td><b>Marcel</b></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="badge">Non renseigné</span></td>
+      <td><span class="muted">—</span></td>
+    </tr><tr>
+      <td><b>Achraf</b></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="badge">Non renseigné</span></td>
+      <td><span class="muted">—</span></td>
+    </tr><tr>
+      <td><b>Hassan</b></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="muted">—</span></td>
+      <td><span class="badge">Non renseigné</span></td>
+      <td><span class="muted">—</span></td>
+    </tr></tbody>
       </table>
     </div>
 
@@ -1347,17 +2646,17 @@ header button.action.secondary{
             <option value="2">2 FID</option>
             <option value="3">3 FID</option>
             <option value="4">4 FID</option>
-            <option value="4" selected>4 FID</option>
+            <option value="4" selected="">4 FID</option>
           </select>
         </label>
       </div>
 
       <div class="day-nav">
-        <button id="prevSimDayBtn" onclick="changeSimulationDay(-1)">‹</button>
+        <button id="prevSimDayBtn" onclick="changeSimulationDay(-1)" disabled="">‹</button>
         <div class="day-nav-center">
-          <div class="day-nav-title" id="simDayTitle">Journée 1</div>
+          <div class="day-nav-title" id="simDayTitle">Journée 1 / 34</div>
           <div class="day-nav-date" id="simDayDate">11 juin 2026</div>
-          <div class="day-nav-date" id="simDayStatus">Simulation</div>
+          <div class="day-nav-date" id="simDayStatus">0 mises · 0/2 résultats</div>
         </div>
         <button id="nextSimDayBtn" onclick="changeSimulationDay(1)">›</button>
       </div>
@@ -1365,8 +2664,8 @@ header button.action.secondary{
       <div class="sim-grid">
         <div class="sim-kpi"><span>Journée testée</span><b id="simDayKpi">1</b></div>
         <div class="sim-kpi"><span>Mises validées</span><b id="simBetsKpi">0</b></div>
-        <div class="sim-kpi"><span>FID misés</span><b id="simStakeKpi">0</b></div>
-        <div class="sim-kpi"><span>Réserve</span><b id="simReserveKpi">0</b></div>
+        <div class="sim-kpi"><span>FID misés</span><b id="simStakeKpi">0 FID</b></div>
+        <div class="sim-kpi"><span>Réserve</span><b id="simReserveKpi">500 FID</b></div>
       </div>
 
       <div class="sim-actions">
@@ -1374,7 +2673,7 @@ header button.action.secondary{
         
         <button class="action" onclick="simulateCurrentDayFull()">🎯 Simuler journée courante</button>
         <button class="action" onclick="simulateFullCompetition()">🚀 Simuler toute la compétition</button>
-        <button class="action secondary" onclick="exportCSV('simulation')">📥 Export simulation CSV</button>
+        <button class="action secondary" onclick="exportCSV(&#39;simulation&#39;)">📥 Export simulation CSV</button>
         <button class="action danger" onclick="clearSimulation()">Réinitialiser simulation</button>
       </div>
 
@@ -1395,7 +2694,91 @@ header button.action.secondary{
               <th>Détail</th>
             </tr>
           </thead>
-          <tbody id="simResultsBody"></tbody>
+          <tbody id="simResultsBody">
+    <tr>
+      <td>🥇</td>
+      <td><b>Nouveau joueur</b></td>
+      <td>0</td>
+      <td>0 FID</td>
+      <td>0</td>
+      <td>0</td>
+      <td class="good">+0 FID</td>
+      <td><b>50 FID</b></td>
+      <td><button class="action secondary admin-mini-btn" onclick="showSimulationUserDetail(&#39;Sandrine&#39;)">Voir détail</button></td>
+    </tr>
+  
+    <tr>
+      <td>🥈</td>
+      <td><b>Nouveau joueur</b></td>
+      <td>0</td>
+      <td>0 FID</td>
+      <td>0</td>
+      <td>0</td>
+      <td class="good">+0 FID</td>
+      <td><b>50 FID</b></td>
+      <td><button class="action secondary admin-mini-btn" onclick="showSimulationUserDetail(&#39;Elie&#39;)">Voir détail</button></td>
+    </tr>
+  
+    <tr>
+      <td>🥉</td>
+      <td><b>Nouveau joueur</b></td>
+      <td>0</td>
+      <td>0 FID</td>
+      <td>0</td>
+      <td>0</td>
+      <td class="good">+0 FID</td>
+      <td><b>50 FID</b></td>
+      <td><button class="action secondary admin-mini-btn" onclick="showSimulationUserDetail(&#39;Merveille&#39;)">Voir détail</button></td>
+    </tr>
+  
+    <tr>
+      <td>4</td>
+      <td><b>Nouveau joueur</b></td>
+      <td>0</td>
+      <td>0 FID</td>
+      <td>0</td>
+      <td>0</td>
+      <td class="good">+0 FID</td>
+      <td><b>50 FID</b></td>
+      <td><button class="action secondary admin-mini-btn" onclick="showSimulationUserDetail(&#39;Tojo&#39;)">Voir détail</button></td>
+    </tr>
+  
+    <tr>
+      <td>5</td>
+      <td><b>Nouveau joueur</b></td>
+      <td>0</td>
+      <td>0 FID</td>
+      <td>0</td>
+      <td>0</td>
+      <td class="good">+0 FID</td>
+      <td><b>50 FID</b></td>
+      <td><button class="action secondary admin-mini-btn" onclick="showSimulationUserDetail(&#39;Marcel&#39;)">Voir détail</button></td>
+    </tr>
+  
+    <tr>
+      <td>6</td>
+      <td><b>Nouveau joueur</b></td>
+      <td>0</td>
+      <td>0 FID</td>
+      <td>0</td>
+      <td>0</td>
+      <td class="good">+0 FID</td>
+      <td><b>50 FID</b></td>
+      <td><button class="action secondary admin-mini-btn" onclick="showSimulationUserDetail(&#39;Achraf&#39;)">Voir détail</button></td>
+    </tr>
+  
+    <tr>
+      <td>7</td>
+      <td><b>Nouveau joueur</b></td>
+      <td>0</td>
+      <td>0 FID</td>
+      <td>0</td>
+      <td>0</td>
+      <td class="good">+0 FID</td>
+      <td><b>50 FID</b></td>
+      <td><button class="action secondary admin-mini-btn" onclick="showSimulationUserDetail(&#39;Hassan&#39;)">Voir détail</button></td>
+    </tr>
+  </tbody>
         </table>
       </div>
       <div id="simUserDetail"></div>
@@ -1403,7 +2786,7 @@ header button.action.secondary{
       <h3>Audit simulation</h3>
       <table>
         <thead><tr><th>Contrôle</th><th>Résultat</th></tr></thead>
-        <tbody id="simAuditBody"></tbody>
+        <tbody id="simAuditBody"><tr><td>Aucun solde négatif</td><td>✅ OK</td></tr><tr><td>Réserve ≥ 5% budget</td><td>✅ OK</td></tr><tr><td>Mises entre 1 et 4 FID</td><td>✅ OK</td></tr><tr><td>Scores officiels cohérents</td><td>✅ OK</td></tr><tr><td>Exports disponibles</td><td>✅ OK</td></tr></tbody>
       </table>
 
       <h3>Journal simulation</h3>
@@ -1411,7 +2794,7 @@ header button.action.secondary{
     </div>
 
     <div class="card">
-      <h2>Mises & pronostics par utilisateur</h2>
+      <h2>Mises &amp; pronostics par utilisateur</h2>
       <div class="muted">Vue admin : consultation, correction d’une mise/prono, puis recalcul possible de la journée.</div>
       <div class="admin-bets-toolbar">
         <label>Journée<select id="adminBetsDay" onchange="renderAdminBetsTable()"></select></label>
@@ -1428,6 +2811,7 @@ header button.action.secondary{
   </div>
 </section>
 
+
 <section id="backup">
   <h2>💾 Excel / Backup</h2>
   <div class="grid">
@@ -1438,101 +2822,50 @@ header button.action.secondary{
       <button class="action" onclick="exportCSV('validated_report')">Exporter pronostics validés + gains CSV</button>
       <button class="action" onclick="exportCSV('results')">Exporter résultats CSV</button>
       <button class="action" onclick="exportCSV('logs')">Exporter journal FID CSV</button>
+      <button class="action" onclick="exportCSV('secrets')">Exporter questions secrètes CSV</button>
+      <button class="action" onclick="exportCSV('events')">Exporter événements CSV</button>
       <button class="action secondary" onclick="downloadJSON()">Exporter sauvegarde JSON complète</button>
-      <p class="muted">Les CSV s’ouvrent dans Excel. Le JSON permet de restaurer toute l’application.</p>
+      <p class="muted">
+        Les CSV utilisent le séparateur point-virgule et s’ouvrent directement dans Excel.
+        Le JSON permet de restaurer toute l’application.
+      </p>
     </div>
+
     <div class="card">
-      <h3>Synchronisation centrale</h3><div class="help"><b>URL serveur actuelle :</b><br><span id="remoteUrlView"></span><br>Configure REMOTE_API_URL dans le HTML avec l’URL Google Apps Script /exec.</div><button class="action secondary" onclick="remoteAdminSaveState();bpAlert('État envoyé au serveur central.',{icon:'✅'})">Forcer sauvegarde serveur</button><hr style="border-color:#333"><h3>Imports en cas de crash</h3>
+      <h3>Imports / restauration</h3>
+
       <label>Importer sauvegarde JSON complète</label>
-      <input type="file" accept=".json" onchange="importJSON(event)">
-      <hr style="border-color:#333">
+      <input type="file" accept=".json,application/json" onchange="importJSON(event)">
+
+      <div class="help">
+        <b>Imports CSV Excel</b><br>
+        Utilise de préférence les fichiers exportés depuis cette application, sans changer les noms de colonnes.
+      </div>
+
+      <label>Importer pronostics CSV</label>
+      <input type="file" accept=".csv,text/csv" onchange="importCSV('bets',event)">
+      <p class="muted">Colonnes attendues : day, matchId, player, scoreA, scoreB, stake, status, validatedAt.</p>
+
       <label>Importer résultats CSV</label>
-      <input type="file" accept=".csv" onchange="importResultsCSV(event)">
-      <p class="muted">Format résultats CSV attendu : day,matchId,scoreA,scoreB</p>
+      <input type="file" accept=".csv,text/csv" onchange="importCSV('results',event)">
+      <p class="muted">Colonnes attendues : day, matchId, scoreA, scoreB ou officialScore.</p>
+
+      <label>Importer questions secrètes CSV</label>
+      <input type="file" accept=".csv,text/csv" onchange="importCSV('secrets',event)">
+
+      <label>Importer événements CSV</label>
+      <input type="file" accept=".csv,text/csv" onchange="importCSV('events',event)">
+      <p class="muted">Colonnes attendues : player, winner, bestPlayer, topScorer, sealed, validatedAt.</p>
+
       <button class="action secondary" onclick="migrateCalendar();renderAll();alert('Calendrier réparé / mis à jour.')">Réparer calendrier</button>
       <button class="action danger" onclick="resetApp()">Réinitialiser démo</button>
     </div>
   </div>
 </section>
+
 </main>
 
 <script>
-
-/* =========================
-   MODE MULTI-JOUEURS CENTRALISÉ
-   1) Déploie le fichier AppsScript_backend_BPWorldCup.gs en Web App Google Apps Script
-   2) Colle ici l’URL /exec obtenue
-   ========================= */
-const REMOTE_API_URL = "https://script.google.com/macros/s/AKfycbzXcECCWTPJTfuqWzUuEO9IRiwtQwwtZYMVW-ej-ok16ttJJrjm48uTkRMKUQxWpeaxEw/exec"; // Exemple : "https://script.google.com/macros/s/XXXX/exec"
-let __REMOTE_READY = false;
-
-function remoteEnabled(){
-  return typeof REMOTE_API_URL==="string" && REMOTE_API_URL.trim().startsWith("https://");
-}
-function remoteJSONP(action, payload={}){
-  return new Promise((resolve,reject)=>{
-    if(!remoteEnabled()) return resolve(null);
-    const cb="bp_cb_"+Date.now()+"_"+Math.floor(Math.random()*100000);
-    const s=document.createElement("script");
-    const params=new URLSearchParams({action,callback:cb,data:JSON.stringify(payload)});
-    window[cb]=(res)=>{
-      try{ delete window[cb]; s.remove(); resolve(res); }catch(e){ resolve(res); }
-    };
-    s.onerror=()=>{ try{ delete window[cb]; s.remove(); }catch(e){} reject(new Error("Erreur connexion serveur")); };
-    s.src=REMOTE_API_URL+"?"+params.toString();
-    document.body.appendChild(s);
-  });
-}
-async function remotePost(action,payload={}){
-  if(!remoteEnabled()) return;
-  try{
-    await fetch(REMOTE_API_URL,{
-      method:"POST",
-      mode:"no-cors",
-      headers:{"Content-Type":"text/plain;charset=utf-8"},
-      body:JSON.stringify({action,payload})
-    });
-  }catch(e){
-    console.warn("Remote post failed",e);
-  }
-}
-async function remoteLoadState(){
-  if(!remoteEnabled()) return false;
-  try{
-    const res=await remoteJSONP("getState",{});
-    if(res && res.ok && res.state){
-      state=res.state;
-      __REMOTE_READY=true;
-      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
-      return true;
-    }
-    if(res && res.ok && !res.state){
-      __REMOTE_READY=true;
-      await remotePost("saveState",state);
-      return true;
-    }
-  }catch(e){
-    console.warn("Remote load failed",e);
-  }
-  return false;
-}
-async function remoteMergeBet(bet){
-  await remotePost("mergeBet",bet);
-}
-async function remoteSyncPlayerProfile(p){
-  await remotePost("savePlayerProfile",{name:p.name,code:p.code,pseudo:p.pseudo||p.name});
-}
-async function remoteAdminSaveState(){
-  if(currentRole==="admin") await remotePost("saveState",state);
-}
-function remoteStatusBadge(){
-  if(!document.getElementById("remoteStatus")) return;
-  remoteStatus.innerHTML = remoteEnabled()
-    ? '<span class="good">SYNC centrale activée</span>'
-    : '<span class="warn">SYNC centrale non configurée</span>';
-}
-
-
 const ADMIN_HASH="79e8c13e1a8c51e0ff30567fa583fd52c900d56163023cc40049d762871417ea";
 const flagCodes={"Mexico":"mx","South Africa":"za","Korea Republic":"kr","Czechia":"cz","Canada":"ca","Bosnia and Herzegovina":"ba","United States":"us","USA":"us","Paraguay":"py","Haiti":"ht","Scotland":"gb-sct","Australia":"au","Türkiye":"tr","Brazil":"br","Morocco":"ma","Qatar":"qa","Switzerland":"ch","Côte d’Ivoire":"ci","Ivory Coast":"ci","Ecuador":"ec","Germany":"de","Curaçao":"cw","Netherlands":"nl","Japan":"jp","Sweden":"se","Tunisia":"tn","Saudi Arabia":"sa","Uruguay":"uy","Spain":"es","Cabo Verde":"cv","Iran":"ir","New Zealand":"nz","Belgium":"be","Egypt":"eg","France":"fr","Senegal":"sn","Iraq":"iq","Norway":"no","Argentina":"ar","Algeria":"dz","Austria":"at","Jordan":"jo","Ghana":"gh","Panama":"pa","England":"gb-eng","Croatia":"hr","Portugal":"pt","Congo DR":"cd","Uzbekistan":"uz","Colombia":"co"};
 const starterMatches=[
@@ -3201,7 +4534,7 @@ const starterMatches=[
     "status": "open"
   }
 ];
-const defaultPlayers=["Sarah","Karim","Nadia","Hassan","Mehdi","Youssef","Amina","Rachid","Leila","Sofia","Omar","Samir","Meryem","Anas","Imane"];
+const defaultPlayers=[]; // V24: joueurs démo supprimés
 let state;
 try {
   state = JSON.parse(localStorage.getItem("bp_wc_dev") || "null") || initState();
@@ -3215,20 +4548,35 @@ let currentRole = null;
 let calendarDayDisplayed = null;
 let pronoDayDisplayed = null;
 
-function generateUniqueCode(){
-  const used=new Set(state.players.map(p=>String(p.code||"")));
+
+function escapeHtml(v){return String(v ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function escapeAttr(v){return escapeHtml(v).replace(/`/g,'&#96;');}
+
+function generateUniqueCode(existingPlayers=null){
+  const list = existingPlayers || state?.players || [];
+  const used = new Set(list.map(p=>String(p.code||"")));
   let code;
-  do { code=String(Math.floor(1000+Math.random()*9000)); }
+  do { code = String(Math.floor(1000 + Math.random()*9000)); }
   while(used.has(code) || code==="1573");
   return code;
 }
 function ensurePlayerCodes(){
   let changed=false;
+  const seen=new Set();
+  if(!Array.isArray(state.players)) state.players=[];
   state.players.forEach(p=>{
-    if(!p.code || !/^\d{4}$/.test(String(p.code)) || String(p.code)==="1573"){
-      p.code=generateUniqueCode();
+    const code=String(p.code||"");
+    if(!/^\d{4}$/.test(code) || code==="1573" || seen.has(code)){
+      p.code=generateUniqueCode(state.players);
       changed=true;
     }
+    seen.add(String(p.code));
+    if(!p.pseudo){p.pseudo=p.name;changed=true;}
+    if(p.startFid===undefined){p.startFid=Number(p.balance||50);changed=true;}
+    if(p.balance===undefined){p.balance=Number(p.startFid||50);changed=true;}
+    if(p.evolution===undefined){p.evolution=0;changed=true;}
+    if(p.good===undefined){p.good=0;changed=true;}
+    if(p.exact===undefined){p.exact=0;changed=true;}
   });
   if(changed) save();
 }
@@ -3279,7 +4627,7 @@ function logout(){
 function initState(){
   return {
     budget:1250,reserveTarget:500,currentDay:1,closed:false,closedDays:{},
-    players:defaultPlayers.map((n,i)=>({name:n,pseudo:n,code:String(2401+i).padStart(4,"0"),avatar:null,startFid:50,balance:50,evolution:0,good:0,exact:0,secrets:null})),
+    players:[],
     matches:starterMatches,
     bets:[],
     logs:[],
@@ -3288,19 +4636,15 @@ function initState(){
   };
 }
 function migrateCalendar(){
-  const version = "official-fifa-2026-v1";
-  if(state.scheduleVersion !== version){
-    state.matches = starterMatches.map(m => ({...m}));
-    state.bets = [];
-    state.settlementDetails = [];
-    state.summaries = {day:{good:0,exact:0,gain:0,rank:0},comp:{good:0,exact:0,gain:0,rank:0}};
-    state.currentDay = 1;
-    state.closed = false;
-    state.closedDays = {}; starterMatches.forEach(m=>{ state.closedDays[m.day] = Number(m.day)!==1; });
-    calendarDayDisplayed = 1;
-    state.scheduleVersion = version;
-    save();
-  }
+  if(!confirm("Réparer uniquement le calendrier ? Les utilisateurs seront conservés.")) return;
+  try{localStorage.setItem("bp_wc_dev_backup_before_calendar_repair",JSON.stringify(state));}catch(e){}
+  const oldById=new Map((state.matches||[]).map(m=>[m.id,m]));
+  state.matches=starterMatches.map(base=>{
+    const old=oldById.get(base.id)||{};
+    return {...base,scoreA:old.scoreA!==undefined?old.scoreA:base.scoreA,scoreB:old.scoreB!==undefined?old.scoreB:base.scoreB,status:old.status||base.status};
+  });
+  state.scheduleVersion="official-fifa-2026-v1";
+  save();renderAll();alert("Calendrier réparé sans modifier les utilisateurs.");
 }
 function save(){localStorage.setItem("bp_wc_dev",JSON.stringify(state));}
 function f(team){let c=flagCodes[team];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${team}`:`<span class="muted">${team}</span>`;}
@@ -3389,7 +4733,6 @@ async function saveMyPseudo(){
   if(exists) return bpAlert("Ce pseudo est déjà utilisé par un autre joueur.",{icon:"⚠️"});
   current.pseudo=value;
   log(current.name,`Pseudo mis à jour : ${value}`,0);
-  await remoteSyncPlayerProfile(current);
   save();
   renderAll();
   await bpAlert("Pseudo sauvegardé.",{icon:"✅"});
@@ -3431,7 +4774,6 @@ function renderHeader(){
   kpiReserve.textContent=calcReserve().reserve;
   kpiDay.textContent=state.currentDay;
   kpiStatus.textContent=currentDayStatusLabel(state.currentDay);
-  remoteStatusBadge();
 }
 function calcReserve(){
   const allocated = state.players.reduce((s,p)=>s+Number(p.startFid||0),0);
@@ -3527,6 +4869,141 @@ function currentDayStatusLabel(day=state.currentDay){
   return isDayClosed(day) ? "🔒 Journée fermée" : "🔓 Journée ouverte";
 }
 
+
+function isRealGroupName(group){
+  return /^Groupe [A-L]$/.test(String(group||""));
+}
+function groupTeams(){
+  const groups={};
+  state.matches.filter(m=>isRealGroupName(m.group)).forEach(m=>{
+    if(!groups[m.group]) groups[m.group]=new Set();
+    groups[m.group].add(m.teamA);
+    groups[m.group].add(m.teamB);
+  });
+  return Object.fromEntries(Object.entries(groups).map(([g,set])=>[g,[...set].sort()]));
+}
+function computeGroupStandings(){
+  const teamsByGroup=groupTeams();
+  const standings={};
+
+  Object.entries(teamsByGroup).forEach(([group,teams])=>{
+    standings[group]=teams.map(team=>({
+      team,
+      played:0,
+      won:0,
+      drawn:0,
+      lost:0,
+      gf:0,
+      ga:0,
+      gd:0,
+      pts:0
+    }));
+  });
+
+  state.matches.filter(m=>isRealGroupName(m.group)).forEach(m=>{
+    if(m.scoreA===null || m.scoreA===undefined || m.scoreB===null || m.scoreB===undefined) return;
+    const table=standings[m.group];
+    if(!table) return;
+    const a=table.find(x=>x.team===m.teamA);
+    const b=table.find(x=>x.team===m.teamB);
+    if(!a || !b) return;
+
+    const sa=Number(m.scoreA);
+    const sb=Number(m.scoreB);
+
+    a.played++; b.played++;
+    a.gf+=sa; a.ga+=sb;
+    b.gf+=sb; b.ga+=sa;
+
+    if(sa>sb){
+      a.won++; b.lost++;
+      a.pts+=3;
+    }else if(sa<sb){
+      b.won++; a.lost++;
+      b.pts+=3;
+    }else{
+      a.drawn++; b.drawn++;
+      a.pts+=1; b.pts+=1;
+    }
+
+    a.gd=a.gf-a.ga;
+    b.gd=b.gf-b.ga;
+  });
+
+  Object.values(standings).forEach(table=>{
+    table.sort((a,b)=>
+      Number(b.pts)-Number(a.pts) ||
+      Number(b.gd)-Number(a.gd) ||
+      Number(b.gf)-Number(a.gf) ||
+      a.team.localeCompare(b.team)
+    );
+  });
+
+  return standings;
+}
+function renderGroupStandings(){
+  const el=document.getElementById("groupStandings");
+  if(!el) return;
+  const standings=computeGroupStandings();
+  const groupOrder=Object.keys(standings).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
+
+  el.innerHTML = `<div class="worldcup-groups-grid">` + groupOrder.map(group=>{
+    const rows=standings[group].map((r,i)=>`<div class="worldcup-team-row">
+      <div>${f(r.team).split('</img>').length>1 ? '' : ''}${flagOnly(r.team)}</div>
+      <div class="worldcup-team-name">${r.team}</div>
+      <div class="worldcup-stat">${r.played}</div>
+      <div class="worldcup-stat">${r.won}</div>
+      <div class="worldcup-stat">${r.drawn}</div>
+      <div class="worldcup-stat">${r.lost}</div>
+      <div class="worldcup-stat">${r.gf}</div>
+      <div class="worldcup-stat">${r.ga}</div>
+      <div class="worldcup-stat worldcup-pts">${r.pts}</div>
+    </div>`).join("");
+
+    return `<div class="worldcup-group-card">
+      <div class="worldcup-group-title">${group.replace("Groupe ","Groupe ")}</div>
+      <div class="worldcup-team-row head">
+        <div></div>
+        <div>Pays</div>
+        <div>MJ</div>
+        <div>G</div>
+        <div>N</div>
+        <div>P</div>
+        <div>BM</div>
+        <div>BE</div>
+        <div>Pts</div>
+      </div>
+      ${rows}
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+
+function renderKnockoutBoard(){
+  const el=document.getElementById("finalBracket");
+  if(!el) return;
+  const rounds=[
+    {title:"1/16", count:8},
+    {title:"1/8", count:4},
+    {title:"1/4", count:2},
+    {title:"1/2", count:2},
+    {title:"Finale", count:1}
+  ];
+  const knockout=state.matches.filter(m=>!isRealGroupName(m.group));
+  el.innerHTML=rounds.map(round=>{
+    const ms=knockout.filter(m=>String(m.phase||m.group||"").toLowerCase().includes(round.title.toLowerCase()) || String(m.group||"").toLowerCase().includes(round.title.toLowerCase())).slice(0, round.count);
+    const cards=[];
+    for(let i=0;i<round.count;i++){
+      const m=ms[i];
+      const a=m ? f(m.teamA) : `<span class="knockout-placeholder">${round.title} · ${i+1}</span>`;
+      const b=m ? f(m.teamB) : `<span class="knockout-placeholder">À déterminer</span>`;
+      const score=(m && m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined) ? `${m.scoreA} - ${m.scoreB}` : "";
+      cards.push(`<div class="knockout-match"><div class="knockout-team"><span>${a}</span><b>${score}</b></div><div class="knockout-team"><span>${b}</span></div></div>`);
+    }
+    return `<div class="knockout-round"><h3>${round.title}</h3>${cards.join("")}</div>`;
+  }).join("");
+}
+
 function renderCalendar(){
   const day=currentCalendarDay();
   let todays=state.matches.filter(m=>Number(m.day)===Number(day));
@@ -3550,7 +5027,7 @@ function renderCalendar(){
   if(document.getElementById("prevDayBtn")) prevDayBtn.disabled=day<=1;
   if(document.getElementById("nextDayBtn")) nextDayBtn.disabled=day>=maxCalendarDay();
 
-  matchesToday.innerHTML=todays.length?todays.map(m=>`
+  if(document.getElementById("matchesToday")) matchesToday.innerHTML=todays.length?todays.map(m=>`
     <div class="card match-card">
       <div class="match-card-inner">
         <div class="match-card-top">
@@ -3576,8 +5053,10 @@ function renderCalendar(){
     </div>`).join(""):`<div class="card muted">Aucun match prévu pour cette journée.</div>`;
 
   let prev=state.matches.filter(m=>m.day===state.currentDay-1 && m.scoreA!==null);
-  lastResults.innerHTML=prev.length?prev.map(m=>`<div class="card"><h3>${f(m.teamA)} ${m.scoreA} - ${m.scoreB} ${f(m.teamB)}</h3><div class="muted">Résultat de la veille · ${m.group}</div></div>`).join(""):`<div class="card muted">Aucun résultat de la veille à afficher.</div>`;
+  if(document.getElementById("lastResults")) lastResults.innerHTML=prev.length?prev.map(m=>`<div class="card"><h3>${f(m.teamA)} ${m.scoreA} - ${m.scoreB} ${f(m.teamB)}</h3><div class="muted">Résultat de la veille · ${m.group}</div></div>`).join(""):`<div class="card muted">Aucun résultat de la veille à afficher.</div>`;
   renderSummaries();
+  renderGroupStandings();
+  renderKnockoutBoard();
 }
 function renderSummaries(){
   let d=state.summaries.day,c=state.summaries.comp;
@@ -3705,6 +5184,410 @@ function betOutcomeHTML(b,m){
   </div>`;
 }
 
+
+function matchInfoHTML(m){
+  const venue = [m.venue, m.city].filter(Boolean).join(" · ");
+  const paris = m.time ? `${m.time} — heure de Paris` : "Heure à confirmer";
+  const parts = [
+    m.date ? `📅 ${m.date}` : "",
+    paris ? `🕒 ${paris}` : "",
+    venue ? `🏟️ ${venue}` : "",
+    m.group ? `🏷️ ${m.group}` : ""
+  ].filter(Boolean).join('<span class="match-info-sep">•</span>');
+  return `<div class="match-info-panel">
+    <div>${parts || "Informations du match à confirmer"}</div>
+    <div>Dernier face-à-face officiel : <b>à compléter</b></div>
+  </div>`;
+}
+
+
+const H2H_DATA = {
+  "Mexico|South Africa": {
+    score: "1-1",
+    date: "11 juin 2010",
+    competition: "Coupe du Monde FIFA 2010 — match d'ouverture, Groupe A",
+    venue: "Soccer City",
+    city: "Johannesburg"
+  },
+  "Korea Republic|Czechia": {
+    score: "2-1 pour la Corée du Sud",
+    date: "5 juin 2016",
+    competition: "Match amical international",
+    venue: "Eden Arena",
+    city: "Prague"
+  },
+  "Brazil|Morocco": {
+    score: "3-0 pour le Brésil",
+    date: "16 juin 1998",
+    competition: "Coupe du Monde FIFA 1998 — Groupe A",
+    venue: "Stade de la Beaujoire",
+    city: "Nantes"
+  },
+  "France|Senegal": {
+    score: "1-0 pour le Sénégal",
+    date: "31 mai 2002",
+    competition: "Coupe du Monde FIFA 2002 — match d'ouverture, Groupe A",
+    venue: "Seoul World Cup Stadium",
+    city: "Séoul"
+  },
+  "England|Croatia": {
+    score: "1-0 pour l’Angleterre",
+    date: "13 juin 2021",
+    competition: "UEFA Euro 2020 — Groupe D",
+    venue: "Wembley Stadium",
+    city: "Londres"
+  },
+  "Germany|Côte d’Ivoire": {
+    score: "2-2",
+    date: "18 novembre 2009",
+    competition: "Match amical international",
+    venue: "Veltins-Arena",
+    city: "Gelsenkirchen"
+  },
+  "Ecuador|Germany": {
+    score: "3-0 pour l’Allemagne",
+    date: "20 juin 2006",
+    competition: "Coupe du Monde FIFA 2006 — Groupe A",
+    venue: "Olympiastadion",
+    city: "Berlin"
+  },
+  "Spain|Saudi Arabia": {
+    score: "3-2 pour l’Espagne",
+    date: "29 mai 2010",
+    competition: "Match amical international",
+    venue: "Tivoli-Neu",
+    city: "Innsbruck"
+  },
+  "Saudi Arabia|Uruguay": {
+    score: "1-0 pour l’Uruguay",
+    date: "20 juin 2018",
+    competition: "Coupe du Monde FIFA 2018 — Groupe A",
+    venue: "Rostov Arena",
+    city: "Rostov-sur-le-Don"
+  },
+  "Uruguay|Spain": {
+    score: "2-1 pour l’Espagne",
+    date: "16 juin 2013",
+    competition: "Coupe des Confédérations FIFA 2013 — Groupe B",
+    venue: "Arena Pernambuco",
+    city: "Recife"
+  },
+  "Netherlands|Japan": {
+    score: "2-2",
+    date: "16 novembre 2013",
+    competition: "Match amical international",
+    venue: "Cristal Arena",
+    city: "Genk"
+  },
+  "Tunisia|Japan": {
+    score: "3-0 pour la Tunisie",
+    date: "14 juin 2022",
+    competition: "Kirin Cup Soccer 2022",
+    venue: "Panasonic Stadium Suita",
+    city: "Osaka"
+  },
+  "Netherlands|Sweden": {
+    score: "2-0 pour les Pays-Bas",
+    date: "10 octobre 2017",
+    competition: "Qualifications Coupe du Monde FIFA 2018 — UEFA",
+    venue: "Johan Cruyff Arena",
+    city: "Amsterdam"
+  },
+  "Canada|Qatar": {
+    score: "2-0 pour le Canada",
+    date: "23 septembre 2022",
+    competition: "Match amical international",
+    venue: "Generali Arena",
+    city: "Vienne"
+  },
+  "Qatar|Switzerland": {
+    score: "1-0 pour le Qatar",
+    date: "14 novembre 2018",
+    competition: "Match amical international",
+    venue: "Cornaredo Stadium",
+    city: "Lugano"
+  },
+  "Mexico|Korea Republic": {
+    score: "3-2 pour le Mexique",
+    date: "14 novembre 2020",
+    competition: "Match amical international",
+    venue: "Wiener Neustadt Stadion",
+    city: "Wiener Neustadt"
+  },
+  "Argentina|Austria": {
+    score: "1-0 pour l’Argentine",
+    date: "13 juin 1990",
+    competition: "Coupe du Monde FIFA 1990 — Groupe B",
+    venue: "Stadio Olimpico",
+    city: "Rome"
+  },
+  "Belgium|Egypt": {
+    score: "2-1 pour l’Égypte",
+    date: "18 novembre 2022",
+    competition: "Match amical international",
+    venue: "Jaber Al-Ahmad International Stadium",
+    city: "Koweït"
+  },
+  "Brazil|Scotland": {
+    score: "2-0 pour le Brésil",
+    date: "27 mars 2011",
+    competition: "Match amical international",
+    venue: "Emirates Stadium",
+    city: "Londres"
+  },
+  "France|Norway": {
+    score: "2-1 pour la France",
+    date: "27 mai 2014",
+    competition: "Match amical international",
+    venue: "Stade de France",
+    city: "Saint-Denis"
+  },
+  "Argentina|Algeria": {
+    score: "4-3 pour l’Argentine",
+    date: "5 juin 2007",
+    competition: "Match amical international",
+    venue: "Camp Nou",
+    city: "Barcelone"
+  },
+  "Portugal|Colombia": {
+    score: "0-0",
+    date: "14 novembre 2017",
+    competition: "Match amical international",
+    venue: "Estádio Dr. Magalhães Pessoa",
+    city: "Leiria"
+  },
+  "Croatia|Ghana": {
+    score: "1-0 pour la Croatie",
+    date: "11 juin 2014",
+    competition: "Match amical international",
+    venue: "Estádio Rei Pelé",
+    city: "Maceió"
+  }
+};
+
+function normalizeTeamNameForH2H(v){
+  return String(v || "")
+    .replace(/’/g,"'")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+function getH2H(m){
+  const a = normalizeTeamNameForH2H(m.teamA);
+  const b = normalizeTeamNameForH2H(m.teamB);
+  const variants = [
+    `${a}|${b}`,
+    `${b}|${a}`,
+    `${a.replace(/'/g,"’")}|${b.replace(/'/g,"’")}`,
+    `${b.replace(/'/g,"’")}|${a.replace(/'/g,"’")}`
+  ];
+  for(const k of variants){
+    if(H2H_DATA[k]) return H2H_DATA[k];
+  }
+  return null;
+}
+
+function matchInfoHTML(m){
+  const h = getH2H(m);
+  const venue = [m.venue, m.city].filter(Boolean).join(" · ");
+  const matchBits = [
+    m.date ? `📅 ${m.date}` : "",
+    m.time ? `🕒 ${m.time} — heure de Paris` : "🕒 Heure de Paris : à confirmer",
+    venue ? `🏟️ ${venue}` : "",
+    m.group ? `🏷️ ${m.group}` : "",
+    m.phase ? `🏆 ${m.phase}` : ""
+  ].filter(Boolean).join('<span class="match-info-sep">•</span>');
+
+  const h2h = h
+    ? `<b>${h.score}</b><br><span>📅 ${h.date}</span><br><span>🏆 ${h.competition}</span><br><span>🏟️ ${[h.venue,h.city].filter(Boolean).join(" · ")}</span>`
+    : `<b>NA</b><br><span class="muted">Aucun dernier face-à-face fiable intégré pour cette affiche.</span>`;
+
+  return `<div class="match-info-panel">
+    <div>
+      <div class="match-info-title">Infos match</div>
+      <div>${matchBits}</div>
+    </div>
+    <div>
+      <div class="match-info-title">Dernier face-à-face officiel</div>
+      <div>${h2h}</div>
+    </div>
+  </div>`;
+}
+
+
+function ensureSpecialEvents(){
+  if(!state.specialEvents) state.specialEvents={};
+  const days=[...new Set((state.matches||[]).map(m=>Number(m.day)))];
+  days.forEach(d=>{
+    if(!state.specialEvents[d]){
+      state.specialEvents[d]={
+        doubleGains:false,
+        doubleExact:false,
+        cashDay:false,
+        cashAmount:10,
+        luckyMatchId:"",
+        luckyMultiplier:2,
+        kingDay:false,
+        kingAmount:20,
+        jackpot:false,
+        jackpotAmount:50,
+        festival:false,
+        festivalAmount:3
+      };
+    }
+  });
+}
+function currentDayEvents(day){
+  ensureSpecialEvents();
+  return state.specialEvents[Number(day)] || {};
+}
+function activeEventsList(day){
+  const e=currentDayEvents(day);
+  const list=[];
+  if(e.doubleGains) list.push("🚀 Vos gains sont doublés");
+  if(e.doubleExact) list.push("🎯 Vos scores parfaits sont récompensés x2");
+  if(e.cashDay) list.push(`💰 Cash Day : +${Number(e.cashAmount||10)} FID si tous les pronostics du jour sont validés`);
+  if(e.luckyMatchId){
+    const m=state.matches.find(x=>x.id===e.luckyMatchId);
+    list.push(`🍀 Lucky Match ${m ? m.teamA+" - "+m.teamB : e.luckyMatchId} : gains x${Number(e.luckyMultiplier||2)}`);
+  }
+  if(e.kingDay) list.push(`👑 King of the Day : +${Number(e.kingAmount||20)} FID au meilleur joueur du jour`);
+  if(e.jackpot) list.push(`🔥 Jackpot : +${Number(e.jackpotAmount||50)} FID en cas de sans-faute`);
+  if(e.festival) list.push(`⚽ Festival offensif : +${Number(e.festivalAmount||3)} FID sur les matchs à 4 buts ou plus`);
+  return list;
+}
+function renderSpecialEventsBanner(){
+  const box=document.getElementById("specialEventsBanner");
+  if(!box) return;
+  const day=typeof currentPronoDay==="function" ? currentPronoDay() : state.currentDay;
+  const list=activeEventsList(day);
+  if(!list.length){ box.innerHTML=""; return; }
+  box.innerHTML=`<div class="special-events-banner">
+    <div class="special-events-banner-title">🔥 ÉVÉNEMENTS DE LA JOURNÉE</div>
+    <div class="special-events-banner-list">${list.map(x=>`<span>${x}</span>`).join("")}</div>
+  </div>`;
+}
+function renderSpecialEventsAdmin(){
+  ensureSpecialEvents();
+  const day=Number(state.currentDay||1);
+  const e=currentDayEvents(day);
+  const lucky=document.getElementById("evtLuckyMatch");
+  if(lucky){
+    const matches=state.matches.filter(m=>Number(m.day)===day);
+    lucky.innerHTML=`<option value="">Aucun</option>`+matches.map(m=>`<option value="${m.id}">${m.id} · ${m.teamA} - ${m.teamB}</option>`).join("");
+    lucky.value=e.luckyMatchId||"";
+  }
+  const set=(id,val)=>{const el=document.getElementById(id); if(el){ if(el.type==="checkbox") el.checked=!!val; else el.value=val; }};
+  set("evtDoubleGains",e.doubleGains);
+  set("evtDoubleExact",e.doubleExact);
+  set("evtCashDay",e.cashDay);
+  set("evtCashAmount",e.cashAmount ?? 10);
+  set("evtLuckyMultiplier",e.luckyMultiplier ?? 2);
+  set("evtKingDay",e.kingDay);
+  set("evtKingAmount",e.kingAmount ?? 20);
+  set("evtJackpot",e.jackpot);
+  set("evtJackpotAmount",e.jackpotAmount ?? 50);
+  set("evtFestival",e.festival);
+  set("evtFestivalAmount",e.festivalAmount ?? 3);
+  const preview=document.getElementById("specialEventsAdminPreview");
+  if(preview){
+    const list=activeEventsList(day);
+    preview.innerHTML=list.length ? `<b>Actifs J${day}</b><br>${list.join("<br>")}` : `<b>J${day}</b> · Aucun événement actif.`;
+  }
+}
+function saveSpecialEventsFromAdmin(){
+  ensureSpecialEvents();
+  const day=Number(state.currentDay||1);
+  const val=id=>document.getElementById(id)?.value;
+  const chk=id=>!!document.getElementById(id)?.checked;
+  state.specialEvents[day]={
+    doubleGains:chk("evtDoubleGains"),
+    doubleExact:chk("evtDoubleExact"),
+    cashDay:chk("evtCashDay"),
+    cashAmount:Number(val("evtCashAmount")||10),
+    luckyMatchId:val("evtLuckyMatch")||"",
+    luckyMultiplier:Number(val("evtLuckyMultiplier")||2),
+    kingDay:chk("evtKingDay"),
+    kingAmount:Number(val("evtKingAmount")||20),
+    jackpot:chk("evtJackpot"),
+    jackpotAmount:Number(val("evtJackpotAmount")||50),
+    festival:chk("evtFestival"),
+    festivalAmount:Number(val("evtFestivalAmount")||3)
+  };
+  log("SYSTEM",`Événements spéciaux enregistrés J${day}`,0);
+  save(); renderAll();
+  alert("Événements spéciaux enregistrés.");
+}
+function clearSpecialEventsForCurrentDay(){
+  ensureSpecialEvents();
+  const day=Number(state.currentDay||1);
+  state.specialEvents[day]={
+    doubleGains:false,doubleExact:false,cashDay:false,cashAmount:10,luckyMatchId:"",luckyMultiplier:2,
+    kingDay:false,kingAmount:20,jackpot:false,jackpotAmount:50,festival:false,festivalAmount:3
+  };
+  log("SYSTEM",`Événements spéciaux désactivés J${day}`,0);
+  save(); renderAll();
+}
+function eventMultiplierForBet(day,matchId,isExact){
+  const e=currentDayEvents(day);
+  let mult=1;
+  if(e.doubleGains) mult*=2;
+  if(isExact && e.doubleExact) mult*=2;
+  if(e.luckyMatchId && e.luckyMatchId===matchId) mult*=Number(e.luckyMultiplier||2);
+  return mult;
+}
+function applySpecialEventBonuses(targetDay, todays){
+  const e=currentDayEvents(targetDay);
+  if(!e) return;
+  const dayMatches=todays || state.matches.filter(m=>Number(m.day)===Number(targetDay));
+  const dayMatchIds=dayMatches.map(m=>m.id);
+  const validated=state.bets.filter(b=>Number(b.day)===Number(targetDay) && (b.status||"DRAFT")==="VALIDATED");
+  const players=state.players || [];
+
+  if(e.cashDay){
+    players.forEach(p=>{
+      const count=validated.filter(b=>b.player===p.name && dayMatchIds.includes(b.matchId)).length;
+      if(count===dayMatchIds.length && dayMatchIds.length>0){
+        const amount=Number(e.cashAmount||10);
+        p.balance+=amount; p.evolution+=amount;
+        log(p.name,`Bonus Cash Day J${targetDay}`,amount);
+        state.settlementDetails.push({day:targetDay,matchId:"EVENT_CASH_DAY",match:"Cash Day",player:p.name,stake:0,prediction:"",predictedScore:"",officialScore:"",result:"",status:"BONUS CASH DAY",baseGain:0,exactBonus:0,netGain:amount});
+      }
+    });
+  }
+
+  if(e.jackpot){
+    players.forEach(p=>{
+      const det=(state.settlementDetails||[]).filter(d=>Number(d.day)===Number(targetDay)&&d.player===p.name&&dayMatchIds.includes(d.matchId));
+      if(det.length===dayMatchIds.length && det.length>0 && det.every(d=>String(d.status||"").startsWith("GAGNÉ"))){
+        const amount=Number(e.jackpotAmount||50);
+        p.balance+=amount; p.evolution+=amount;
+        log(p.name,`Bonus Jackpot J${targetDay}`,amount);
+        state.settlementDetails.push({day:targetDay,matchId:"EVENT_JACKPOT",match:"Jackpot",player:p.name,stake:0,prediction:"",predictedScore:"",officialScore:"",result:"",status:"BONUS JACKPOT SANS-FAUTE",baseGain:0,exactBonus:0,netGain:amount});
+      }
+    });
+  }
+
+  if(e.kingDay){
+    const scores={};
+    players.forEach(p=>scores[p.name]=0);
+    (state.settlementDetails||[]).forEach(d=>{
+      if(Number(d.day)===Number(targetDay) && scores[d.player]!==undefined && !String(d.matchId||"").startsWith("EVENT_")){
+        scores[d.player]+=Number(d.netGain||0);
+      }
+    });
+    const max=Math.max(...Object.values(scores));
+    const winners=Object.keys(scores).filter(name=>scores[name]===max && max>0);
+    winners.forEach(name=>{
+      const p=players.find(x=>x.name===name); if(!p) return;
+      const amount=Number(e.kingAmount||20);
+      p.balance+=amount; p.evolution+=amount;
+      log(p.name,`Bonus King of the Day J${targetDay}`,amount);
+      state.settlementDetails.push({day:targetDay,matchId:"EVENT_KING_DAY",match:"King of the Day",player:p.name,stake:0,prediction:"",predictedScore:"",officialScore:"",result:"",status:"BONUS KING OF THE DAY",baseGain:0,exactBonus:0,netGain:amount});
+    });
+  }
+}
+
 function renderBets(){
   const day=currentPronoDay();
 
@@ -3742,19 +5625,23 @@ function renderBets(){
         <h3 style="margin:0">${f(m.teamA)} vs ${f(m.teamB)}</h3>
         ${!available ? `<span class="badge closed">Mise non disponible</span>` : isValidated ? '<span class="badge ok">✅ Validée</span>' : '<span class="badge">Brouillon</span>'}
       </div>
+      ${matchInfoHTML(m)}
 
       <div class="bet-form score-only">
 <label style="width:100%">
-<span>Score pronostiqué</span>
+<span class="score-main-label">Score pronostiqué</span>
 <div class="bet-inline-row">
-<div class="flag-wrap">${flagOnly(m.teamA)}</div>
-<input type="number" min="0" max="99" aria-label="Score ${m.teamA}" data-match="${m.id}" class="scoreA" value="${b.scoreA??splitScore(b.score)[0]}" ${locked?'disabled':''}>
-<span class="score-dash">-</span>
-<input type="number" min="0" max="99" aria-label="Score ${m.teamB}" data-match="${m.id}" class="scoreB" value="${b.scoreB??splitScore(b.score)[1]}" ${locked?'disabled':''}>
-<div class="flag-wrap">${flagOnly(m.teamB)}</div>
-<select data-match="${m.id}" class="stake" ${locked?'disabled':''}>${stakeOptions(b.stake||1)}</select>
+  <div class="flag-wrap">${flagOnly(m.teamA)}</div>
+  <input type="number" min="0" max="99" aria-label="Score ${m.teamA}" data-match="${m.id}" class="scoreA" value="${b.scoreA??splitScore(b.score)[0]}" ${locked?'disabled':''}>
+  <span class="score-dash">-</span>
+  <input type="number" min="0" max="99" aria-label="Score ${m.teamB}" data-match="${m.id}" class="scoreB" value="${b.scoreB??splitScore(b.score)[1]}" ${locked?'disabled':''}>
+  <div class="flag-wrap">${flagOnly(m.teamB)}</div>
 </div>
-<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:#bbb"><span>${m.teamA}</span><span>${m.teamB}</span></div>
+<div class="team-label-row"><span>${m.teamA}</span><span>${m.teamB}</span></div>
+<div class="stake-container">
+  <div class="stake-label">Mise</div>
+  <select data-match="${m.id}" class="stake" ${locked?'disabled':''}>${stakeOptions(b.stake||1)}</select>
+</div>
 <div class="score-helper">Le résultat est déduit automatiquement du score choisi.</div>
 </label>
 </div>
@@ -3919,10 +5806,8 @@ async function validateSingleBet(matchId){
   });
   if(!ok) return;
   upsertBet(matchId,data,"VALIDATED");
-  const syncedBet=state.bets.find(b=>Number(b.day)===Number(currentPronoDay())&&b.matchId===matchId&&b.player===player().name);
-  if(syncedBet) await remoteMergeBet(syncedBet);
   log(player().name,`Mise validée ${matchId}`,0);
-  save();await remoteAdminSaveState();renderAll();
+  save();renderAll();
 }
 function editBet(matchId){
   if(!pronoDayIsAvailable(currentPronoDay())) return bpAlert("Les pronostics sont clôturés.",{icon:"🔒"});
@@ -4234,13 +6119,13 @@ function adminSaveBet(day,matchId,playerName){
   if(b.status==="VALIDATED" && oldStatus!=="VALIDATED") b.validatedAt=new Date().toISOString();
   if(b.status!=="VALIDATED") b.validatedAt=null;
   log("SYSTEM",`Admin correction mise ${playerName} ${matchId}`,0);
-  save(); remoteAdminSaveState(); renderAdminBetsTable(); renderAdmin();
+  save(); renderAdminBetsTable(); renderAdmin();
 }
 async function adminDeleteBet(day,matchId,playerName){
   if(!await bpConfirm(`Supprimer la mise de ${playerName} pour ${matchId} ?`,{title:"Supprimer la mise",icon:"🗑️",confirmText:"Supprimer"})) return;
   state.bets=state.bets.filter(b=>!(Number(b.day)===Number(day)&&b.matchId===matchId&&b.player===playerName));
   log("SYSTEM",`Admin suppression mise ${playerName} ${matchId}`,0);
-  save(); remoteAdminSaveState(); renderAdminBetsTable(); renderAdmin();
+  save(); renderAdminBetsTable(); renderAdmin();
 }
 function rollbackDaySettlement(day){
   const details=(state.settlementDetails||[]).filter(d=>Number(d.day)===Number(day) && d.player && d.player!=="RÉSERVE");
@@ -4544,59 +6429,230 @@ function previewFinanceSettings(){
   if(typeof renderReserveExposure === "function") renderReserveExposure();
 }
 
+
+
+function markWorkflowGainsDone(day){
+  if(!state.workflow) state.workflow={};
+  if(!Array.isArray(state.workflow.gainsDoneDays)) state.workflow.gainsDoneDays=[];
+  const d=Number(day);
+  if(!state.workflow.gainsDoneDays.includes(d)) state.workflow.gainsDoneDays.push(d);
+}
+function isWorkflowGainsDone(day){
+  const d=Number(day);
+  return !!(state.workflow && Array.isArray(state.workflow.gainsDoneDays) && state.workflow.gainsDoneDays.includes(d));
+}
+
+function workflowContext(){
+  const openDay = Number(state.currentDay || onlyOpenDay() || 1);
+  const scoreDay = Math.max(1, openDay - 1);
+  const openDayClosed = isDayClosed(openDay);
+  const scoreMatches = state.matches.filter(m=>Number(m.day)===Number(scoreDay));
+  const scoreCompleted = scoreMatches.length > 0 && scoreMatches.every(m=>m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined);
+  const gainsDone = isWorkflowGainsDone(scoreDay) || (state.settlementDetails||[]).some(d=>Number(d.day)===Number(scoreDay) && d.player!=="RÉSERVE");
+  const openDayBets = state.bets.filter(b=>Number(b.day)===Number(openDay));
+  const validatedBets = openDayBets.filter(b=>b.status==="VALIDATED");
+  return {openDay, scoreDay, openDayClosed, scoreCompleted, gainsDone, openDayBets, validatedBets};
+}
+
+function workflowCurrentStep(){
+  const c = workflowContext();
+  if(!c.openDayClosed){
+    return {
+      key:"close",
+      title:`Fermer la journée ${c.openDay}`,
+      button:`1️⃣ Fermer la journée ${c.openDay}`,
+      message:`Journée ouverte : J${c.openDay}<br>Pronostics validés : <b>${c.validatedBets.length}</b><br><br>Quand tous les joueurs ont terminé, ferme la journée.`
+    };
+  }
+  if(c.openDayClosed){
+    return {
+      key:"openNext",
+      title:`Ouvrir la journée ${c.openDay+1}`,
+      button:`2️⃣ Ouvrir la journée ${c.openDay+1}`,
+      message:`Journée ${c.openDay} fermée.<br>Prochaine étape : ouvrir J${c.openDay+1}.`
+    };
+  }
+  return {key:"none",title:"Aucune action",button:"Aucune action",message:"Workflow terminé."};
+}
+
+function workflowStepForOpenDay(){
+  const c = workflowContext();
+  if(c.openDay <= 1){
+    return {
+      key:"close",
+      button:`1️⃣ Fermer la journée ${c.openDay}`,
+      message:`J${c.openDay} est ouverte. Les joueurs peuvent miser.`
+    };
+  }
+  if(!c.scoreCompleted){
+    return {
+      key:"scores",
+      button:`3️⃣ Saisir les scores de J${c.scoreDay}`,
+      message:`J${c.openDay} est ouverte aux pronostics.<br>Résultats à traiter : <b>J${c.scoreDay}</b>.<br>Saisis les scores officiels de J${c.scoreDay}, puis confirme.`
+    };
+  }
+  if(!c.gainsDone){
+    return {
+      key:"gains",
+      button:`4️⃣ Calculer les gains de J${c.scoreDay}`,
+      message:`Scores de J${c.scoreDay} enregistrés.<br>Prochaine étape : calculer les gains de J${c.scoreDay}.`
+    };
+  }
+  return {
+    key:"close",
+    button:`5️⃣ Fermer la journée ${c.openDay}`,
+    message:`J${c.scoreDay} est traitée : scores + gains OK.<br>Tu peux maintenant clôturer J${c.openDay}. Après confirmation, le workflow proposera automatiquement d’ouvrir J${c.openDay+1}.`
+  };
+}
+
+function renderWorkflow(){
+  if(!document.getElementById("workflowStatus")) return;
+  const c = workflowContext();
+  const step = c.openDayClosed ? workflowCurrentStep() : workflowStepForOpenDay();
+
+  workflowStatus.innerHTML = `
+    <b>Journée ouverte / courante :</b> J${c.openDay}<br>
+    <b>Pronostics en cours :</b> ${c.openDayClosed ? "Aucune — journée fermée" : "J"+c.openDay}<br>
+    <b>Résultats à traiter :</b> ${c.openDay>1 ? "J"+c.scoreDay : "Aucun avant J2"}<br>
+    <b>Action recommandée :</b> ${step.button}
+  `;
+
+  const steps = [
+    {key:"bets", label:`Pronostics J${c.openDay}`, done:c.validatedBets.length>0},
+    {key:"close", label:`Clôture J${c.openDay}`, done:c.openDayClosed},
+    {key:"scores", label:c.openDay>1?`Scores J${c.scoreDay}`:"Scores J-1", done:c.openDay>1 && c.scoreCompleted},
+    {key:"gains", label:c.openDay>1?`Gains J${c.scoreDay}`:"Gains J-1", done:c.openDay>1 && c.gainsDone}
+  ];
+  workflowSteps.innerHTML = steps.map(s=>`<div class="workflow-step ${s.done?'done':''} ${s.key===step.key?'active':''}">${s.done?'✅':'⬜'} ${s.label}</div>`).join("");
+  workflowNextBtn.textContent = step.button;
+}
+
+async function workflowNextStep(){
+  const c = workflowContext();
+
+  if(c.openDayClosed){
+    const next = c.openDay + 1;
+    if(next > maxCalendarDay()) return bpAlert("Dernière journée atteinte.",{icon:"🏁"});
+    const ok = await bpConfirm(
+      `Ouvrir la journée ${next} ?\n\nLes joueurs pourront miser sur J${next}.\nEnsuite tu pourras saisir les scores de J${c.openDay}.`,
+      {title:"Ouvrir journée suivante",icon:"🟢",confirmText:`Ouvrir J${next}`}
+    );
+    if(!ok) return;
+    enforceSingleOpenDay(next);
+    save();
+    renderAll();
+    await bpAlert(`Journée ${next} ouverte. Tu peux maintenant saisir les scores de J${c.openDay}.`,{icon:"✅"});
+    return;
+  }
+
+  if(c.openDay <= 1){
+    const ok = await bpConfirm(
+      `Fermer la journée ${c.openDay} ?\n\nAprès fermeture, les joueurs ne pourront plus modifier leurs pronostics de J${c.openDay}.`,
+      {title:"Fermer journée",icon:"🔒",confirmText:`Fermer J${c.openDay}`}
+    );
+    if(!ok) return;
+    setDayClosed(c.openDay,true);
+    save();
+    renderAll();
+    await bpAlert(`Journée ${c.openDay} fermée. Étape suivante : ouvrir J${c.openDay+1}.`,{icon:"✅"});
+    return;
+  }
+
+  if(!c.scoreCompleted){
+    const ok = await bpConfirm(
+      `Enregistrer les scores officiels de la journée ${c.scoreDay} ?\n\nVérifie bien les scores affichés dans la zone “Saisie des scores”.`,
+      {title:"Enregistrer scores",icon:"⚽",confirmText:`Enregistrer scores J${c.scoreDay}`}
+    );
+    if(!ok) return;
+    state.matches.filter(m=>Number(m.day)===Number(c.scoreDay)).forEach(m=>{
+      const sa=document.getElementById("sa_"+m.id)?.value;
+      const sb=document.getElementById("sb_"+m.id)?.value;
+      if(sa!==undefined && sb!==undefined){
+        m.scoreA=Number(sa);
+        m.scoreB=Number(sb);
+      }
+    });
+    save();
+    renderAll();
+    await bpAlert(`Scores de la journée ${c.scoreDay} enregistrés. Étape suivante : calculer les gains.`,{icon:"✅"});
+    return;
+  }
+
+  if(!c.gainsDone){
+    const ok = await bpConfirm(
+      `Calculer les gains de la journée ${c.scoreDay} ?\n\nLes gains seront appliqués aux soldes joueurs.`,
+      {title:"Calculer gains",icon:"💰",confirmText:`Calculer gains J${c.scoreDay}`}
+    );
+    if(!ok) return;
+    await calculateGains(true);
+    markWorkflowGainsDone(c.scoreDay);
+    save();
+    renderAll();
+    return;
+  }
+
+  const ok = await bpConfirm(
+    `Fermer la journée ${c.openDay} ?\n\nJ${c.scoreDay} est déjà traitée. Tu peux maintenant clôturer J${c.openDay}.`,
+    {title:"Fermer journée courante",icon:"🔒",confirmText:`Fermer J${c.openDay}`}
+  );
+  if(!ok) return;
+  setDayClosed(c.openDay,true);
+  save();
+  renderAll();
+  await bpAlert(`Journée ${c.openDay} fermée. Étape suivante : ouvrir J${c.openDay+1}.`,{icon:"✅"});
+}
+
+
 function renderAdmin(){
-  renderSimulation();
-  const ri=document.getElementById('reserveInput'); if(ri && !ri.value) ri.value=500; renderReserveExposure();
-  renderAdminSecrets();
-  let cr=calcReserve(); budget.value=cr.budget; if(document.getElementById('reserveInput')) reserveInput.value=state.reserveTarget ?? cr.reserve; if(document.getElementById('defaultFid')) defaultFid.value=state.players[0]?.startFid ?? 50; adminDay.textContent=state.currentDay; if(document.getElementById("adminDayDate")) adminDayDate.textContent=dayDate(state.currentDay)||"—"; adminStatus.innerHTML=isDayClosed(state.currentDay)
-    ? '<span class="day-status-closed">Fermée</span>'
-    : '<span class="day-status-open">Ouverte</span>';
-  let todaysCount=state.matches.filter(m=>m.day===state.currentDay).length;
-  let dayBets=state.bets.filter(b=>b.day===state.currentDay);
+  ensurePlayerCodes();
+  if(typeof renderWorkflow==="function") renderWorkflow();
+  if(typeof renderSimulation==="function") renderSimulation();
+  if(typeof renderAdminSecrets==="function") renderAdminSecrets();
+  if(typeof renderSpecialEventsAdmin==="function") renderSpecialEventsAdmin();
+  if(typeof renderReserveExposure==="function") renderReserveExposure();
+  if(typeof renderAdminBetsTable==="function") renderAdminBetsTable();
+
+  let cr=calcReserve();
+  if(document.getElementById("budget")) budget.value=cr.budget;
+  if(document.getElementById("reserveInput")) reserveInput.value=state.reserveTarget ?? cr.reserve;
+  if(document.getElementById("defaultFid")) defaultFid.value=state.players[0]?.startFid ?? 50;
+  if(document.getElementById("adminDay")) adminDay.textContent=state.currentDay;
+  if(document.getElementById("adminDayDate")) adminDayDate.textContent=dayDate(state.currentDay)||"—";
+  if(document.getElementById("adminStatus")) adminStatus.innerHTML=isDayClosed(state.currentDay)?'<span class="day-status-closed">Fermée</span>':'<span class="day-status-open">Ouverte</span>';
+
+  const todaysCount=state.matches.filter(m=>Number(m.day)===Number(state.currentDay)).length;
+  const dayBets=state.bets.filter(b=>Number(b.day)===Number(state.currentDay));
   if(document.getElementById("adminBetCount")){
     adminBetCount.textContent=dayBets.length;
     adminExpectedBets.textContent=state.players.length*todaysCount;
     adminValidatedBets.textContent=dayBets.filter(b=>b.status==="VALIDATED").length;
     adminDraftBets.textContent=dayBets.filter(b=>(b.status||"DRAFT")==="DRAFT").length;
   }
-  let r=calcReserve(); budget.value=r.budget; allocatedView.textContent=r.allocated; reserveView.textContent=r.reserve; minReserveView.textContent=r.min;
-  budgetStatus.innerHTML=r.valid?`<span class="good">Configuration valide</span>`:`<span class="bad">Réserve insuffisante</span>`;
-  saveAdminBtn.disabled=!r.valid;
-  ensurePlayerCodes();
-  adminPlayers.innerHTML=state.players.map((p,i)=>`<div class="admin-player-card">
-    <label>Joueur
-      <input value="${p.name}" onchange="state.players[${i}].name=this.value;if(!state.players[${i}].pseudo) state.players[${i}].pseudo=this.value;renderAdmin()">
-    </label>
-    <label>Pseudo
-      <input value="${p.pseudo||p.name}" maxlength="20" onchange="state.players[${i}].pseudo=this.value;renderAdmin()">
-    </label>
-    <label>Code
-      <span class="user-code">${p.code}</span>
-    </label>
-    <label>FID départ
-      <input type="number" value="${p.startFid}" onchange="state.players[${i}].startFid=Number(this.value);renderAdmin()">
-    </label>
-    <label>Solde
-      <input type="number" value="${p.balance}" onchange="state.players[${i}].balance=Number(this.value);renderAdmin()">
-    </label>
-    <div class="admin-player-actions">
-      <button class="action secondary" onclick="showAdminUserDetail(${i})">Voir détail</button>
-      <button class="action danger" onclick="state.players.splice(${i},1);renderAdmin()">Suppr.</button>
-    </div>
-  </div>`).join("");
-  const scoreDay = scoreEntryDay();
-  const scoreTitle = document.getElementById("scoreEntryTitle");
-  if(scoreTitle){
-    scoreTitle.innerHTML = `Scores attendus pour la <b>journée ${scoreDay}</b>${scoreDay !== Number(state.currentDay) ? ` <span class="muted">(journée précédente)</span>` : ""}`;
+  if(document.getElementById("allocatedView")) allocatedView.textContent=cr.allocated;
+  if(document.getElementById("reserveView")) reserveView.textContent=cr.reserve;
+  if(document.getElementById("minReserveView")) minReserveView.textContent=cr.min;
+  if(document.getElementById("budgetStatus")) budgetStatus.innerHTML=cr.valid?`<span class="good">Configuration valide</span>`:`<span class="bad">Réserve insuffisante</span>`;
+  if(document.getElementById("saveAdminBtn")) saveAdminBtn.disabled=!cr.valid;
+
+  const container=document.getElementById("adminPlayers");
+  if(container){
+    container.innerHTML=(state.players||[]).map((p,i)=>`
+      <div class="admin-player-card" data-player-index="${i}">
+        <label>Joueur<input value="${escapeAttr(p.name||'')}" onchange="adminUpdatePlayer(${i},'name',this.value)"></label>
+        <label>Pseudo<input value="${escapeAttr(p.pseudo||p.name||'')}" maxlength="20" onchange="adminUpdatePlayer(${i},'pseudo',this.value)"></label>
+        <label>Code<span class="user-code">${escapeHtml(p.code||'')}</span><button class="action secondary admin-mini-btn" type="button" onclick="regeneratePlayerCode(${i})">Nouveau code</button></label>
+        <label>FID départ<input type="number" value="${Number(p.startFid||0)}" onchange="adminUpdatePlayer(${i},'startFid',this.value)"></label>
+        <label>Solde<input type="number" value="${Number(p.balance||0)}" onchange="adminUpdatePlayer(${i},'balance',this.value)"></label>
+        <div class="admin-player-actions"><button class="action secondary" type="button" onclick="showAdminUserDetail(${i})">Voir détail</button><button class="action danger" type="button" onclick="safeDeletePlayer(${i})">Suppr.</button></div>
+      </div>`).join("");
   }
-  let todays=state.matches.filter(m=>Number(m.day)===Number(scoreDay));
-  scoreInputs.innerHTML=todays.map(m=>`<div class="score-row"><div>${f(m.teamA)} vs ${f(m.teamB)} <span class="muted">(${m.id})</span></div>
-  <div class="score-selects">
-    <select id="sa_${m.id}">${scoreOptions(m.scoreA??0)}</select>
-    <span class="score-dash">-</span>
-    <select id="sb_${m.id}">${scoreOptions(m.scoreB??0)}</select>
-  </div>
-</div>`).join("");
+
+  const scoreDay=scoreEntryDay();
+  if(document.getElementById("scoreEntryTitle")) scoreEntryTitle.innerHTML=`Scores attendus pour la <b>journée ${scoreDay}</b>${scoreDay!==Number(state.currentDay)?` <span class="muted">(journée précédente)</span>`:""}`;
+  const todays=state.matches.filter(m=>Number(m.day)===Number(scoreDay));
+  if(document.getElementById("scoreInputs")){
+    scoreInputs.innerHTML=todays.map(m=>`<div class="score-row"><div>${f(m.teamA)} vs ${f(m.teamB)} <span class="muted">(${m.id})</span></div><div class="score-selects"><select id="sa_${m.id}">${scoreOptions(m.scoreA??0)}</select><span class="score-dash">-</span><select id="sb_${m.id}">${scoreOptions(m.scoreB??0)}</select></div></div>`).join("");
+  }
 }
 
 async function resetAllGameData(){
@@ -4635,7 +6691,6 @@ async function resetAllGameData(){
   pronoDayDisplayed = 1;
   state.simulationDay = 1;
   save();
-  await remoteAdminSaveState();
   renderAll();
   await bpAlert("Tout a été remis à zéro : joueurs à 50 FID, réserve à 500 FID, journée 1 ouverte.", {icon:"✅"});
 }
@@ -4656,11 +6711,98 @@ async function saveAdmin(){
 
   state.budget = state.players.reduce((s,p)=>s+Number(p.startFid||0),0) + reserveTarget;
   save();
-  await remoteAdminSaveState();
   renderAll();
   await bpAlert("Paramètres enregistrés.",{icon:"✅"});
 }
-function addPlayer(){let v=Number(defaultFid.value||50);state.players.push({name:"Nouveau joueur",pseudo:"Nouveau joueur",code:generateUniqueCode(),avatar:null,startFid:v,balance:v,evolution:0,good:0,exact:0,secrets:null});renderAdmin();}
+async function savePlayersAdmin(){
+  ensurePlayerCodes();
+  const seenNames=new Set();
+  const seenCodes=new Set();
+  for(const p of state.players){
+    p.name=String(p.name||"").trim() || "Nouveau joueur";
+    p.pseudo=String(p.pseudo||p.name||"").trim() || p.name;
+    if(seenNames.has(p.name.toLowerCase())){
+      await bpAlert("Deux joueurs ont le même nom. Merci de corriger avant sauvegarde.",{icon:"⚠️"});
+      return;
+    }
+    if(!/^\d{4}$/.test(String(p.code)) || String(p.code)==="1573" || seenCodes.has(String(p.code))){
+      p.code=generateUniqueCode(state.players);
+    }
+    seenNames.add(p.name.toLowerCase());
+    seenCodes.add(String(p.code));
+  }
+  save();
+  if(typeof remoteAdminSaveState==="function") await remoteAdminSaveState();
+  renderAll();
+  await bpAlert("Utilisateurs sauvegardés. Les mots de passe joueurs sont des codes aléatoires à 4 chiffres. Le code admin reste 1573.",{icon:"✅"});
+}
+function regeneratePlayerCode(index){
+  if(!state.players[index]) return;
+  state.players[index].code=generateUniqueCode(state.players);
+  save();
+  renderAdmin();
+}
+
+
+function backupUsers(reason){
+  try{
+    localStorage.setItem("bp_wc_dev_backup_users_last",JSON.stringify(state));
+    localStorage.setItem("bp_wc_dev_backup_users_"+reason+"_"+new Date().toISOString(),JSON.stringify(state));
+  }catch(e){}
+}
+function makeUniquePlayerName(base="Nouveau joueur"){
+  const existing=new Set((state.players||[]).map(p=>String(p.name||"").toLowerCase()));
+  let i=(state.players||[]).length+1, name=`${base} ${i}`;
+  while(existing.has(name.toLowerCase())){i++;name=`${base} ${i}`;}
+  return name;
+}
+function adminUpdatePlayer(index,field,value){
+  if(!state.players || !state.players[index]) return;
+  backupUsers("update");
+  const p=state.players[index];
+  if(field==="name"){
+    const old=p.name;
+    const val=String(value||"").trim()||old||"Nouveau joueur";
+    if(state.players.some((x,j)=>j!==index && String(x.name||"").toLowerCase()===val.toLowerCase())){
+      alert("Ce nom existe déjà."); renderAdmin(); return;
+    }
+    p.name=val;
+    if(!p.pseudo || p.pseudo===old) p.pseudo=val;
+    (state.bets||[]).forEach(b=>{if(b.player===old)b.player=val;});
+    (state.logs||[]).forEach(l=>{if(l.player===old)l.player=val;});
+    (state.settlementDetails||[]).forEach(d=>{if(d.player===old)d.player=val;});
+  }
+  if(field==="pseudo") p.pseudo=String(value||p.name||"").trim()||p.name;
+  if(field==="startFid") p.startFid=Number(value||0);
+  if(field==="balance") p.balance=Number(value||0);
+  save();renderAll();
+}
+async function addPlayer(){
+  if(!Array.isArray(state.players)){await bpAlert("Liste utilisateurs introuvable.",{icon:"⚠️"});return;}
+  backupUsers("add");
+  const fid=Number(document.getElementById("defaultFid")?.value||state.players[0]?.startFid||50);
+  const name=makeUniquePlayerName("Nouveau joueur");
+  state.players.push({name,pseudo:name,code:generateUniqueCode(state.players),avatar:null,startFid:fid,balance:fid,evolution:0,good:0,exact:0,secrets:null});
+  save();renderAll();
+  await bpAlert(`Utilisateur ajouté : ${name}. Les autres utilisateurs sont conservés.`,{icon:"✅"});
+}
+async function safeDeletePlayer(index){
+  if(!state.players || !state.players[index]) return;
+  const name=state.players[index].name;
+  if(!confirm(`Supprimer uniquement "${name}" ?\n\nLes autres utilisateurs seront conservés.`)) return;
+  backupUsers("delete");
+  state.players.splice(index,1);
+  save();renderAll();
+  await bpAlert(`Utilisateur supprimé : ${name}.`,{icon:"✅"});
+}
+async function restoreBeforeUserChangeBackup(){
+  const raw=localStorage.getItem("bp_wc_dev_backup_users_last");
+  if(!raw){await bpAlert("Aucune sauvegarde utilisateurs trouvée.",{icon:"ℹ️"});return;}
+  if(!confirm("Restaurer la dernière sauvegarde utilisateurs ?")) return;
+  state=JSON.parse(raw);save();renderAll();
+  await bpAlert("Sauvegarde utilisateurs restaurée.",{icon:"✅"});
+}
+
 function applyDefaultFid(){let v=Number(defaultFid.value||50);state.players.forEach(p=>{p.startFid=v;p.balance=v;p.evolution=0});renderAdmin();}
 async function closeBets(){
   if(isDayClosed(state.currentDay)){
@@ -4675,7 +6817,6 @@ Les mises seront clôturées. Les gains ne seront pas calculés maintenant : ils
   state.closed=true;
   log("SYSTEM",`Journée ${state.currentDay} fermée - mises clôturées`,0);
   save();
-  await remoteAdminSaveState();
   renderAll();
   await bpAlert(`Journée ${state.currentDay} fermée. Les mises sont clôturées.`,{icon:"✅"});
 }
@@ -4746,7 +6887,6 @@ async function resetOfficialScoresDay(){
   state.summaries.day = {good:0, exact:0, gain:0, rank:0};
   log("SYSTEM", `Scores officiels remis à zéro pour la journée ${day}`, 0);
   save();
-  await remoteAdminSaveState();
   renderAll();
   await bpAlert(`Scores officiels de la journée ${day} remis à zéro. Ils ne sont plus visibles côté utilisateurs.`, {icon:"✅"});
 }
@@ -4845,10 +6985,14 @@ async function calculateGains(showAlert=true){
       let stake=Number(b.stake||0);
       let exact=(Number(b.scoreA)===Number(m.scoreA) && Number(b.scoreB)===Number(m.scoreB));
       let multiplier=exact ? 3 : 2;
-      let net=stake * multiplier;
-      let baseGain=stake * 2;
-      let exactBonus=exact ? stake : 0;
-      payoutTotal += net;
+      let eventMult=eventMultiplierForBet(targetDay,m.id,exact);
+      let net=stake * multiplier * eventMult;
+      let baseGain=stake * 2 * eventMult;
+      let exactBonus=exact ? stake * eventMult : 0;
+      if(currentDayEvents(targetDay).festival && (Number(m.scoreA)+Number(m.scoreB))>=4){
+        const fest=Number(currentDayEvents(targetDay).festivalAmount||3);
+        net += fest; payoutTotal += fest; baseGain += fest;
+      }
 
       pl.balance+=net;pl.evolution+=net;pl.good++;totalGood++;
       if(exact){pl.exact++;totalExact++;}
@@ -4858,7 +7002,7 @@ async function calculateGains(showAlert=true){
       state.settlementDetails.push({
         day:targetDay, matchId:m.id, match:`${m.teamA} - ${m.teamB}`,
         player:b.player, stake, prediction:outcomeLabel(b.predictedOutcome,m), predictedScore:scoreText(b.scoreA,b.scoreB),
-        officialScore:scoreText(m.scoreA,m.scoreB), result:actualLabel, status:exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)",
+        officialScore:scoreText(m.scoreA,m.scoreB), result:actualLabel, status:(exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)") + (eventMult>1 ? " · BONUS x"+eventMult : ""),
         baseGain, exactBonus, netGain:net
       });
     });
@@ -4873,6 +7017,8 @@ async function calculateGains(showAlert=true){
       baseGain:payoutTotal, exactBonus:0, netGain:reserveSurplus-reserveNeed
     });
   });
+
+  applySpecialEventBonuses(targetDay,todays);
 
   state.players.forEach(p=>{
     if(p.balance<=0 && calcReserve().reserve>0){
@@ -4890,9 +7036,8 @@ async function calculateGains(showAlert=true){
   state.summaries.day={good:totalGood,exact:totalExact,gain:personalGain,rank:personalGain>=0?1:-1};
   state.summaries.comp.good+=totalGood;state.summaries.comp.exact+=totalExact;state.summaries.comp.gain+=personalGain;state.summaries.comp.rank+=personalGain>=0?1:-1;
   calcInfo.innerHTML=`Journée ${targetDay} · ${processed} match(s) traité(s). Gains calculés. <button class="action secondary" onclick="exportCSV('settlement')">Télécharger pronostics validés + gains</button>`;
-  save();
-  await remoteAdminSaveState();
-  renderAll();
+  markWorkflowGainsDone(typeof targetDay!=="undefined" ? targetDay : scoreEntryDay());
+  save();renderAll();
   if(showAlert) await bpAlert(`${processed} match(s) traité(s). Gains calculés.`,{icon:"✅"});
 }
 
@@ -4953,6 +7098,9 @@ function exportCSV(type){
   })];
   if(type==="results") rows=[["day","matchId","officialScore","scoreA","scoreB"],...state.matches.filter(m=>m.scoreA!==null).map(m=>[m.day,m.id,excelScore(m.scoreA,m.scoreB),m.scoreA,m.scoreB])];
   if(type==="logs") rows=[["day","player","text","amount","date"],...state.logs.map(l=>[l.day,l.player,l.text,l.amount,l.date])];
+  if(type==="secrets") rows=[["player","winner","bestPlayer","topScorer","sealed","validatedAt"],...state.players.map(p=>[p.name,p.secrets?.winner||"",p.secrets?.bestPlayer||"",p.secrets?.topScorer||"",p.secrets?.sealed?"YES":"NO",p.secrets?.validatedAt||""])];
+  if(type==="events"){ensureSpecialEvents(); rows=[["day","doubleGains","doubleExact","cashDay","cashAmount","luckyMatchId","luckyMultiplier","kingDay","kingAmount","jackpot","jackpotAmount","festival","festivalAmount"],...Object.keys(state.specialEvents||{}).sort((a,b)=>Number(a)-Number(b)).map(day=>{const e=state.specialEvents[day]||{};return [day,e.doubleGains?"YES":"NO",e.doubleExact?"YES":"NO",e.cashDay?"YES":"NO",e.cashAmount||10,e.luckyMatchId||"",e.luckyMultiplier||2,e.kingDay?"YES":"NO",e.kingAmount||20,e.jackpot?"YES":"NO",e.jackpotAmount||50,e.festival?"YES":"NO",e.festivalAmount||3];})];}
+
   if(type==="settlement" || type==="validated_report") rows=buildValidatedReportRows();
   if(type==="simulation") rows=[
     ["section","day","matchId","match","player","stake","prediction","score","officialScore","status","netGain"],
@@ -4967,6 +7115,129 @@ function exportCSV(type){
   download(`bp_worldcup_${type}.csv`, rows.map(r=>r.map(csvEscape).join(";")).join("\n"));
 }
 function downloadJSON(){download("bp_worldcup_backup.json",JSON.stringify(state,null,2),"application/json;charset=utf-8");}
+
+function parseCSVText(text){
+  const rows=[]; let row=[], cell="", q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i], next=text[i+1];
+    if(q){
+      if(ch==='"' && next==='"'){ cell+='"'; i++; }
+      else if(ch==='"'){ q=false; }
+      else cell+=ch;
+    }else{
+      if(ch==='"') q=true;
+      else if(ch===';' || ch===','){ row.push(cell); cell=""; }
+      else if(ch==='\n'){ row.push(cell); rows.push(row); row=[]; cell=""; }
+      else if(ch!=='\r') cell+=ch;
+    }
+  }
+  if(cell!=="" || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(c=>String(c).trim()!==""));
+}
+function csvRowsToObjects(rows){
+  if(!rows.length) return [];
+  const headers=rows[0].map(h=>String(h).trim());
+  return rows.slice(1).map(r=>{
+    const o={};
+    headers.forEach((h,i)=>o[h]=r[i] ?? "");
+    return o;
+  });
+}
+function importCSV(type,e){
+  const file=e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const rows=parseCSVText(String(reader.result||""));
+      const data=csvRowsToObjects(rows);
+      let imported=0, skipped=0;
+      if(type==="bets"){
+        data.forEach(o=>{
+          const day=Number(o.day), matchId=String(o.matchId||"").trim(), player=String(o.player||"").trim();
+          const m=state.matches.find(x=>String(x.id)===matchId && Number(x.day)===day);
+          const p=state.players.find(x=>x.name===player);
+          if(!day || !m || !p){ skipped++; return; }
+          const scoreA=Number(o.scoreA ?? splitScore(o.predictedScore||"0 - 0")[0]);
+          const scoreB=Number(o.scoreB ?? splitScore(o.predictedScore||"0 - 0")[1]);
+          const stake=Math.max(1, Math.min(4, Number(o.stake||1)));
+          const status=String(o.status||"DRAFT").toUpperCase()==="VALIDATED" ? "VALIDATED" : "DRAFT";
+          state.bets=state.bets.filter(b=>!(Number(b.day)===day && b.matchId===matchId && b.player===player));
+          state.bets.push({
+            day, matchId, player,
+            prediction:outcomeFromScore(scoreA,scoreB),
+            predictedOutcome:outcomeFromScore(scoreA,scoreB),
+            score:scoreText(scoreA,scoreB), scoreA, scoreB, stake, status,
+            validatedAt:status==="VALIDATED" ? (o.validatedAt || new Date().toISOString()) : null
+          });
+          imported++;
+        });
+      }
+      if(type==="results"){
+        data.forEach(o=>{
+          const day=Number(o.day), matchId=String(o.matchId||"").trim();
+          const m=state.matches.find(x=>String(x.id)===matchId && Number(x.day)===day);
+          if(!m){ skipped++; return; }
+          let a=o.scoreA, b=o.scoreB;
+          if((a==="" || a===undefined) && o.officialScore){
+            const sp=splitScore(o.officialScore); a=sp[0]; b=sp[1];
+          }
+          if(a==="" || b==="" || a===undefined || b===undefined){ skipped++; return; }
+          m.scoreA=Number(a); m.scoreB=Number(b); m.status="done";
+          imported++;
+        });
+      }
+      if(type==="secrets"){
+        data.forEach(o=>{
+          const player=String(o.player||"").trim();
+          const p=state.players.find(x=>x.name===player);
+          if(!p){ skipped++; return; }
+          const sealed=String(o.sealed||"YES").toUpperCase();
+          p.secrets={
+            winner:o.winner||"",
+            bestPlayer:o.bestPlayer||"",
+            topScorer:o.topScorer||"",
+            sealed: sealed==="YES" || sealed==="TRUE" || sealed==="1",
+            validatedAt:o.validatedAt || new Date().toISOString()
+          };
+          imported++;
+        });
+      }
+      if(type==="events"){
+        ensureSpecialEvents();
+        data.forEach(o=>{
+          const day=Number(o.day);
+          if(!day){ skipped++; return; }
+          const yes=v=>["YES","TRUE","1","OUI"].includes(String(v||"").toUpperCase());
+          state.specialEvents[day]={
+            doubleGains:yes(o.doubleGains),
+            doubleExact:yes(o.doubleExact),
+            cashDay:yes(o.cashDay),
+            cashAmount:Number(o.cashAmount||10),
+            luckyMatchId:o.luckyMatchId||"",
+            luckyMultiplier:Number(o.luckyMultiplier||2),
+            kingDay:yes(o.kingDay),
+            kingAmount:Number(o.kingAmount||20),
+            jackpot:yes(o.jackpot),
+            jackpotAmount:Number(o.jackpotAmount||50),
+            festival:yes(o.festival),
+            festivalAmount:Number(o.festivalAmount||3)
+          };
+          imported++;
+        });
+      }
+      save(); renderAll();
+      alert(`${imported} ligne(s) importée(s). ${skipped} ligne(s) ignorée(s).`);
+    }catch(err){
+      console.error(err);
+      alert("Import impossible : fichier CSV invalide ou colonnes non reconnues.");
+    }finally{
+      e.target.value="";
+    }
+  };
+  reader.readAsText(file, "utf-8");
+}
+
 function importJSON(e){let file=e.target.files[0];if(!file)return;let r=new FileReader();r.onload=()=>{state=JSON.parse(r.result);save();renderAll();alert("Sauvegarde restaurée.");};r.readAsText(file);}
 function importResultsCSV(e){
   let file=e.target.files[0];if(!file)return;let r=new FileReader();r.onload=()=>{
@@ -4990,14 +7261,291 @@ function repairState(){
   save();
 }
 
-function renderAll(){ if(document.getElementById("remoteUrlView")) remoteUrlView.textContent=remoteEnabled()?REMOTE_API_URL:"Non configurée";if(!state.closedDays) state.closedDays={}; if(Object.keys(state.closedDays).length===0){state.matches.forEach(m=>state.closedDays[m.day]=Number(m.day)!==Number(state.currentDay||1));} state.closed=isDayClosed(state.currentDay); ensurePlayerCodes();applyRoleUI();renderHeader();renderCalendar();renderBets();renderRanking(); if(adminPanel.style.display!=="none") renderAdmin();}
-async function initApp(){
-  await remoteLoadState();
-  repairState();
-  migrateCalendar();
-  renderAll();
+function renderAll(){if(!state.closedDays) state.closedDays={}; if(Object.keys(state.closedDays).length===0){state.matches.forEach(m=>state.closedDays[m.day]=Number(m.day)!==Number(state.currentDay||1));} state.closed=isDayClosed(state.currentDay); ensurePlayerCodes();applyRoleUI();renderHeader();ensureSpecialEvents(); renderCalendar();renderBets();renderSpecialEventsBanner();renderRanking(); if(adminPanel.style.display!=="none"){ renderAdmin(); renderSpecialEventsAdmin(); if(typeof renderAdminBetsTable==="function") renderAdminBetsTable(); }}
+repairState();
+renderAll();
+
+function runSanityCheck(){
+  const issues=[];
+  const requiredSections=["calendar","bets","scores","ranking","admin","backup"];
+  requiredSections.forEach(id=>{ if(!document.getElementById(id)) issues.push("Section manquante: "+id); });
+  ["activePlayer","betRows","secretWinner","secretBestPlayer","secretTopScorer","adminSecretsBody","adminBetsBody","scoreInputs","personalLog"].forEach(id=>{
+    if(!document.getElementById(id)) issues.push("ID manquant: "+id);
+  });
+  if(typeof saveBets!=="function") issues.push("saveBets manquant");
+  if(typeof validateSingleBet!=="function") issues.push("validateSingleBet manquant");
+  if(typeof sealSecrets!=="function") issues.push("sealSecrets manquant");
+  if(typeof exportCSV!=="function") issues.push("exportCSV manquant");
+  if(typeof importCSV!=="function") issues.push("importCSV manquant");
+  return {ok:issues.length===0, issues};
 }
-initApp();
+
 </script>
-</body>
-</html>
+
+
+
+<script>
+/* V13 — enrichissement cartes pronostics : stade, heure Paris, contexte match */
+(function(){
+  function esc(v){return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+  function getMatches(){
+    try{
+      if(Array.isArray(window.MATCHES)) return window.MATCHES;
+      if(Array.isArray(window.matches)) return window.matches;
+      if(Array.isArray(window.MATCH_LIST)) return window.MATCH_LIST;
+    }catch(e){}
+    return [];
+  }
+  function parisTimeFromMatch(m){
+    const raw = m.time || m.hour || m.kickoff || m.dateTime || m.datetime || '';
+    const date = m.date || m.dayDate || '';
+    if(!raw && !date) return '';
+    // If only HH:mm is stored, display as Paris reference instead of guessing timezone.
+    if(/^\d{1,2}:\d{2}$/.test(String(raw))) return raw + ' — heure de Paris';
+    try{
+      const d = new Date(raw || date);
+      if(!isNaN(d.getTime())){
+        return new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit'}).format(d) + ' — heure de Paris';
+      }
+    }catch(e){}
+    return esc(raw) + ' — heure de Paris';
+  }
+  function matchLabel(m){
+    const bits = [];
+    const d = m.date || m.dayDate || '';
+    const t = parisTimeFromMatch(m);
+    const stadium = m.stadium || m.venue || m.location || '';
+    if(d) bits.push('📅 ' + esc(d));
+    if(t) bits.push('🕒 ' + esc(t));
+    if(stadium) bits.push('🏟️ ' + esc(stadium));
+    if(m.group) bits.push('🏷️ ' + esc(m.group));
+    return bits.join('<span class="match-info-sep">•</span>');
+  }
+  function h2hLabel(m){
+    // Optional data can be added later in the match object:
+    // lastH2H:{score:'2-1', date:'21 juin 1986', context:'Quart de finale Coupe du Monde 1986'}
+    const h = m.lastH2H || m.lastHeadToHead || m.h2h || null;
+    if(!h) return 'Dernier face-à-face officiel : <b>à compléter</b>';
+    const score = h.score || '';
+    const date = h.date || '';
+    const ctx = h.context || h.competition || '';
+    return 'Dernier face-à-face officiel : <b>' + esc(score) + '</b>' +
+      (date ? ' — ' + esc(date) : '') +
+      (ctx ? ' · ' + esc(ctx) : '');
+  }
+  function enhance(){
+    const matches = getMatches();
+    document.querySelectorAll('#bets .bet-card').forEach(card => {
+      if(card.dataset.v13Enhanced === '1') return;
+      const id = (card.id || '').replace('betCard_','');
+      const m = matches.find(x => String(x.id || x.matchId || x.code || '') === id) || {};
+      const title = card.querySelector('.bet-title');
+      if(title && !card.querySelector('.match-info-panel')){
+        const panel = document.createElement('div');
+        panel.className = 'match-info-panel';
+        panel.innerHTML = '<div>' + (matchLabel(m) || '📅 Journée ouverte') + '</div><div>' + h2hLabel(m) + '</div>';
+        title.insertAdjacentElement('afterend', panel);
+      }
+      card.dataset.v13Enhanced = '1';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', enhance);
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function'){
+    window.renderAll = function(){
+      const r = oldRenderAll.apply(this, arguments);
+      setTimeout(enhance, 0);
+      return r;
+    };
+  }
+  setInterval(enhance, 1200);
+})();
+</script>
+
+
+<script>
+/* V24 CLEAN USERS MODULE — remplace totalement l'ancien module utilisateurs */
+(function(){
+  const DEMO_NAMES = new Set(["Sarah","Karim","Nadia","Hassan","Mehdi","Youssef","Amina","Rachid","Leila","Sofia","Omar","Samir","Meryem","Anas","Imane"]);
+
+  function esc(v){
+    return String(v ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+  }
+  function backupUsers(reason){
+    try{
+      localStorage.setItem("bp_wc_dev_backup_users_last", JSON.stringify(window.state || state));
+      localStorage.setItem("bp_wc_dev_backup_users_" + reason + "_" + new Date().toISOString(), JSON.stringify(window.state || state));
+    }catch(e){ console.warn("Backup users failed", e); }
+  }
+  function users(){
+    if(!Array.isArray(state.players)) state.players=[];
+    return state.players;
+  }
+  function saveState(){
+    if(typeof save === "function") save();
+    else localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+  }
+  function generateCode(){
+    const used = new Set(users().map(p=>String(p.code||"")));
+    let code;
+    do{ code=String(Math.floor(1000+Math.random()*9000)); }
+    while(code==="1573" || used.has(code));
+    return code;
+  }
+  function normalizeUser(p){
+    p.name = String(p.name||"").trim() || "Nouvel utilisateur";
+    p.pseudo = String(p.pseudo||p.name).trim() || p.name;
+    if(!/^\d{4}$/.test(String(p.code||"")) || p.code==="1573") p.code=generateCode();
+    if(p.startFid===undefined || p.startFid===null) p.startFid=Number(p.balance||50);
+    if(p.balance===undefined || p.balance===null) p.balance=Number(p.startFid||50);
+    if(p.evolution===undefined || p.evolution===null) p.evolution=0;
+    if(p.good===undefined || p.good===null) p.good=0;
+    if(p.exact===undefined || p.exact===null) p.exact=0;
+    if(p.avatar===undefined) p.avatar=null;
+    if(p.secrets===undefined) p.secrets=null;
+    return p;
+  }
+  function purgeDemoUsersIfPolluted(){
+    const list=users();
+    const demoCount=list.filter(p=>DEMO_NAMES.has(String(p.name||""))).length;
+    // Si ancien stockage pollué par les 15 utilisateurs démo, on les retire.
+    if(demoCount >= 10){
+      backupUsers("before_demo_purge");
+      state.players=list.filter(p=>!DEMO_NAMES.has(String(p.name||"")));
+      saveState();
+      console.warn("V24: utilisateurs démo purgés automatiquement:", demoCount);
+    }
+  }
+  window.ensurePlayerCodes = function(){
+    users().forEach(normalizeUser);
+    const seen=new Set();
+    users().forEach(p=>{
+      if(seen.has(String(p.code))){
+        p.code=generateCode();
+      }
+      seen.add(String(p.code));
+    });
+    saveState();
+  };
+  function uniqueName(base){
+    const existing=new Set(users().map(p=>String(p.name||"").toLowerCase()));
+    let i=users().length+1, name=`${base} ${i}`;
+    while(existing.has(name.toLowerCase())){i++;name=`${base} ${i}`;}
+    return name;
+  }
+  window.addPlayer = async function(){
+    backupUsers("before_add");
+    const fid=Number(document.getElementById("defaultFid")?.value || 50);
+    const name=uniqueName("Nouvel utilisateur");
+    users().push(normalizeUser({
+      name, pseudo:name, code:generateCode(), avatar:null,
+      startFid:fid, balance:fid, evolution:0, good:0, exact:0, secrets:null
+    }));
+    saveState();
+    if(typeof renderAll==="function") renderAll();
+    if(typeof bpAlert==="function") await bpAlert(`Utilisateur ajouté : ${name}`,{icon:"✅"});
+  };
+  window.adminUpdatePlayer = function(index, field, value){
+    const list=users();
+    if(!list[index]) return;
+    backupUsers("before_update");
+    const p=list[index];
+    if(field==="name"){
+      const old=p.name;
+      const val=String(value||"").trim() || old || "Nouvel utilisateur";
+      if(list.some((x,i)=>i!==index && String(x.name||"").toLowerCase()===val.toLowerCase())){
+        alert("Ce nom existe déjà.");
+        renderAdmin();
+        return;
+      }
+      p.name=val;
+      if(!p.pseudo || p.pseudo===old) p.pseudo=val;
+      (state.bets||[]).forEach(b=>{if(b.player===old)b.player=val;});
+      (state.logs||[]).forEach(l=>{if(l.player===old)l.player=val;});
+      (state.settlementDetails||[]).forEach(d=>{if(d.player===old)d.player=val;});
+    }
+    if(field==="pseudo") p.pseudo=String(value||p.name).trim() || p.name;
+    if(field==="startFid") p.startFid=Number(value||0);
+    if(field==="balance") p.balance=Number(value||0);
+    normalizeUser(p);
+    saveState();
+    renderAll();
+  };
+  window.safeDeletePlayer = async function(index){
+    const list=users();
+    if(!list[index]) return;
+    const name=list[index].name;
+    if(!confirm(`Supprimer uniquement "${name}" ?\n\nAucun autre utilisateur ne sera modifié.`)) return;
+    backupUsers("before_delete");
+    list.splice(index,1);
+    saveState();
+    renderAll();
+    if(typeof bpAlert==="function") await bpAlert(`Utilisateur supprimé : ${name}`,{icon:"✅"});
+  };
+  window.restoreBeforeUserChangeBackup = async function(){
+    const raw=localStorage.getItem("bp_wc_dev_backup_users_last");
+    if(!raw){ if(typeof bpAlert==="function") await bpAlert("Aucune sauvegarde utilisateurs trouvée.",{icon:"ℹ️"}); return; }
+    if(!confirm("Restaurer la dernière sauvegarde utilisateurs ?")) return;
+    state=JSON.parse(raw);
+    saveState();
+    renderAll();
+    if(typeof bpAlert==="function") await bpAlert("Sauvegarde utilisateurs restaurée.",{icon:"✅"});
+  };
+  window.purgeDemoUsers = async function(){
+    backupUsers("manual_demo_purge");
+    const before=users().length;
+    state.players=users().filter(p=>!DEMO_NAMES.has(String(p.name||"")));
+    const removed=before-state.players.length;
+    saveState();
+    renderAll();
+    if(typeof bpAlert==="function") await bpAlert(`${removed} utilisateur(s) démo supprimé(s).`,{icon:"🧹"});
+  };
+  window.renderAdminUsersClean = function(){
+    const container=document.getElementById("adminPlayers");
+    if(!container) return;
+    container.innerHTML=users().map((p,i)=>`
+      <div class="admin-player-card" data-player-index="${i}">
+        <label>Utilisateur
+          <input value="${esc(p.name)}" onchange="adminUpdatePlayer(${i},'name',this.value)">
+        </label>
+        <label>Pseudo
+          <input value="${esc(p.pseudo||p.name)}" maxlength="20" onchange="adminUpdatePlayer(${i},'pseudo',this.value)">
+        </label>
+        <label>Code
+          <span class="user-code">${esc(p.code)}</span>
+          <button class="action secondary admin-mini-btn" type="button" onclick="regeneratePlayerCode(${i});renderAll()">Nouveau code</button>
+        </label>
+        <label>FID départ
+          <input type="number" value="${Number(p.startFid||0)}" onchange="adminUpdatePlayer(${i},'startFid',this.value)">
+        </label>
+        <label>Solde
+          <input type="number" value="${Number(p.balance||0)}" onchange="adminUpdatePlayer(${i},'balance',this.value)">
+        </label>
+        <div class="admin-player-actions">
+          <button class="action secondary" type="button" onclick="showAdminUserDetail(${i})">Voir détail</button>
+          <button class="action danger" type="button" onclick="safeDeletePlayer(${i})">Suppr.</button>
+        </div>
+      </div>
+    `).join("") || `<div class="help">Aucun utilisateur. Clique sur <b>Ajouter utilisateur</b> pour créer le premier participant.</div>`;
+  };
+
+  const oldRenderAdmin = window.renderAdmin;
+  window.renderAdmin = function(){
+    if(typeof oldRenderAdmin==="function") oldRenderAdmin.apply(this, arguments);
+    renderAdminUsersClean();
+    const addBtn=[...document.querySelectorAll("button")].find(b=>b.getAttribute("onclick")==="addPlayer()");
+    if(addBtn) addBtn.textContent="Ajouter utilisateur";
+    const parent=addBtn?.parentElement;
+    if(parent && !document.getElementById("restoreUsersBtn")){
+      addBtn.insertAdjacentHTML("afterend", ` <button id="restoreUsersBtn" class="action secondary" onclick="restoreBeforeUserChangeBackup()">Restaurer utilisateurs</button> <button id="purgeDemoUsersBtn" class="action danger" onclick="purgeDemoUsers()">Purger joueurs démo</button>`);
+    }
+  };
+
+  purgeDemoUsersIfPolluted();
+  ensurePlayerCodes();
+  saveState();
+  setTimeout(()=>{ if(typeof renderAll==="function") renderAll(); },0);
+})();
+</script>
+
+</body></html>
