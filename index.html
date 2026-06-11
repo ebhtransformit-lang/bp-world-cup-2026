@@ -9884,4 +9884,257 @@ function bpModalClose(){
 })();
 </script>
 
+
+<script>
+/* V54 — Sauvegarde Supabase fiable des pronostics */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
+
+  function getSb(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
+      throw new Error("Supabase non configuré.");
+    }
+    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+  }
+
+  function clone(x){ return JSON.parse(JSON.stringify(x || {})); }
+
+  function curPlayer(){
+    if(window.currentRole==="user" && window.currentUserIndex!==null && state.players?.[window.currentUserIndex]){
+      return state.players[window.currentUserIndex];
+    }
+    if(typeof player==="function") return player();
+    const sel=document.getElementById("activePlayer");
+    return (state.players||[])[Number(sel?.value||0)] || null;
+  }
+
+  function curDay(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
+  }
+
+  function dayOk(day){
+    if(typeof pronoDayIsAvailable==="function") return pronoDayIsAvailable(day);
+    if(typeof isDayClosed==="function") return !isDayClosed(day);
+    return true;
+  }
+
+  function outcome(a,b){
+    if(typeof outcomeFromScore==="function") return outcomeFromScore(a,b);
+    return a>b?"A":b>a?"B":"N";
+  }
+
+  function form(matchId){
+    const scoreA=Number(document.querySelector(`.scoreA[data-match="${matchId}"]`)?.value ?? 0);
+    const scoreB=Number(document.querySelector(`.scoreB[data-match="${matchId}"]`)?.value ?? 0);
+    const stake=Number(document.querySelector(`.stake[data-match="${matchId}"]`)?.value ?? 1);
+    const prediction=outcome(scoreA,scoreB);
+    return {prediction,predictedOutcome:prediction,scoreA,scoreB,score:`${scoreA} - ${scoreB}`,stake};
+  }
+
+  function betKey(b){
+    return `${Number(b.day)}|${String(b.matchId)}|${String(b.player)}`;
+  }
+
+  function mergeState(local, cloud){
+    const merged={...clone(local),...clone(cloud)};
+
+    const players=new Map();
+    (local.players||[]).forEach(p=>players.set(String(p.code||p.name),clone(p)));
+    (cloud.players||[]).forEach(p=>{
+      const k=String(p.code||p.name);
+      players.set(k,{...(players.get(k)||{}),...clone(p)});
+    });
+    merged.players=[...players.values()];
+
+    const bets=new Map();
+    (cloud.bets||[]).forEach(b=>bets.set(betKey(b),clone(b)));
+    (local.bets||[]).forEach(b=>bets.set(betKey(b),clone(b)));
+    merged.bets=[...bets.values()];
+
+    if(!Array.isArray(merged.matches) || !merged.matches.length) merged.matches=clone(local.matches||[]);
+    return merged;
+  }
+
+  async function fetchCloud(){
+    const {data,error}=await getSb().from("app_state").select("data").eq("id",APP_ID).maybeSingle();
+    if(error) throw error;
+    return data?.data ? clone(data.data) : {};
+  }
+
+  async function writeCloud(st){
+    const {error}=await getSb().from("app_state").upsert({
+      id:APP_ID,
+      data:st,
+      updated_at:new Date().toISOString()
+    },{onConflict:"id"});
+    if(error) throw error;
+    return true;
+  }
+
+  async function saveCloudMerged(){
+    const cloud=await fetchCloud();
+    const merged=mergeState(state,cloud);
+    await writeCloud(merged);
+    state=merged;
+    localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+    return state;
+  }
+
+  function upsertLocalBet(matchId,data,status){
+    const p=curPlayer();
+    const day=curDay();
+    if(!p) throw new Error("Joueur introuvable.");
+    state.bets=Array.isArray(state.bets)?state.bets:[];
+    state.bets=state.bets.filter(b=>!(
+      Number(b.day)===Number(day) &&
+      String(b.matchId)===String(matchId) &&
+      String(b.player)===String(p.name)
+    ));
+    const bet={
+      day,
+      matchId:String(matchId),
+      player:p.name,
+      ...data,
+      status,
+      validatedAt:status==="VALIDATED"?new Date().toISOString():null,
+      savedAt:new Date().toISOString()
+    };
+    state.bets.push(bet);
+    return bet;
+  }
+
+  function setStatus(matchId,html){
+    const card=document.getElementById(`betCard_${matchId}`);
+    const status=card?.querySelector(".bet-status");
+    if(status) status.innerHTML=html;
+  }
+
+  function markValidated(matchId){
+    const card=document.getElementById(`betCard_${matchId}`);
+    if(!card) return;
+    const badge=card.querySelector(".bet-title .badge");
+    if(badge){ badge.textContent="✅ Validée"; badge.className="badge ok"; }
+    setStatus(matchId,'<span class="good">Validée et sauvegardée Supabase</span>');
+    const btn=[...card.querySelectorAll("button")].find(b=>/valider/i.test(b.textContent||""));
+    if(btn){
+      btn.textContent="✏️ Modifier la mise";
+      btn.classList.add("editBtn");
+      btn.onclick=function(){ if(typeof editBet==="function") editBet(matchId); };
+    }
+  }
+
+  window.validateSingleBet = async function(matchId){
+    try{
+      const day=curDay();
+      if(!dayOk(day)){
+        if(typeof bpAlert==="function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
+        alert("Mise non disponible sur cette journée.");
+        return false;
+      }
+
+      const p=curPlayer();
+      const m=(state.matches||[]).find(x=>String(x.id)===String(matchId));
+      if(!p || !m) throw new Error("Joueur ou match introuvable.");
+
+      const data=form(matchId);
+      const label=data.prediction==="A"?m.teamA:data.prediction==="B"?m.teamB:"Nul";
+
+      let ok=true;
+      if(typeof bpConfirmBet==="function"){
+        try{
+          ok=await bpConfirmBet({match:`${m.teamA} vs ${m.teamB}`,result:label,score:data.score,stake:data.stake});
+        }catch(e){
+          ok=confirm(`Confirmer la mise ?\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nMise : ${data.stake} FID`);
+        }
+      }else{
+        ok=confirm(`Confirmer la mise ?\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nMise : ${data.stake} FID`);
+      }
+      if(!ok) return false;
+
+      setStatus(matchId,'<span class="warn">⏳ Sauvegarde Supabase en cours...</span>');
+      upsertLocalBet(matchId,data,"VALIDATED");
+      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+
+      await saveCloudMerged();
+
+      try{ if(typeof log==="function") log(p.name,`Mise validée ${matchId}`,0); }catch(e){}
+      markValidated(matchId);
+
+      if(typeof bpV52ApplyCurrentBetCards==="function") bpV52ApplyCurrentBetCards();
+      if(typeof bpV50SyncUserBetsView==="function") bpV50SyncUserBetsView();
+
+      if(typeof bpAlert==="function") await bpAlert("Mise validée et sauvegardée dans Supabase.",{icon:"✅"});
+      return true;
+    }catch(e){
+      console.error(e);
+      setStatus(matchId,`<span class="bad">❌ Non sauvegardé : ${e.message||e}</span>`);
+      alert("La mise n'a PAS été sauvegardée dans Supabase : "+(e.message||e));
+      return false;
+    }
+  };
+
+  window.saveBets = async function(){
+    try{
+      const day=curDay();
+      if(!dayOk(day)){
+        if(typeof bpAlert==="function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
+        alert("Mise non disponible sur cette journée.");
+        return false;
+      }
+      const p=curPlayer();
+      if(!p) throw new Error("Joueur introuvable.");
+
+      document.querySelectorAll(".scoreA").forEach(sel=>{
+        const matchId=sel.dataset.match;
+        const existing=(state.bets||[]).find(b=>
+          Number(b.day)===Number(day) &&
+          String(b.matchId)===String(matchId) &&
+          String(b.player)===String(p.name)
+        );
+        if(existing?.status==="VALIDATED") return;
+        upsertLocalBet(matchId,form(matchId),"DRAFT");
+      });
+
+      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+      await saveCloudMerged();
+
+      if(typeof renderAll==="function") renderAll();
+      if(typeof bpAlert==="function") await bpAlert("Brouillons sauvegardés dans Supabase.",{icon:"✅"});
+      return true;
+    }catch(e){
+      console.error(e);
+      alert("Erreur sauvegarde Supabase des brouillons : "+(e.message||e));
+      return false;
+    }
+  };
+
+  window.bpV54AuditCloudBets = async function(code){
+    try{
+      const cloud=await fetchCloud();
+      const p=(cloud.players||[]).find(x=>String(x.code||"")===String(code||"4533"));
+      if(!p){ alert("Joueur introuvable dans Supabase pour code "+(code||"4533")); return; }
+      const bets=(cloud.bets||[]).filter(b=>String(b.player)===String(p.name));
+      alert(`Audit Supabase\nJoueur: ${p.name}\nCode: ${p.code}\nPronostics cloud: ${bets.length}\n\n`+
+        bets.slice(0,20).map(b=>`J${b.day} ${b.matchId} ${b.scoreA}-${b.scoreB} mise ${b.stake} ${b.status}`).join("\n"));
+    }catch(e){
+      alert("Audit cloud impossible : "+(e.message||e));
+    }
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV54CloudAuditPanel")){
+      backup.insertAdjacentHTML("afterbegin",`
+        <div id="bpV54CloudAuditPanel" class="card" style="border-color:rgba(34,197,94,.45)">
+          <h2>✅ Sauvegarde fiable Supabase</h2>
+          <div class="muted">Les mises validées sont écrites directement dans Supabase. Aucun statut validé n'est affiché si l’écriture cloud échoue.</div>
+          <button class="action secondary" onclick="bpV54AuditCloudBets('4533')">Auditer cloud Hassan / 4533</button>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
 </body></html>
