@@ -10137,4 +10137,137 @@ function bpModalClose(){
 })();
 </script>
 
+
+<script>
+/* V55 — Ouverture manuelle Admin prioritaire */
+(function(){
+  function maxDay(){
+    if(typeof maxCalendarDay === "function") return maxCalendarDay();
+    return Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
+  }
+
+  function saveNow(){
+    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
+    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
+  }
+
+  function forceOpenDay(day){
+    day=Number(day||state.currentDay||1);
+    if(!state.closedDays) state.closedDays={};
+    if(!state.adminForcedOpenDays) state.adminForcedOpenDays={};
+
+    const max=maxDay();
+    for(let d=1; d<=max; d++){
+      state.closedDays[d] = Number(d)!==day;
+      state.adminForcedOpenDays[d] = false;
+    }
+
+    state.closedDays[day]=false;
+    state.adminForcedOpenDays[day]=true;
+    state.currentDay=day;
+    if(typeof calendarDayDisplayed!=="undefined") calendarDayDisplayed=day;
+    if(typeof pronoDayDisplayed!=="undefined") pronoDayDisplayed=day;
+    state.closed=false;
+    saveNow();
+  }
+
+  // Override isDayClosed so manually opened day is never considered closed.
+  const oldIsDayClosed = window.isDayClosed;
+  if(typeof oldIsDayClosed === "function" && !oldIsDayClosed.__bpV55Wrapped){
+    window.isDayClosed = function(day){
+      if(state.adminForcedOpenDays && state.adminForcedOpenDays[Number(day)] === true) return false;
+      return oldIsDayClosed.apply(this, arguments);
+    };
+    window.isDayClosed.__bpV55Wrapped=true;
+  }
+
+  // Override onlyOpenDay to prefer admin forced day.
+  const oldOnlyOpenDay = window.onlyOpenDay;
+  if(typeof oldOnlyOpenDay === "function" && !oldOnlyOpenDay.__bpV55Wrapped){
+    window.onlyOpenDay = function(){
+      if(state.adminForcedOpenDays){
+        const forced=Object.entries(state.adminForcedOpenDays).find(([d,v])=>v===true);
+        if(forced) return Number(forced[0]);
+      }
+      return oldOnlyOpenDay.apply(this, arguments);
+    };
+    window.onlyOpenDay.__bpV55Wrapped=true;
+  }
+
+  // Override openBets: admin can reopen the currently displayed/current day, including J1.
+  window.openBets = async function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+      alert("Accès réservé à l’admin.");
+      return false;
+    }
+
+    const day=Number(state.currentDay||1);
+    const ok=confirm(`Ouvrir la journée ${day} ?\n\nCette journée sera ouverte aux mises et toutes les autres seront fermées.\nL’ouverture manuelle Admin prime sur la clôture automatique.`);
+    if(!ok) return false;
+
+    forceOpenDay(day);
+    try{ if(typeof log==="function") log("SYSTEM",`Journée ${day} ouverte manuellement par Admin`,0); }catch(e){}
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} ouverte.`);
+    return true;
+  };
+
+  // Override closeBets to remove forced-open flag.
+  const oldCloseBets = window.closeBets;
+  window.closeBets = async function(){
+    const day=Number(state.currentDay||1);
+    if(state.adminForcedOpenDays) state.adminForcedOpenDays[day]=false;
+    if(typeof setDayClosed==="function") setDayClosed(day,true);
+    else {
+      if(!state.closedDays) state.closedDays={};
+      state.closedDays[day]=true;
+      state.closed=true;
+    }
+    saveNow();
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} fermée. Les mises sont clôturées.`);
+    return true;
+  };
+
+  // Prevent auto-roll from reclosing a manually opened day.
+  const oldAutoRoll = window.bpV44AutoRollDay;
+  if(typeof oldAutoRoll === "function" && !oldAutoRoll.__bpV55Wrapped){
+    window.bpV44AutoRollDay = function(){
+      if(state.adminForcedOpenDays && Object.values(state.adminForcedOpenDays).some(Boolean)){
+        return false;
+      }
+      return oldAutoRoll.apply(this, arguments);
+    };
+    window.bpV44AutoRollDay.__bpV55Wrapped=true;
+  }
+
+  window.bpV55OpenSpecificDay = function(day){
+    if(window.currentRole!=="admin") return alert("Admin uniquement.");
+    state.currentDay=Number(day);
+    forceOpenDay(day);
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} ouverte.`);
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    const admin=document.getElementById("admin");
+    if(admin && !document.getElementById("bpV55OpenDayPanel")){
+      const max=maxDay();
+      admin.insertAdjacentHTML("afterbegin",`
+        <div id="bpV55OpenDayPanel" class="card" style="border-color:rgba(250,204,21,.45)">
+          <h2>🟢 Ouverture manuelle Admin</h2>
+          <div class="muted">Permet de rouvrir une journée, y compris J1. Cette ouverture prime sur la clôture automatique.</div>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;max-width:420px">
+            <label>Journée à ouvrir
+              <select id="bpV55DaySelect">${Array.from({length:max},(_,i)=>`<option value="${i+1}">Journée ${i+1}</option>`).join("")}</select>
+            </label>
+            <button class="action" onclick="bpV55OpenSpecificDay(document.getElementById('bpV55DaySelect').value)">Ouvrir</button>
+          </div>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
 </body></html>
