@@ -2151,6 +2151,12 @@ window.BP_SUPABASE_ANON_KEY = "sb_publishable_u2rK6amJNW07tL-aD9x69Q_S8gbYTEi";
 window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 </script>
 
+
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>window.BP_APP_VERSION = "v57-cloud-authoritative";</script>
+
 </head>
 <body>
 
@@ -10369,6 +10375,160 @@ function bpModalClose(){
     };
     window.renderAll.__bpV56Wrapped=true;
   }
+})();
+</script>
+
+
+<script>
+/* V57 — Cloud authoritative : Supabase source de vérité + cache local nettoyé */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
+  let cloudBusy = false;
+  let pendingReason = null;
+  function clone(x){ return JSON.parse(JSON.stringify(x || {})); }
+  function nowISO(){ return new Date().toISOString(); }
+  function sb(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) throw new Error("Supabase non configuré.");
+    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+  }
+  function betKey(b){ return `${Number(b.day)}|${String(b.matchId)}|${String(b.player)}`; }
+  function playerKey(p){ return String(p?.code || p?.name || p?.pseudo || "").trim().toLowerCase(); }
+  function mergePlayers(localPlayers, cloudPlayers){
+    const map=new Map();
+    (cloudPlayers||[]).forEach(p=>{ const k=playerKey(p); if(k) map.set(k,clone(p)); });
+    (localPlayers||[]).forEach(lp=>{
+      const k=playerKey(lp); if(!k) return;
+      const cp=map.get(k)||{};
+      const merged={...cp,...clone(lp)};
+      if(cp.secrets && Object.keys(cp.secrets||{}).length && (!lp.secrets || !Object.keys(lp.secrets||{}).length)) merged.secrets=cp.secrets;
+      if(lp.secrets && Object.keys(lp.secrets||{}).length) merged.secrets=lp.secrets;
+      if(!merged.avatar && cp.avatar) merged.avatar=cp.avatar;
+      if(!merged.pseudo && cp.pseudo) merged.pseudo=cp.pseudo;
+      map.set(k,merged);
+    });
+    return [...map.values()].filter(p=>p&&(p.name||p.pseudo||p.code));
+  }
+  function mergeBets(localBets, cloudBets){
+    const map=new Map();
+    (cloudBets||[]).forEach(b=>map.set(betKey(b),clone(b)));
+    (localBets||[]).forEach(lb=>{
+      const k=betKey(lb); const cb=map.get(k)||{};
+      const merged={...cb,...clone(lb)};
+      if(cb.status==="VALIDATED" && lb.status!=="VALIDATED"){
+        merged.status="VALIDATED";
+        merged.validatedAt=cb.validatedAt||merged.validatedAt;
+      }
+      map.set(k,merged);
+    });
+    return [...map.values()];
+  }
+  function mergeMatches(localMatches, cloudMatches){
+    const map=new Map();
+    (cloudMatches||[]).forEach(m=>map.set(String(m.id),clone(m)));
+    (localMatches||[]).forEach(lm=>{
+      const cm=map.get(String(lm.id))||{};
+      const merged={...cm,...clone(lm)};
+      if((lm.scoreA===null || lm.scoreA===undefined || lm.scoreA==="") && cm.scoreA!==undefined) merged.scoreA=cm.scoreA;
+      if((lm.scoreB===null || lm.scoreB===undefined || lm.scoreB==="") && cm.scoreB!==undefined) merged.scoreB=cm.scoreB;
+      map.set(String(lm.id),merged);
+    });
+    return [...map.values()];
+  }
+  function mergeState(localState, cloudState){
+    const local=clone(localState), cloud=clone(cloudState);
+    const merged={...cloud,...local};
+    merged.players=mergePlayers(local.players,cloud.players);
+    merged.bets=mergeBets(local.bets,cloud.bets);
+    merged.matches=mergeMatches(local.matches,cloud.matches);
+    const smap=new Map();
+    (cloud.settlementDetails||[]).forEach(x=>smap.set(`${x.day}|${x.matchId}|${x.player}`,clone(x)));
+    (local.settlementDetails||[]).forEach(x=>smap.set(`${x.day}|${x.matchId}|${x.player}`,clone(x)));
+    merged.settlementDetails=[...smap.values()];
+    merged.closedDays={...(cloud.closedDays||{}),...(local.closedDays||{})};
+    merged.adminForcedOpenDays={...(cloud.adminForcedOpenDays||{}),...(local.adminForcedOpenDays||{})};
+    merged.lastSavedAt=nowISO();
+    return merged;
+  }
+  async function fetchCloud(){
+    const {data,error}=await sb().from("app_state").select("data,updated_at").eq("id",APP_ID).maybeSingle();
+    if(error) throw error;
+    return data?.data ? clone(data.data) : {};
+  }
+  async function writeCloud(st){
+    const {error}=await sb().from("app_state").upsert({id:APP_ID,data:st,updated_at:nowISO()},{onConflict:"id"});
+    if(error) throw error;
+    return true;
+  }
+  async function saveCloudStrong(reason="save"){
+    if(cloudBusy){ pendingReason=reason; return false; }
+    cloudBusy=true;
+    try{
+      const cloud=await fetchCloud();
+      const merged=mergeState(state,cloud);
+      await writeCloud(merged);
+      state=merged;
+      try{ sessionStorage.setItem("bp_wc_session_state",JSON.stringify(state)); }catch(e){}
+      const s=document.getElementById("bpCloudStatusV57");
+      if(s) s.innerHTML=`<span class="good">Sauvegarde Supabase OK — ${reason} — ${new Date().toLocaleTimeString("fr-FR")}</span>`;
+      return true;
+    }catch(e){
+      console.error("[V57 cloud save]",e);
+      const s=document.getElementById("bpCloudStatusV57");
+      if(s) s.innerHTML=`<span class="bad">Erreur Supabase : ${e.message||e}</span>`;
+      throw e;
+    }finally{
+      cloudBusy=false;
+      const p=pendingReason; pendingReason=null;
+      if(p) setTimeout(()=>saveCloudStrong(p).catch(console.error),300);
+    }
+  }
+  async function loadCloudAuthoritative(showAlert=false){
+    try{
+      const cloud=await fetchCloud();
+      if(!cloud || !Array.isArray(cloud.players) || !cloud.players.length){ if(showAlert) alert("Supabase ne contient pas d’état valide."); return false; }
+      state=cloud;
+      try{
+        localStorage.removeItem("bp_wc_dev");
+        localStorage.removeItem("bp_wc_dev_last_restore_report");
+        localStorage.removeItem("bp_wc_dev_last_successful_cloud_restore");
+        sessionStorage.setItem("bp_wc_session_state",JSON.stringify(state));
+      }catch(e){}
+      if(typeof repairState==="function") repairState();
+      if(typeof renderAll==="function" && window.bpIsAuthenticated===true) renderAll();
+      const s=document.getElementById("bpCloudStatusV57");
+      if(s) s.innerHTML=`<span class="good">Chargement Supabase OK — ${new Date().toLocaleTimeString("fr-FR")}</span>`;
+      if(showAlert) alert("Données chargées depuis Supabase.");
+      return true;
+    }catch(e){ console.error("[V57 cloud load]",e); if(showAlert) alert("Erreur chargement Supabase : "+(e.message||e)); return false; }
+  }
+  window.bpV57LoadCloud=loadCloudAuthoritative;
+  window.bpV57SaveCloud=saveCloudStrong;
+  window.bpForceLoadSupabase=async function(){ const ok=await loadCloudAuthoritative(true); if(ok) setTimeout(()=>location.reload(),400); return ok; };
+  window.bpCloudLoad=async function(showAlert=true){ return loadCloudAuthoritative(showAlert); };
+  window.bpCloudSave=async function(showAlert=true){ try{ await saveCloudStrong("manual"); if(showAlert) alert("Sauvegarde Supabase OK."); return true; }catch(e){ if(showAlert) alert("Erreur sauvegarde Supabase : "+(e.message||e)); return false; } };
+  window.bpCloudSaveDebounced=function(){ clearTimeout(window.__bpV57SaveTimer); window.__bpV57SaveTimer=setTimeout(()=>saveCloudStrong("auto").catch(console.error),600); };
+  document.addEventListener("DOMContentLoaded",()=>{
+    try{ localStorage.removeItem("bp_wc_dev"); localStorage.removeItem("bp_last_daily_backup"); }catch(e){}
+    setTimeout(()=>loadCloudAuthoritative(false),250);
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpCloudPanelV57")){
+      backup.insertAdjacentHTML("afterbegin",`<div id="bpCloudPanelV57" class="card" style="border-color:rgba(34,197,94,.45)"><h2>☁️ Supabase — Source de vérité</h2><div class="muted">Le cache local est vidé au chargement. Les mises, scores, journées, questions secrètes et gains sont sauvegardés dans Supabase.</div><button class="action" onclick="bpV57LoadCloud(true)">Charger Supabase</button><button class="action secondary" onclick="bpV57SaveCloud('manuel')">Forcer sauvegarde Supabase</button><div id="bpCloudStatusV57" class="help">Statut : prêt.</div></div>`);
+    }
+  });
+  const oldSave=window.save;
+  if(typeof oldSave==="function" && !oldSave.__bpV57Wrapped){
+    window.save=function(){ try{ sessionStorage.setItem("bp_wc_session_state",JSON.stringify(state)); }catch(e){} const r=oldSave.apply(this,arguments); window.bpCloudSaveDebounced(); return r; };
+    window.save.__bpV57Wrapped=true;
+  }
+  function wrapCritical(name,reason){
+    const fn=window[name];
+    if(typeof fn!=="function" || fn.__bpV57Wrapped) return;
+    window[name]=async function(){ const r=fn.apply(this,arguments); if(r&&typeof r.then==="function") await r; await saveCloudStrong(reason||name); return r; };
+    window[name].__bpV57Wrapped=true;
+  }
+  [["validateSingleBet","mise-validée"],["saveBets","brouillons"],["sealSecrets","questions-secretes"],["openBets","ouverture-journee"],["closeBets","fermeture-journee"],["bpV55OpenSpecificDay","ouverture-admin"],["calculateGains","calcul-gains"],["saveAdmin","admin"],["saveScores","scores"],["workflowNextStep","workflow"]].forEach(([n,r])=>setTimeout(()=>wrapCritical(n,r),900));
+  document.addEventListener("change",e=>{ if(e.target && /^s[ab]_/.test(e.target.id||"")) window.bpCloudSaveDebounced(); },true);
+  try{ const prev=sessionStorage.getItem("bp_app_version"); if(prev && prev!==window.BP_APP_VERSION) sessionStorage.clear(); sessionStorage.setItem("bp_app_version",window.BP_APP_VERSION); }catch(e){}
 })();
 </script>
 
