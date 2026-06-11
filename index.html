@@ -10270,4 +10270,106 @@ function bpModalClose(){
 })();
 </script>
 
+
+<script>
+/* V56 — Navigation journées Admin */
+(function(){
+  function saveLocal(){
+    try{
+      localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+    }catch(e){}
+  }
+
+  function setDisplayedAdminDay(day){
+    day = Number(day);
+    if(!day || day < 1) day = 1;
+
+    const max = typeof maxCalendarDay === "function"
+      ? maxCalendarDay()
+      : Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
+
+    if(day > max) day = max;
+
+    state.currentDay = day;
+    if(typeof calendarDayDisplayed !== "undefined") calendarDayDisplayed = day;
+    if(typeof pronoDayDisplayed !== "undefined") pronoDayDisplayed = day;
+    state.closed = typeof isDayClosed === "function" ? isDayClosed(day) : !!(state.closedDays && state.closedDays[day]);
+
+    saveLocal();
+
+    if(typeof renderAll === "function") renderAll();
+
+    // Reste sur l'onglet Admin après rendu.
+    setTimeout(()=>{
+      document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+      document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+      const admin=document.getElementById("admin");
+      const btn=document.getElementById("navAdmin");
+      if(admin) admin.classList.add("active");
+      if(btn) btn.classList.add("active");
+    },50);
+  }
+
+  window.previousDay = async function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+      alert("Accès réservé à l’admin.");
+      return false;
+    }
+    const day = Number(state.currentDay || 1);
+    if(day <= 1){
+      alert("Tu es déjà sur la journée 1.");
+      return false;
+    }
+    setDisplayedAdminDay(day - 1);
+    return true;
+  };
+
+  window.nextDay = async function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+      alert("Accès réservé à l’admin.");
+      return false;
+    }
+
+    const max = typeof maxCalendarDay === "function"
+      ? maxCalendarDay()
+      : Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
+
+    const day = Number(state.currentDay || 1);
+    if(day >= max){
+      alert("Dernière journée atteinte.");
+      return false;
+    }
+
+    // Navigation simple de consultation admin. N’ouvre pas automatiquement la journée.
+    setDisplayedAdminDay(day + 1);
+    return true;
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    // Sécurise les handlers si le rendu HTML a gardé d'anciens onclick.
+    setTimeout(()=>{
+      const prev=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée précédente"));
+      const next=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée suivante"));
+      if(prev) prev.onclick=window.previousDay;
+      if(next) next.onclick=window.nextDay;
+    },500);
+  });
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV56Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(()=>{
+        const prev=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée précédente"));
+        const next=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée suivante"));
+        if(prev) prev.onclick=window.previousDay;
+        if(next) next.onclick=window.nextDay;
+      },80);
+      return r;
+    };
+    window.renderAll.__bpV56Wrapped=true;
+  }
+})();
+</script>
+
 </body></html>
