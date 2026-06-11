@@ -2157,11 +2157,6 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 <meta http-equiv="Expires" content="0">
 <script>window.BP_APP_VERSION = "v57-cloud-authoritative";</script>
 
-
-<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<script>window.BP_APP_VERSION = "v59-persistence-clean";</script>
 </head>
 <body>
 
@@ -9194,487 +9189,1410 @@ function bpModalClose(){
 </script>
 
 
+<script>
+/* V50 — Sync pronos user depuis state.bets */
+(function(){
+  function currentUser(){
+    if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null && state.players && state.players[currentUserIndex]){
+      return state.players[currentUserIndex];
+    }
+    const sel=document.getElementById("activePlayer");
+    const idx=sel ? Number(sel.value||0) : 0;
+    return (state.players||[])[idx] || null;
+  }
+  function currentDayVisible(){
+    if(typeof currentPronoDay === "function") return Number(currentPronoDay());
+    return Number(state.currentDay || 1);
+  }
+  function samePlayerName(b,p){
+    const bp=String(b.player||"").trim();
+    return bp === String(p.name||"").trim() || bp === String(p.pseudo||"").trim();
+  }
+  function normalizeBet(b){
+    let a=b.scoreA, c=b.scoreB;
+    if((a===undefined || c===undefined) && b.score){
+      const sp=String(b.score).split(/[-–]/); a=sp[0]; c=sp[1];
+    }
+    if((a===undefined || c===undefined) && b.predictedScore){
+      const sp=String(b.predictedScore).split(/[-–]/); a=sp[0]; c=sp[1];
+    }
+    return {scoreA:Number(a??0),scoreB:Number(c??0),stake:Number(b.stake??b.mise??1),status:String(b.status||"").toUpperCase()};
+  }
+  function findBetForCard(card,p,day){
+    const text=card.textContent||"";
+    const matches=(state.matches||[]).filter(m=>Number(m.day)===Number(day));
+    const match=matches.find(m=>text.includes(m.teamA) && text.includes(m.teamB));
+    if(!match) return null;
+    const bet=(state.bets||[]).find(b=>samePlayerName(b,p) && Number(b.day)===Number(day) && String(b.matchId)===String(match.id));
+    return {bet,match};
+  }
+  function setSelectValue(select,value){
+    if(!select) return;
+    const v=String(value);
+    if([...select.options].some(o=>String(o.value)===v)) select.value=v;
+  }
+  function applyBetToCard(card,found){
+    if(!found || !found.bet) return;
+    const b=normalizeBet(found.bet);
+    setSelectValue(card.querySelector(".scoreA"),b.scoreA);
+    setSelectValue(card.querySelector(".scoreB"),b.scoreB);
+    setSelectValue(card.querySelector(".stake"),b.stake);
+
+    const status=card.querySelector(".bet-status");
+    if(status) status.innerHTML = b.status==="VALIDATED" ? '<span class="good">Validé</span>' : '<span class="muted">Brouillon</span>';
+
+    const badge=card.querySelector(".bet-title .badge");
+    if(badge){
+      badge.textContent=b.status==="VALIDATED" ? "Validé" : "Brouillon";
+      badge.className=b.status==="VALIDATED" ? "badge ok" : "badge";
+    }
+
+    const btn=[...card.querySelectorAll("button")].find(x=>/valider/i.test(x.textContent||""));
+    if(btn && b.status==="VALIDATED"){
+      btn.textContent="Mise validée";
+      btn.classList.add("validatedBtn");
+    }
+
+    const pred=card.querySelector(".prediction-derived");
+    if(pred){
+      const label=b.scoreA>b.scoreB?found.match.teamA:(b.scoreB>b.scoreA?found.match.teamB:"Nul");
+      pred.innerHTML=`Résultat pronostiqué : <b>${label}</b>`;
+    }
+  }
+
+  window.bpV50SyncUserBetsView=function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole === "admin") return;
+    const p=currentUser();
+    if(!p) return;
+    const day=currentDayVisible();
+    document.querySelectorAll("#betRows .bet-card").forEach(card=>{
+      const found=findBetForCard(card,p,day);
+      if(found && found.bet) applyBetToCard(card,found);
+    });
+  };
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV50Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(window.bpV50SyncUserBetsView,120);
+      setTimeout(window.bpV50SyncUserBetsView,500);
+      return r;
+    };
+    window.renderAll.__bpV50Wrapped=true;
+  }
+
+  const oldTab=window.tab;
+  if(typeof oldTab==="function" && !oldTab.__bpV50Wrapped){
+    window.tab=function(id,btn){
+      const r=oldTab.apply(this,arguments);
+      if(id==="bets") setTimeout(window.bpV50SyncUserBetsView,150);
+      return r;
+    };
+    window.tab.__bpV50Wrapped=true;
+  }
+
+  window.bpV50AuditUserBets=function(code){
+    const p=(state.players||[]).find(x=>String(x.code||"")===String(code||"4533"));
+    if(!p){ alert("Utilisateur introuvable pour code "+(code||"4533")); return; }
+    const bets=(state.bets||[]).filter(b=>samePlayerName(b,p));
+    alert(`${p.name} / ${p.pseudo||""}\nCode: ${p.code}\nPronostics trouvés: ${bets.length}\n\n`+
+      bets.slice(0,10).map(b=>`J${b.day} ${b.matchId} ${b.scoreA ?? b.score ?? ""}-${b.scoreB ?? ""} mise ${b.stake} ${b.status}`).join("\n"));
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(window.bpV50SyncUserBetsView,800);
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV50AuditPanel")){
+      backup.insertAdjacentHTML("afterbegin",`
+        <div id="bpV50AuditPanel" class="card" style="border-color:rgba(250,204,21,.45)">
+          <h2>🔎 Audit pronostics utilisateur</h2>
+          <div class="muted">Vérifie que les pronostics stockés dans state.bets sont bien liés au joueur.</div>
+          <button class="action secondary" onclick="bpV50AuditUserBets('4533')">Auditer Hassan / 4533</button>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
 
 <script>
-/* V59 — Persistance Supabase unifiée et fiable */
+/* V51 — Notifications login propres : pas au logout, pseudo complet */
+(function(){
+  window.bpLoginJustSucceeded = false;
+  window.bpSuppressLoginNotifications = false;
+
+  function closeLoginModals(){
+    ["bpV40Modal","bpOnboardingBackdrop","bpV40Modal","bpModalBackdrop"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el){
+        if(id==="bpModalBackdrop") el.style.display="none";
+        else el.remove();
+      }
+    });
+  }
+
+  function isAuthedUser(){
+    return window.bpIsAuthenticated === true && window.currentRole === "user";
+  }
+
+  function getLoggedPlayer(){
+    if(!isAuthedUser()) return null;
+    if(typeof currentUserIndex !== "undefined" && currentUserIndex !== null && state.players && state.players[currentUserIndex]){
+      return state.players[currentUserIndex];
+    }
+    return null;
+  }
+
+  function fullDisplayName(p){
+    return String(p?.pseudo || p?.name || "champion").trim();
+  }
+
+  function secretsDone(p){
+    const s=p?.secrets||{};
+    return !!(s.winner && s.bestPlayer && s.topScorer && s.sealed);
+  }
+
+  function currentDay(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
+  }
+
+  function missingBetsCount(p){
+    const d=currentDay();
+    const matches=(state.matches||[]).filter(m=>Number(m.day)===Number(d));
+    const done=new Set((state.bets||[])
+      .filter(b=>b.player===p.name && Number(b.day)===Number(d) && String(b.status||"").toUpperCase()==="VALIDATED")
+      .map(b=>b.matchId));
+    return matches.filter(m=>!done.has(m.id)).length;
+  }
+
+  function showCleanLoginMessage(){
+    if(!window.bpLoginJustSucceeded || window.bpSuppressLoginNotifications || !isAuthedUser()) return false;
+
+    closeLoginModals();
+
+    const p=getLoggedPlayer();
+    if(!p) return false;
+
+    const name=fullDisplayName(p);
+    const first=!p.firstLoginDone;
+    const missing=missingBetsCount(p);
+    const d=currentDay();
+
+    const modal=document.createElement("div");
+    modal.id="bpV51LoginModal";
+    modal.className="bp-modal-backdrop";
+    modal.style.display="flex";
+
+    let body="";
+    if(first){
+      body=`
+        <p><b>Bienvenue ${name} !</b></p>
+        <p>Avant de commencer, personnalise ton espace :</p>
+        <ul>
+          <li>Choisis un <b>pseudo</b>.</li>
+          <li>Ajoute un <b>avatar ou une image</b>.</li>
+          <li>Réponds aux <b>questions secrètes</b> dans l’onglet <b>Mes scores</b>.</li>
+        </ul>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpV51Go('bets')">Compléter mon profil</button>
+          <button class="action secondary" onclick="bpV51Go('scores')">Questions secrètes</button>
+        </div>
+      `;
+    }else if(missing>0){
+      body=`
+        <p><b>Bonjour ${name}.</b></p>
+        <p>La <b>journée ${d}</b> est ouverte.</p>
+        <p>Il te reste <b>${missing}</b> match(s) sans mise validée.</p>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpV51Go('bets')">Aller à Mes Pronos</button>
+        </div>
+      `;
+    }else{
+      body=`
+        <p><b>Bonjour ${name}.</b></p>
+        <p>Toutes tes mises disponibles sont validées.</p>
+        <p>Tu peux consulter ton score dans <b>Mes scores</b>.</p>
+        <div class="bp-onboarding-actions">
+          <button class="action" onclick="bpV51Go('scores')">Voir Mes scores</button>
+        </div>
+      `;
+    }
+
+    if(!secretsDone(p)){
+      body+=`<div class="help">Rappel : pense à compléter tes questions secrètes dans <b>Mes scores</b>.</div>`;
+    }
+
+    modal.innerHTML=`
+      <div class="bp-modal" role="dialog" aria-modal="true">
+        <div class="bp-modal-head">
+          <div class="bp-modal-icon">${first?"🏆":"👋"}</div>
+          <div>
+            <div class="bp-modal-title">${first?"Bienvenue dans la compétition":"Connexion réussie"}</div>
+            <div class="muted">B Partner World Cup</div>
+          </div>
+        </div>
+        <div class="bp-modal-body">${body}</div>
+        <div class="bp-modal-actions"><button class="bp-modal-ok" onclick="bpV51Close()">OK</button></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    p.firstLoginDone=true;
+    p.lastLoginAt=new Date().toISOString();
+    try{
+      if(typeof save==="function") save();
+      if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
+    }catch(e){}
+
+    window.bpLoginJustSucceeded=false;
+    return true;
+  }
+
+  window.bpV51Close=function(){
+    const el=document.getElementById("bpV51LoginModal");
+    if(el) el.remove();
+  };
+
+  window.bpV51Go=function(tabId){
+    bpV51Close();
+    const btn=document.getElementById(tabId==="bets"?"navBets":tabId==="scores"?"navScores":"");
+    if(typeof tab==="function") tab(tabId,btn||undefined);
+  };
+
+  // Neutralise les anciens modules de notification : seul V51 décide.
+  [
+    "bpV40ShowLoginMessage",
+    "bpShowLoginOnboarding",
+    "bpV36ShowLoginOnboarding",
+    "showFirstLoginOnboarding",
+    "showReturningLoginMessage",
+    "bpSmartLoginMessage"
+  ].forEach(name=>{
+    window[name]=function(){ return false; };
+  });
+
+  const oldLogin=window.loginWithCode;
+  if(typeof oldLogin==="function" && !oldLogin.__bpV51Wrapped){
+    window.loginWithCode=function(){
+      window.bpSuppressLoginNotifications=false;
+      const code=String(document.getElementById("loginCode")?.value||"").trim();
+      const result=oldLogin.apply(this,arguments);
+      if(result && code!=="1573"){
+        window.bpLoginJustSucceeded=true;
+        setTimeout(showCleanLoginMessage,700);
+      }else{
+        window.bpLoginJustSucceeded=false;
+      }
+      return result;
+    };
+    window.loginWithCode.__bpV51Wrapped=true;
+  }
+
+  const oldLogout=window.logout;
+  if(typeof oldLogout==="function" && !oldLogout.__bpV51Wrapped){
+    window.logout=function(){
+      window.bpSuppressLoginNotifications=true;
+      window.bpLoginJustSucceeded=false;
+      closeLoginModals();
+      bpV51Close();
+      const r=oldLogout.apply(this,arguments);
+      setTimeout(closeLoginModals,100);
+      setTimeout(closeLoginModals,500);
+      return r;
+    };
+    window.logout.__bpV51Wrapped=true;
+  }
+
+  // Si le login screen est visible, aucune popup ne doit rester.
+  setInterval(()=>{
+    const login=document.getElementById("loginScreen");
+    const visible=login && getComputedStyle(login).display!=="none" && login.offsetParent!==null;
+    if(visible || !isAuthedUser()){
+      if(!window.bpLoginJustSucceeded){
+        closeLoginModals();
+        bpV51Close();
+      }
+    }
+  },500);
+})();
+</script>
+
+
+<script>
+/* V52 — Normalisation pronostics : Admin/BDD vers vue joueur */
+(function(){
+  function norm(s){ return String(s||"").trim().toLowerCase(); }
+
+  function playerAliases(p){
+    return [p.name,p.pseudo,p.displayName,p.fullName]
+      .filter(Boolean)
+      .map(norm);
+  }
+
+  function resolvePlayerForBet(b){
+    const bp=norm(b.player || b.playerName || b.user || b.username);
+    if(!bp) return null;
+
+    return (state.players||[]).find(p=>{
+      const aliases=playerAliases(p);
+      if(aliases.includes(bp)) return true;
+      // matching souple pour anciens libellés type "Hassan" vs "Hassan El Bakkali"
+      return aliases.some(a => a && (a.includes(bp) || bp.includes(a)));
+    }) || null;
+  }
+
+  function resolveMatchForBet(b){
+    if(b.matchId){
+      const exact=(state.matches||[]).find(m=>String(m.id)===String(b.matchId));
+      if(exact) return exact;
+    }
+
+    const txt=norm(b.match || b.label || b.fixture || b.teams || b.matchName);
+    if(txt){
+      const m=(state.matches||[]).find(x => txt.includes(norm(x.teamA)) && txt.includes(norm(x.teamB)));
+      if(m) return m;
+    }
+
+    // Ancien format éventuel teamA/teamB dans le bet
+    if(b.teamA && b.teamB){
+      const a=norm(b.teamA), c=norm(b.teamB);
+      const m=(state.matches||[]).find(x => norm(x.teamA)===a && norm(x.teamB)===c);
+      if(m) return m;
+    }
+
+    return null;
+  }
+
+  function normalizeScoreFields(b){
+    if((b.scoreA===undefined || b.scoreB===undefined) && b.score){
+      const sp=String(b.score).split(/[-–]/);
+      if(sp.length>=2){ b.scoreA=Number(sp[0]); b.scoreB=Number(sp[1]); }
+    }
+    if((b.scoreA===undefined || b.scoreB===undefined) && b.predictedScore){
+      const sp=String(b.predictedScore).split(/[-–]/);
+      if(sp.length>=2){ b.scoreA=Number(sp[0]); b.scoreB=Number(sp[1]); }
+    }
+    b.scoreA=Number(b.scoreA??0);
+    b.scoreB=Number(b.scoreB??0);
+    b.score=`${b.scoreA} - ${b.scoreB}`;
+    b.stake=Number(b.stake ?? b.mise ?? 1);
+  }
+
+  function normalizeStatus(b){
+    const st=norm(b.status);
+    if(["validé","valide","validated","validée","validee"].includes(st)) b.status="VALIDATED";
+    else if(["draft","brouillon"].includes(st)) b.status="DRAFT";
+  }
+
+  window.bpV52NormalizeBets = function(){
+    if(!state || !Array.isArray(state.bets)) return;
+
+    let changed=false;
+    state.bets.forEach(b=>{
+      const before=JSON.stringify({p:b.player,m:b.matchId,s:b.status,a:b.scoreA,c:b.scoreB,st:b.stake});
+
+      const p=resolvePlayerForBet(b);
+      if(p) b.player=p.name;
+
+      const m=resolveMatchForBet(b);
+      if(m) {
+        b.matchId=m.id;
+        if(!b.day) b.day=m.day;
+      }
+
+      normalizeScoreFields(b);
+      normalizeStatus(b);
+
+      if(!b.prediction && typeof outcomeFromScore==="function"){
+        b.prediction=outcomeFromScore(b.scoreA,b.scoreB);
+      }
+      if(!b.predictedOutcome) b.predictedOutcome=b.prediction;
+
+      const after=JSON.stringify({p:b.player,m:b.matchId,s:b.status,a:b.scoreA,c:b.scoreB,st:b.stake});
+      if(before!==after) changed=true;
+    });
+
+    if(changed){
+      try{
+        localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+        if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
+      }catch(e){}
+    }
+  };
+
+  // Remplace player() par une version qui ne retombe pas sur Sandrine si un user est connecté.
+  window.player = function(){
+    if(window.currentRole==="user" && window.currentUserIndex!==null && state.players && state.players[window.currentUserIndex]){
+      return state.players[window.currentUserIndex];
+    }
+    const sel=document.getElementById("activePlayer");
+    const idx=sel ? Number(sel.value||0) : 0;
+    return (state.players||[])[idx] || (state.players||[])[0];
+  };
+
+  // Patch renderBets : normaliser avant rendu
+  const oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==="function" && !oldRenderBets.__bpV52Wrapped){
+    window.renderBets=function(){
+      window.bpV52NormalizeBets();
+      const r=oldRenderBets.apply(this,arguments);
+      setTimeout(window.bpV52ApplyCurrentBetCards,80);
+      return r;
+    };
+    window.renderBets.__bpV52Wrapped=true;
+  }
+
+  function setVal(el,v){
+    if(!el) return;
+    el.value=String(v);
+  }
+
+  window.bpV52ApplyCurrentBetCards=function(){
+    if(window.currentRole==="admin") return;
+    const p=window.player();
+    if(!p) return;
+    const day=typeof currentPronoDay==="function" ? Number(currentPronoDay()) : Number(state.currentDay||1);
+
+    document.querySelectorAll("#betRows .bet-card").forEach(card=>{
+      const id=String(card.id||"").replace("betCard_","");
+      if(!id) return;
+      const b=(state.bets||[]).find(x=>Number(x.day)===day && String(x.matchId)===id && norm(x.player)===norm(p.name));
+      if(!b) return;
+
+      setVal(card.querySelector(".scoreA"),b.scoreA);
+      setVal(card.querySelector(".scoreB"),b.scoreB);
+      setVal(card.querySelector(".stake"),b.stake);
+
+      const badge=card.querySelector(".bet-title .badge");
+      const status=card.querySelector(".bet-status");
+      const btn=[...card.querySelectorAll("button")].find(x=>/valider|modifier|validée/i.test(x.textContent||""));
+
+      if(b.status==="VALIDATED"){
+        if(badge){ badge.textContent="✅ Validée"; badge.className="badge ok"; }
+        if(status){ status.innerHTML=b.validatedAt ? "Validée le "+new Date(b.validatedAt).toLocaleString("fr-FR") : "Validée"; }
+        if(btn){ btn.textContent="✏️ Modifier la mise"; btn.classList.add("editBtn"); }
+      }
+
+      const pred=card.querySelector(".prediction-derived b");
+      const match=(state.matches||[]).find(m=>String(m.id)===id);
+      if(pred && match){
+        pred.textContent=b.scoreA>b.scoreB ? match.teamA : b.scoreB>b.scoreA ? match.teamB : "Nul";
+      }
+    });
+  };
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV52Wrapped){
+    window.renderAll=function(){
+      window.bpV52NormalizeBets();
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(window.bpV52ApplyCurrentBetCards,150);
+      setTimeout(window.bpV52ApplyCurrentBetCards,600);
+      return r;
+    };
+    window.renderAll.__bpV52Wrapped=true;
+  }
+
+  window.bpV52AuditHassan=function(){
+    window.bpV52NormalizeBets();
+    const p=(state.players||[]).find(x=>String(x.code||"")==="4533" || /hassan/i.test(String(x.name||"")));
+    if(!p){ alert("Hassan/code 4533 introuvable"); return; }
+    const bets=(state.bets||[]).filter(b=>norm(b.player)===norm(p.name));
+    alert(`Audit Hassan\nNom: ${p.name}\nPseudo: ${p.pseudo||""}\nCode: ${p.code}\nPronostics liés: ${bets.length}\n\n`+
+      bets.slice(0,12).map(b=>`J${b.day} ${b.matchId} ${b.scoreA}-${b.scoreB} mise ${b.stake} ${b.status}`).join("\n"));
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(()=>{ window.bpV52NormalizeBets(); window.bpV52ApplyCurrentBetCards(); },600);
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV52AuditPanel")){
+      backup.insertAdjacentHTML("afterbegin",`
+        <div id="bpV52AuditPanel" class="card" style="border-color:rgba(250,204,21,.45)">
+          <h2>🧭 Audit mapping pronostics</h2>
+          <div class="muted">Normalise les pronostics Admin/BDD vers la vue joueur.</div>
+          <button class="action secondary" onclick="bpV52AuditHassan()">Auditer mapping Hassan / 4533</button>
+          <button class="action" onclick="bpV52NormalizeBets(); renderAll(); alert('Pronostics normalisés.')">Normaliser maintenant</button>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
+
+<script>
+/* V53 — Fix Valider la mise */
+(function(){
+  function getCurrentPlayerSafe(){
+    if(window.currentRole==="user" && window.currentUserIndex!==null && state.players && state.players[window.currentUserIndex]){
+      return state.players[window.currentUserIndex];
+    }
+    if(typeof player==="function") return player();
+    const sel=document.getElementById("activePlayer");
+    return (state.players||[])[Number(sel?.value||0)] || null;
+  }
+
+  function getCurrentDaySafe(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
+  }
+
+  function dayAvailableSafe(day){
+    if(typeof pronoDayIsAvailable==="function") return pronoDayIsAvailable(day);
+    if(typeof isDayClosed==="function") return !isDayClosed(day);
+    return true;
+  }
+
+  function scoreTextSafe(a,b){
+    if(typeof scoreText==="function") return scoreText(a,b);
+    return `${a} - ${b}`;
+  }
+
+  function outcomeSafe(a,b){
+    if(typeof outcomeFromScore==="function") return outcomeFromScore(a,b);
+    return a>b ? "A" : b>a ? "B" : "N";
+  }
+
+  function getBetFormDataSafe(matchId){
+    const scoreA=Number(document.querySelector(`.scoreA[data-match="${matchId}"]`)?.value ?? 0);
+    const scoreB=Number(document.querySelector(`.scoreB[data-match="${matchId}"]`)?.value ?? 0);
+    const stake=Number(document.querySelector(`.stake[data-match="${matchId}"]`)?.value ?? 1);
+    const prediction=outcomeSafe(scoreA,scoreB);
+    return {prediction,predictedOutcome:prediction,scoreA,scoreB,score:scoreTextSafe(scoreA,scoreB),stake};
+  }
+
+  function upsertBetSafe(matchId,data,status){
+    const p=getCurrentPlayerSafe();
+    const day=getCurrentDaySafe();
+    if(!p) throw new Error("Joueur introuvable.");
+    state.bets=Array.isArray(state.bets)?state.bets:[];
+    state.bets=state.bets.filter(b=>!(Number(b.day)===Number(day) && String(b.matchId)===String(matchId) && String(b.player)===String(p.name)));
+    state.bets.push({
+      day,
+      matchId:String(matchId),
+      player:p.name,
+      ...data,
+      status,
+      validatedAt:status==="VALIDATED"?new Date().toISOString():null
+    });
+  }
+
+  function saveEverywhere(){
+    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){ console.warn(e); }
+    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){ console.warn(e); }
+  }
+
+  function updateCardNow(matchId){
+    const card=document.getElementById(`betCard_${matchId}`);
+    if(!card) return;
+    const badge=card.querySelector(".bet-title .badge");
+    if(badge){ badge.textContent="✅ Validée"; badge.className="badge ok"; }
+    const status=card.querySelector(".bet-status");
+    if(status) status.innerHTML="Validée le "+new Date().toLocaleString("fr-FR");
+    const btn=[...card.querySelectorAll("button")].find(b=>/valider/i.test(b.textContent||""));
+    if(btn){
+      btn.textContent="✏️ Modifier la mise";
+      btn.classList.add("editBtn");
+      btn.onclick=function(){ if(typeof editBet==="function") editBet(matchId); };
+    }
+  }
+
+  window.validateSingleBet = async function(matchId){
+    try{
+      const day=getCurrentDaySafe();
+      if(!dayAvailableSafe(day)){
+        if(typeof bpAlert==="function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
+        alert("Mise non disponible sur cette journée.");
+        return false;
+      }
+
+      const p=getCurrentPlayerSafe();
+      const m=(state.matches||[]).find(x=>String(x.id)===String(matchId));
+      if(!p || !m){
+        alert("Impossible de valider : joueur ou match introuvable.");
+        return false;
+      }
+
+      const data=getBetFormDataSafe(matchId);
+      const label=data.prediction==="A"?m.teamA:data.prediction==="B"?m.teamB:"Nul";
+
+      let ok=true;
+      if(typeof bpConfirmBet==="function"){
+        try{
+          ok=await bpConfirmBet({
+            match:`${m.teamA} vs ${m.teamB}`,
+            result:label,
+            score:data.score,
+            stake:data.stake
+          });
+        }catch(e){
+          console.warn("bpConfirmBet KO, fallback confirm",e);
+          ok=confirm(`Confirmer la mise ?\n\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nRésultat : ${label}\nMise : ${data.stake} FID`);
+        }
+      }else{
+        ok=confirm(`Confirmer la mise ?\n\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nRésultat : ${label}\nMise : ${data.stake} FID`);
+      }
+      if(!ok) return false;
+
+      upsertBetSafe(matchId,data,"VALIDATED");
+
+      try{ if(typeof log==="function") log(p.name,`Mise validée ${matchId}`,0); }catch(e){}
+
+      saveEverywhere();
+      updateCardNow(matchId);
+
+      setTimeout(()=>{
+        if(typeof renderAll==="function") renderAll();
+        if(typeof bpV52ApplyCurrentBetCards==="function") bpV52ApplyCurrentBetCards();
+        if(typeof bpV50SyncUserBetsView==="function") bpV50SyncUserBetsView();
+      },150);
+
+      if(typeof bpAlert==="function"){
+        setTimeout(()=>bpAlert("Mise validée et sauvegardée.",{icon:"✅"}),250);
+      }
+
+      return true;
+    }catch(e){
+      console.error(e);
+      alert("Erreur validation mise : "+(e.message||e));
+      return false;
+    }
+  };
+
+  // Réattache les boutons qui auraient gardé un ancien handler.
+  window.bpV53PatchValidateButtons=function(){
+    document.querySelectorAll("#betRows .bet-card").forEach(card=>{
+      const id=String(card.id||"").replace("betCard_","");
+      const btn=[...card.querySelectorAll("button")].find(b=>/valider la mise/i.test(b.textContent||""));
+      if(btn && id){
+        btn.onclick=function(){ return window.validateSingleBet(id); };
+      }
+    });
+  };
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV53Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(window.bpV53PatchValidateButtons,200);
+      return r;
+    };
+    window.renderAll.__bpV53Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    setTimeout(window.bpV53PatchValidateButtons,800);
+    setInterval(window.bpV53PatchValidateButtons,1500);
+  });
+})();
+</script>
+
+
+<script>
+/* V54 — Sauvegarde Supabase fiable des pronostics */
 (function(){
   const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
-  let cloudLock = false;
-  let pendingReason = null;
 
-  function clone(x){ return JSON.parse(JSON.stringify(x || {})); }
-  function iso(){ return new Date().toISOString(); }
-  function norm(v){ return String(v ?? "").trim(); }
-
-  function client(){
+  function getSb(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
       throw new Error("Supabase non configuré.");
     }
     return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
   }
 
-  function playerKey(p){
-    return norm(p?.code) || norm(p?.name).toLowerCase() || norm(p?.pseudo).toLowerCase();
-  }
+  function clone(x){ return JSON.parse(JSON.stringify(x || {})); }
 
-  function betKey(b){
-    return `${Number(b.day)}|${norm(b.matchId)}|${norm(b.player)}`;
-  }
-
-  function settlementKey(x){
-    return `${Number(x.day)}|${norm(x.matchId)}|${norm(x.player)}`;
-  }
-
-  function mergePlayers(localPlayers, cloudPlayers){
-    const map = new Map();
-
-    (cloudPlayers || []).forEach(p => {
-      const k = playerKey(p);
-      if(k) map.set(k, clone(p));
-    });
-
-    (localPlayers || []).forEach(lp => {
-      const k = playerKey(lp);
-      if(!k) return;
-      const cp = map.get(k) || {};
-      const merged = {...cp, ...clone(lp)};
-
-      // Questions secrètes : ne jamais les perdre.
-      const cpSec = cp.secrets && Object.keys(cp.secrets || {}).length ? cp.secrets : null;
-      const lpSec = lp.secrets && Object.keys(lp.secrets || {}).length ? lp.secrets : null;
-      if(cpSec && !lpSec) merged.secrets = cpSec;
-      if(lpSec) merged.secrets = lpSec;
-
-      // Ne jamais effacer pseudo/avatar avec valeur vide.
-      if(!merged.pseudo && cp.pseudo) merged.pseudo = cp.pseudo;
-      if(!merged.avatar && cp.avatar) merged.avatar = cp.avatar;
-
-      map.set(k, merged);
-    });
-
-    return [...map.values()].filter(Boolean);
-  }
-
-  function mergeBets(localBets, cloudBets){
-    const map = new Map();
-
-    (cloudBets || []).forEach(b => map.set(betKey(b), clone(b)));
-
-    (localBets || []).forEach(lb => {
-      const k = betKey(lb);
-      const cb = map.get(k) || {};
-      const merged = {...cb, ...clone(lb)};
-
-      // Un VALIDATED cloud ne doit jamais être rétrogradé par un vieux brouillon local.
-      if(String(cb.status).toUpperCase() === "VALIDATED" && String(lb.status).toUpperCase() !== "VALIDATED"){
-        merged.status = "VALIDATED";
-        merged.validatedAt = cb.validatedAt || merged.validatedAt;
-      }
-
-      // Normalisation score/mise
-      merged.scoreA = Number(merged.scoreA ?? 0);
-      merged.scoreB = Number(merged.scoreB ?? 0);
-      merged.score = merged.score || `${merged.scoreA} - ${merged.scoreB}`;
-      merged.stake = Number(merged.stake ?? merged.mise ?? 1);
-      merged.status = String(merged.status || "DRAFT").toUpperCase();
-
-      map.set(k, merged);
-    });
-
-    return [...map.values()];
-  }
-
-  function mergeMatches(localMatches, cloudMatches){
-    const map = new Map();
-
-    (cloudMatches || []).forEach(m => map.set(norm(m.id), clone(m)));
-
-    (localMatches || []).forEach(lm => {
-      const k = norm(lm.id);
-      if(!k) return;
-      const cm = map.get(k) || {};
-      const merged = {...cm, ...clone(lm)};
-
-      // Scores officiels : conserver cloud si local vide.
-      if((lm.scoreA === undefined || lm.scoreA === null || lm.scoreA === "") && cm.scoreA !== undefined) merged.scoreA = cm.scoreA;
-      if((lm.scoreB === undefined || lm.scoreB === null || lm.scoreB === "") && cm.scoreB !== undefined) merged.scoreB = cm.scoreB;
-
-      map.set(k, merged);
-    });
-
-    return [...map.values()];
-  }
-
-  function mergeSettlements(localRows, cloudRows){
-    const map = new Map();
-    (cloudRows || []).forEach(x => map.set(settlementKey(x), clone(x)));
-    (localRows || []).forEach(x => map.set(settlementKey(x), clone(x)));
-    return [...map.values()];
-  }
-
-  function mergeState(localState, cloudState){
-    const local = clone(localState);
-    const cloud = clone(cloudState);
-    const merged = {...cloud, ...local};
-
-    merged.players = mergePlayers(local.players, cloud.players);
-    merged.bets = mergeBets(local.bets, cloud.bets);
-    merged.matches = mergeMatches(local.matches, cloud.matches);
-    merged.settlementDetails = mergeSettlements(local.settlementDetails, cloud.settlementDetails);
-
-    merged.closedDays = {...(cloud.closedDays || {}), ...(local.closedDays || {})};
-    merged.adminForcedOpenDays = {...(cloud.adminForcedOpenDays || {}), ...(local.adminForcedOpenDays || {})};
-
-    // Logs: concat simple dédupliquée
-    const logs = [...(cloud.logs || []), ...(local.logs || [])];
-    const seen = new Set();
-    merged.logs = logs.filter(l => {
-      const k = JSON.stringify(l);
-      if(seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-
-    merged.lastSavedAt = iso();
-    merged.schemaVersion = "v59";
-    return merged;
-  }
-
-  async function fetchCloud(){
-    const {data,error} = await client().from("app_state").select("data,updated_at").eq("id", APP_ID).maybeSingle();
-    if(error) throw error;
-    return data?.data ? clone(data.data) : {};
-  }
-
-  async function writeCloud(nextState){
-    const {error} = await client().from("app_state").upsert({
-      id: APP_ID,
-      data: nextState,
-      updated_at: iso()
-    }, {onConflict:"id"});
-    if(error) throw error;
-    return true;
-  }
-
-  async function saveCloud(reason="auto"){
-    if(cloudLock){
-      pendingReason = reason;
-      return false;
-    }
-
-    cloudLock = true;
-    try{
-      const cloud = await fetchCloud();
-      const merged = mergeState(state, cloud);
-      await writeCloud(merged);
-
-      state = merged;
-
-      // Pas de cache local comme source de vérité. Session uniquement.
-      try{
-        localStorage.removeItem("bp_wc_dev");
-        sessionStorage.setItem("bp_wc_session_state", JSON.stringify(state));
-      }catch(e){}
-
-      const box = document.getElementById("bpV59Status");
-      if(box) box.innerHTML = `<span class="good">Sauvegarde Supabase OK — ${reason} — ${new Date().toLocaleTimeString("fr-FR")}</span>`;
-
-      return true;
-    }catch(e){
-      console.error("[V59 saveCloud]", e);
-      const box = document.getElementById("bpV59Status");
-      if(box) box.innerHTML = `<span class="bad">Erreur Supabase — ${e.message || e}</span>`;
-      throw e;
-    }finally{
-      cloudLock = false;
-      const p = pendingReason;
-      pendingReason = null;
-      if(p) setTimeout(() => saveCloud(p).catch(console.error), 400);
-    }
-  }
-
-  async function loadCloud(showAlert=false){
-    try{
-      const cloud = await fetchCloud();
-      if(!cloud || !Array.isArray(cloud.players) || !cloud.players.length){
-        if(showAlert) alert("Aucune donnée Supabase valide trouvée.");
-        return false;
-      }
-
-      state = cloud;
-      try{
-        localStorage.removeItem("bp_wc_dev");
-        sessionStorage.setItem("bp_wc_session_state", JSON.stringify(state));
-      }catch(e){}
-
-      if(typeof repairState === "function") repairState();
-      if(typeof renderAll === "function" && window.bpIsAuthenticated === true) renderAll();
-
-      const box = document.getElementById("bpV59Status");
-      if(box) box.innerHTML = `<span class="good">Chargement Supabase OK — ${new Date().toLocaleTimeString("fr-FR")}</span>`;
-      if(showAlert) alert("Données Supabase chargées.");
-      return true;
-    }catch(e){
-      console.error("[V59 loadCloud]", e);
-      if(showAlert) alert("Erreur chargement Supabase : " + (e.message || e));
-      return false;
-    }
-  }
-
-  function currentPlayer(){
-    if(window.currentRole === "user" && window.currentUserIndex !== null && state.players?.[window.currentUserIndex]){
+  function curPlayer(){
+    if(window.currentRole==="user" && window.currentUserIndex!==null && state.players?.[window.currentUserIndex]){
       return state.players[window.currentUserIndex];
     }
-    if(typeof player === "function") return player();
-    return null;
+    if(typeof player==="function") return player();
+    const sel=document.getElementById("activePlayer");
+    return (state.players||[])[Number(sel?.value||0)] || null;
   }
 
-  function currentDay(){
-    if(typeof currentPronoDay === "function") return Number(currentPronoDay());
-    return Number(state.currentDay || 1);
+  function curDay(){
+    if(typeof currentPronoDay==="function") return Number(currentPronoDay());
+    return Number(state.currentDay||1);
   }
 
-  function dayAvailable(day){
-    if(typeof pronoDayIsAvailable === "function") return pronoDayIsAvailable(day);
-    if(typeof isDayClosed === "function") return !isDayClosed(day);
+  function dayOk(day){
+    if(typeof pronoDayIsAvailable==="function") return pronoDayIsAvailable(day);
+    if(typeof isDayClosed==="function") return !isDayClosed(day);
     return true;
   }
 
   function outcome(a,b){
-    if(typeof outcomeFromScore === "function") return outcomeFromScore(a,b);
-    return a > b ? "A" : b > a ? "B" : "N";
+    if(typeof outcomeFromScore==="function") return outcomeFromScore(a,b);
+    return a>b?"A":b>a?"B":"N";
   }
 
-  function readBetForm(matchId){
-    const scoreA = Number(document.querySelector(`.scoreA[data-match="${matchId}"]`)?.value ?? 0);
-    const scoreB = Number(document.querySelector(`.scoreB[data-match="${matchId}"]`)?.value ?? 0);
-    const stake = Number(document.querySelector(`.stake[data-match="${matchId}"]`)?.value ?? 1);
-    const prediction = outcome(scoreA, scoreB);
-    return {prediction, predictedOutcome:prediction, scoreA, scoreB, score:`${scoreA} - ${scoreB}`, stake};
+  function form(matchId){
+    const scoreA=Number(document.querySelector(`.scoreA[data-match="${matchId}"]`)?.value ?? 0);
+    const scoreB=Number(document.querySelector(`.scoreB[data-match="${matchId}"]`)?.value ?? 0);
+    const stake=Number(document.querySelector(`.stake[data-match="${matchId}"]`)?.value ?? 1);
+    const prediction=outcome(scoreA,scoreB);
+    return {prediction,predictedOutcome:prediction,scoreA,scoreB,score:`${scoreA} - ${scoreB}`,stake};
   }
 
-  function upsertBet(matchId, data, status){
-    const p = currentPlayer();
-    const day = currentDay();
+  function betKey(b){
+    return `${Number(b.day)}|${String(b.matchId)}|${String(b.player)}`;
+  }
+
+  function mergeState(local, cloud){
+    const merged={...clone(local),...clone(cloud)};
+
+    const players=new Map();
+    (local.players||[]).forEach(p=>players.set(String(p.code||p.name),clone(p)));
+    (cloud.players||[]).forEach(p=>{
+      const k=String(p.code||p.name);
+      players.set(k,{...(players.get(k)||{}),...clone(p)});
+    });
+    merged.players=[...players.values()];
+
+    const bets=new Map();
+    (cloud.bets||[]).forEach(b=>bets.set(betKey(b),clone(b)));
+    (local.bets||[]).forEach(b=>bets.set(betKey(b),clone(b)));
+    merged.bets=[...bets.values()];
+
+    if(!Array.isArray(merged.matches) || !merged.matches.length) merged.matches=clone(local.matches||[]);
+    return merged;
+  }
+
+  async function fetchCloud(){
+    const {data,error}=await getSb().from("app_state").select("data").eq("id",APP_ID).maybeSingle();
+    if(error) throw error;
+    return data?.data ? clone(data.data) : {};
+  }
+
+  async function writeCloud(st){
+    const {error}=await getSb().from("app_state").upsert({
+      id:APP_ID,
+      data:st,
+      updated_at:new Date().toISOString()
+    },{onConflict:"id"});
+    if(error) throw error;
+    return true;
+  }
+
+  async function saveCloudMerged(){
+    const cloud=await fetchCloud();
+    const merged=mergeState(state,cloud);
+    await writeCloud(merged);
+    state=merged;
+    localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+    return state;
+  }
+
+  function upsertLocalBet(matchId,data,status){
+    const p=curPlayer();
+    const day=curDay();
     if(!p) throw new Error("Joueur introuvable.");
-    state.bets = Array.isArray(state.bets) ? state.bets : [];
-
-    state.bets = state.bets.filter(b => !(
-      Number(b.day) === Number(day) &&
-      norm(b.matchId) === norm(matchId) &&
-      norm(b.player) === norm(p.name)
+    state.bets=Array.isArray(state.bets)?state.bets:[];
+    state.bets=state.bets.filter(b=>!(
+      Number(b.day)===Number(day) &&
+      String(b.matchId)===String(matchId) &&
+      String(b.player)===String(p.name)
     ));
-
-    state.bets.push({
+    const bet={
       day,
-      matchId: norm(matchId),
-      player: p.name,
+      matchId:String(matchId),
+      player:p.name,
       ...data,
       status,
-      validatedAt: status === "VALIDATED" ? iso() : null,
-      savedAt: iso()
-    });
+      validatedAt:status==="VALIDATED"?new Date().toISOString():null,
+      savedAt:new Date().toISOString()
+    };
+    state.bets.push(bet);
+    return bet;
   }
 
-  function setCardStatus(matchId, ok, message){
-    const card = document.getElementById(`betCard_${matchId}`);
+  function setStatus(matchId,html){
+    const card=document.getElementById(`betCard_${matchId}`);
+    const status=card?.querySelector(".bet-status");
+    if(status) status.innerHTML=html;
+  }
+
+  function markValidated(matchId){
+    const card=document.getElementById(`betCard_${matchId}`);
     if(!card) return;
-
-    const status = card.querySelector(".bet-status");
-    if(status){
-      status.innerHTML = ok
-        ? '<span class="good">Validée et sauvegardée Supabase</span>'
-        : `<span class="bad">❌ ${message || "Non sauvegardé"}</span>`;
-    }
-
-    if(ok){
-      const badge = card.querySelector(".bet-title .badge");
-      if(badge){ badge.textContent = "✅ Validée"; badge.className = "badge ok"; }
-
-      const btn = [...card.querySelectorAll("button")].find(b => /valider/i.test(b.textContent || ""));
-      if(btn){
-        btn.textContent = "✏️ Modifier la mise";
-        btn.classList.add("editBtn");
-        btn.onclick = function(){ if(typeof editBet === "function") editBet(matchId); };
-      }
+    const badge=card.querySelector(".bet-title .badge");
+    if(badge){ badge.textContent="✅ Validée"; badge.className="badge ok"; }
+    setStatus(matchId,'<span class="good">Validée et sauvegardée Supabase</span>');
+    const btn=[...card.querySelectorAll("button")].find(b=>/valider/i.test(b.textContent||""));
+    if(btn){
+      btn.textContent="✏️ Modifier la mise";
+      btn.classList.add("editBtn");
+      btn.onclick=function(){ if(typeof editBet==="function") editBet(matchId); };
     }
   }
 
   window.validateSingleBet = async function(matchId){
     try{
-      const day = currentDay();
-      if(!dayAvailable(day)){
-        if(typeof bpAlert === "function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
+      const day=curDay();
+      if(!dayOk(day)){
+        if(typeof bpAlert==="function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
         alert("Mise non disponible sur cette journée.");
         return false;
       }
 
-      const p = currentPlayer();
-      const m = (state.matches || []).find(x => norm(x.id) === norm(matchId));
+      const p=curPlayer();
+      const m=(state.matches||[]).find(x=>String(x.id)===String(matchId));
       if(!p || !m) throw new Error("Joueur ou match introuvable.");
 
-      const data = readBetForm(matchId);
-      const label = data.prediction === "A" ? m.teamA : data.prediction === "B" ? m.teamB : "Nul";
+      const data=form(matchId);
+      const label=data.prediction==="A"?m.teamA:data.prediction==="B"?m.teamB:"Nul";
 
-      let ok = true;
-      if(typeof bpConfirmBet === "function"){
+      let ok=true;
+      if(typeof bpConfirmBet==="function"){
         try{
-          ok = await bpConfirmBet({match:`${m.teamA} vs ${m.teamB}`, result:label, score:data.score, stake:data.stake});
+          ok=await bpConfirmBet({match:`${m.teamA} vs ${m.teamB}`,result:label,score:data.score,stake:data.stake});
         }catch(e){
-          ok = confirm(`Confirmer la mise ?\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nMise : ${data.stake} FID`);
+          ok=confirm(`Confirmer la mise ?\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nMise : ${data.stake} FID`);
         }
       }else{
-        ok = confirm(`Confirmer la mise ?\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nMise : ${data.stake} FID`);
+        ok=confirm(`Confirmer la mise ?\n${m.teamA} vs ${m.teamB}\nScore : ${data.score}\nMise : ${data.stake} FID`);
       }
       if(!ok) return false;
 
-      setCardStatus(matchId, false, "Sauvegarde Supabase en cours...");
-      upsertBet(matchId, data, "VALIDATED");
-      await saveCloud("mise-validée");
-      setCardStatus(matchId, true);
+      setStatus(matchId,'<span class="warn">⏳ Sauvegarde Supabase en cours...</span>');
+      upsertLocalBet(matchId,data,"VALIDATED");
+      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
 
-      if(typeof bpAlert === "function") await bpAlert("Mise validée et sauvegardée dans Supabase.",{icon:"✅"});
+      await saveCloudMerged();
+
+      try{ if(typeof log==="function") log(p.name,`Mise validée ${matchId}`,0); }catch(e){}
+      markValidated(matchId);
+
+      if(typeof bpV52ApplyCurrentBetCards==="function") bpV52ApplyCurrentBetCards();
+      if(typeof bpV50SyncUserBetsView==="function") bpV50SyncUserBetsView();
+
+      if(typeof bpAlert==="function") await bpAlert("Mise validée et sauvegardée dans Supabase.",{icon:"✅"});
       return true;
     }catch(e){
-      console.error("[V59 validateSingleBet]", e);
-      setCardStatus(matchId, false, e.message || e);
-      alert("La mise n'a PAS été sauvegardée dans Supabase : " + (e.message || e));
+      console.error(e);
+      setStatus(matchId,`<span class="bad">❌ Non sauvegardé : ${e.message||e}</span>`);
+      alert("La mise n'a PAS été sauvegardée dans Supabase : "+(e.message||e));
       return false;
     }
   };
 
   window.saveBets = async function(){
     try{
-      const day = currentDay();
-      if(!dayAvailable(day)){
-        if(typeof bpAlert === "function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
+      const day=curDay();
+      if(!dayOk(day)){
+        if(typeof bpAlert==="function") return bpAlert("Mise non disponible sur cette journée.",{icon:"🔒"});
         alert("Mise non disponible sur cette journée.");
         return false;
       }
-
-      const p = currentPlayer();
+      const p=curPlayer();
       if(!p) throw new Error("Joueur introuvable.");
 
-      document.querySelectorAll(".scoreA").forEach(sel => {
-        const matchId = sel.dataset.match;
-        const existing = (state.bets || []).find(b =>
-          Number(b.day) === Number(day) &&
-          norm(b.matchId) === norm(matchId) &&
-          norm(b.player) === norm(p.name)
+      document.querySelectorAll(".scoreA").forEach(sel=>{
+        const matchId=sel.dataset.match;
+        const existing=(state.bets||[]).find(b=>
+          Number(b.day)===Number(day) &&
+          String(b.matchId)===String(matchId) &&
+          String(b.player)===String(p.name)
         );
-        if(existing?.status === "VALIDATED") return;
-        upsertBet(matchId, readBetForm(matchId), "DRAFT");
+        if(existing?.status==="VALIDATED") return;
+        upsertLocalBet(matchId,form(matchId),"DRAFT");
       });
 
-      await saveCloud("brouillons");
-      if(typeof renderAll === "function") renderAll();
-      if(typeof bpAlert === "function") await bpAlert("Brouillons sauvegardés dans Supabase.",{icon:"✅"});
+      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+      await saveCloudMerged();
+
+      if(typeof renderAll==="function") renderAll();
+      if(typeof bpAlert==="function") await bpAlert("Brouillons sauvegardés dans Supabase.",{icon:"✅"});
       return true;
     }catch(e){
-      console.error("[V59 saveBets]", e);
-      alert("Erreur sauvegarde Supabase des brouillons : " + (e.message || e));
+      console.error(e);
+      alert("Erreur sauvegarde Supabase des brouillons : "+(e.message||e));
       return false;
     }
   };
 
-  function wrapCritical(name, reason){
-    const fn = window[name];
-    if(typeof fn !== "function" || fn.__bpV59Wrapped) return;
-
-    window[name] = async function(){
-      const result = fn.apply(this, arguments);
-      if(result && typeof result.then === "function") await result;
-      await saveCloud(reason || name);
-      return result;
-    };
-    window[name].__bpV59Wrapped = true;
-  }
-
-  // Exports publics
-  window.bpV59LoadCloud = loadCloud;
-  window.bpV59SaveCloud = saveCloud;
-  window.bpForceLoadSupabase = async function(){
-    const ok = await loadCloud(true);
-    if(ok) setTimeout(() => location.reload(), 500);
-    return ok;
-  };
-  window.bpCloudLoad = async function(showAlert=true){ return loadCloud(showAlert); };
-  window.bpCloudSave = async function(showAlert=true){
+  window.bpV54AuditCloudBets = async function(code){
     try{
-      await saveCloud("manuel");
-      if(showAlert) alert("Sauvegarde Supabase OK.");
-      return true;
+      const cloud=await fetchCloud();
+      const p=(cloud.players||[]).find(x=>String(x.code||"")===String(code||"4533"));
+      if(!p){ alert("Joueur introuvable dans Supabase pour code "+(code||"4533")); return; }
+      const bets=(cloud.bets||[]).filter(b=>String(b.player)===String(p.name));
+      alert(`Audit Supabase\nJoueur: ${p.name}\nCode: ${p.code}\nPronostics cloud: ${bets.length}\n\n`+
+        bets.slice(0,20).map(b=>`J${b.day} ${b.matchId} ${b.scoreA}-${b.scoreB} mise ${b.stake} ${b.status}`).join("\n"));
     }catch(e){
-      if(showAlert) alert("Erreur sauvegarde Supabase : " + (e.message || e));
-      return false;
-    }
-  };
-  window.bpCloudSaveDebounced = function(){
-    clearTimeout(window.__bpV59Timer);
-    window.__bpV59Timer = setTimeout(() => saveCloud("auto").catch(console.error), 700);
-  };
-
-  window.bpV59Audit = async function(){
-    try{
-      const cloud = await fetchCloud();
-      const players = cloud.players?.length || 0;
-      const bets = cloud.bets?.length || 0;
-      const validated = (cloud.bets || []).filter(b => String(b.status).toUpperCase() === "VALIDATED").length;
-      const hassan = (cloud.players || []).find(p => norm(p.code) === "4533" || /hassan/i.test(norm(p.name)));
-      const hassanBets = hassan ? (cloud.bets || []).filter(b => norm(b.player) === norm(hassan.name)).length : 0;
-      const hassanSecrets = hassan?.secrets ? JSON.stringify(hassan.secrets, null, 2) : "absentes";
-
-      alert(`Audit Supabase V59\n\nJoueurs : ${players}\nPronostics : ${bets}\nValidés : ${validated}\nHassan : ${hassan ? "trouvé" : "non trouvé"}\nPronos Hassan : ${hassanBets}\nQuestions Hassan : ${hassanSecrets}`);
-    }catch(e){
-      alert("Audit impossible : " + (e.message || e));
+      alert("Audit cloud impossible : "+(e.message||e));
     }
   };
 
-  // Cache local : jamais source de vérité.
-  document.addEventListener("DOMContentLoaded", () => {
-    try{
-      localStorage.removeItem("bp_wc_dev");
-      localStorage.removeItem("bp_last_daily_backup");
-    }catch(e){}
-
-    setTimeout(() => loadCloud(false), 250);
-
-    setTimeout(() => {
-      ["sealSecrets","openBets","closeBets","previousDay","nextDay","bpV55OpenSpecificDay","calculateGains","saveAdmin","workflowNextStep","saveScores"].forEach(name => wrapCritical(name, name));
-    }, 900);
-
-    const backup = document.getElementById("backup");
-    if(backup && !document.getElementById("bpV59Panel")){
+  document.addEventListener("DOMContentLoaded",()=>{
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV54CloudAuditPanel")){
       backup.insertAdjacentHTML("afterbegin",`
-        <div id="bpV59Panel" class="card" style="border-color:rgba(34,197,94,.45)">
-          <h2>☁️ Supabase — Persistance V59</h2>
-          <div class="muted">
-            Supabase est la source de vérité. Le cache local est vidé au chargement. Les mises, scores, journées, questions secrètes et gains sont sauvegardés en BDD.
-          </div>
-          <button class="action" onclick="bpV59LoadCloud(true)">Charger Supabase</button>
-          <button class="action secondary" onclick="bpV59SaveCloud('manuel')">Forcer sauvegarde Supabase</button>
-          <button class="action secondary" onclick="bpV59Audit()">Auditer Supabase</button>
-          <div id="bpV59Status" class="help">Statut : prêt.</div>
+        <div id="bpV54CloudAuditPanel" class="card" style="border-color:rgba(34,197,94,.45)">
+          <h2>✅ Sauvegarde fiable Supabase</h2>
+          <div class="muted">Les mises validées sont écrites directement dans Supabase. Aucun statut validé n'est affiché si l’écriture cloud échoue.</div>
+          <button class="action secondary" onclick="bpV54AuditCloudBets('4533')">Auditer cloud Hassan / 4533</button>
         </div>
       `);
     }
   });
+})();
+</script>
 
-  // Score official inputs : sauvegarde cloud après changement.
-  document.addEventListener("change", e => {
-    if(e.target && /^s[ab]_/.test(e.target.id || "")){
-      window.bpCloudSaveDebounced();
-    }
-  }, true);
 
-  // Anti-cache de version.
-  try{
-    const previous = sessionStorage.getItem("bp_app_version");
-    if(previous && previous !== window.BP_APP_VERSION){
-      sessionStorage.clear();
+<script>
+/* V55 — Ouverture manuelle Admin prioritaire */
+(function(){
+  function maxDay(){
+    if(typeof maxCalendarDay === "function") return maxCalendarDay();
+    return Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
+  }
+
+  function saveNow(){
+    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
+    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
+  }
+
+  function forceOpenDay(day){
+    day=Number(day||state.currentDay||1);
+    if(!state.closedDays) state.closedDays={};
+    if(!state.adminForcedOpenDays) state.adminForcedOpenDays={};
+
+    const max=maxDay();
+    for(let d=1; d<=max; d++){
+      state.closedDays[d] = Number(d)!==day;
+      state.adminForcedOpenDays[d] = false;
     }
-    sessionStorage.setItem("bp_app_version", window.BP_APP_VERSION);
-  }catch(e){}
+
+    state.closedDays[day]=false;
+    state.adminForcedOpenDays[day]=true;
+    state.currentDay=day;
+    if(typeof calendarDayDisplayed!=="undefined") calendarDayDisplayed=day;
+    if(typeof pronoDayDisplayed!=="undefined") pronoDayDisplayed=day;
+    state.closed=false;
+    saveNow();
+  }
+
+  // Override isDayClosed so manually opened day is never considered closed.
+  const oldIsDayClosed = window.isDayClosed;
+  if(typeof oldIsDayClosed === "function" && !oldIsDayClosed.__bpV55Wrapped){
+    window.isDayClosed = function(day){
+      if(state.adminForcedOpenDays && state.adminForcedOpenDays[Number(day)] === true) return false;
+      return oldIsDayClosed.apply(this, arguments);
+    };
+    window.isDayClosed.__bpV55Wrapped=true;
+  }
+
+  // Override onlyOpenDay to prefer admin forced day.
+  const oldOnlyOpenDay = window.onlyOpenDay;
+  if(typeof oldOnlyOpenDay === "function" && !oldOnlyOpenDay.__bpV55Wrapped){
+    window.onlyOpenDay = function(){
+      if(state.adminForcedOpenDays){
+        const forced=Object.entries(state.adminForcedOpenDays).find(([d,v])=>v===true);
+        if(forced) return Number(forced[0]);
+      }
+      return oldOnlyOpenDay.apply(this, arguments);
+    };
+    window.onlyOpenDay.__bpV55Wrapped=true;
+  }
+
+  // Override openBets: admin can reopen the currently displayed/current day, including J1.
+  window.openBets = async function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+      alert("Accès réservé à l’admin.");
+      return false;
+    }
+
+    const day=Number(state.currentDay||1);
+    const ok=confirm(`Ouvrir la journée ${day} ?\n\nCette journée sera ouverte aux mises et toutes les autres seront fermées.\nL’ouverture manuelle Admin prime sur la clôture automatique.`);
+    if(!ok) return false;
+
+    forceOpenDay(day);
+    try{ if(typeof log==="function") log("SYSTEM",`Journée ${day} ouverte manuellement par Admin`,0); }catch(e){}
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} ouverte.`);
+    return true;
+  };
+
+  // Override closeBets to remove forced-open flag.
+  const oldCloseBets = window.closeBets;
+  window.closeBets = async function(){
+    const day=Number(state.currentDay||1);
+    if(state.adminForcedOpenDays) state.adminForcedOpenDays[day]=false;
+    if(typeof setDayClosed==="function") setDayClosed(day,true);
+    else {
+      if(!state.closedDays) state.closedDays={};
+      state.closedDays[day]=true;
+      state.closed=true;
+    }
+    saveNow();
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} fermée. Les mises sont clôturées.`);
+    return true;
+  };
+
+  // Prevent auto-roll from reclosing a manually opened day.
+  const oldAutoRoll = window.bpV44AutoRollDay;
+  if(typeof oldAutoRoll === "function" && !oldAutoRoll.__bpV55Wrapped){
+    window.bpV44AutoRollDay = function(){
+      if(state.adminForcedOpenDays && Object.values(state.adminForcedOpenDays).some(Boolean)){
+        return false;
+      }
+      return oldAutoRoll.apply(this, arguments);
+    };
+    window.bpV44AutoRollDay.__bpV55Wrapped=true;
+  }
+
+  window.bpV55OpenSpecificDay = function(day){
+    if(window.currentRole!=="admin") return alert("Admin uniquement.");
+    state.currentDay=Number(day);
+    forceOpenDay(day);
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} ouverte.`);
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    const admin=document.getElementById("admin");
+    if(admin && !document.getElementById("bpV55OpenDayPanel")){
+      const max=maxDay();
+      admin.insertAdjacentHTML("afterbegin",`
+        <div id="bpV55OpenDayPanel" class="card" style="border-color:rgba(250,204,21,.45)">
+          <h2>🟢 Ouverture manuelle Admin</h2>
+          <div class="muted">Permet de rouvrir une journée, y compris J1. Cette ouverture prime sur la clôture automatique.</div>
+          <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;max-width:420px">
+            <label>Journée à ouvrir
+              <select id="bpV55DaySelect">${Array.from({length:max},(_,i)=>`<option value="${i+1}">Journée ${i+1}</option>`).join("")}</select>
+            </label>
+            <button class="action" onclick="bpV55OpenSpecificDay(document.getElementById('bpV55DaySelect').value)">Ouvrir</button>
+          </div>
+        </div>
+      `);
+    }
+  });
+})();
+</script>
+
+
+<script>
+/* V56 — Navigation journées Admin */
+(function(){
+  function saveLocal(){
+    try{
+      localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+    }catch(e){}
+  }
+
+  function setDisplayedAdminDay(day){
+    day = Number(day);
+    if(!day || day < 1) day = 1;
+
+    const max = typeof maxCalendarDay === "function"
+      ? maxCalendarDay()
+      : Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
+
+    if(day > max) day = max;
+
+    state.currentDay = day;
+    if(typeof calendarDayDisplayed !== "undefined") calendarDayDisplayed = day;
+    if(typeof pronoDayDisplayed !== "undefined") pronoDayDisplayed = day;
+    state.closed = typeof isDayClosed === "function" ? isDayClosed(day) : !!(state.closedDays && state.closedDays[day]);
+
+    saveLocal();
+
+    if(typeof renderAll === "function") renderAll();
+
+    // Reste sur l'onglet Admin après rendu.
+    setTimeout(()=>{
+      document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+      document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+      const admin=document.getElementById("admin");
+      const btn=document.getElementById("navAdmin");
+      if(admin) admin.classList.add("active");
+      if(btn) btn.classList.add("active");
+    },50);
+  }
+
+  window.previousDay = async function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+      alert("Accès réservé à l’admin.");
+      return false;
+    }
+    const day = Number(state.currentDay || 1);
+    if(day <= 1){
+      alert("Tu es déjà sur la journée 1.");
+      return false;
+    }
+    setDisplayedAdminDay(day - 1);
+    return true;
+  };
+
+  window.nextDay = async function(){
+    if(window.bpIsAuthenticated !== true || window.currentRole !== "admin"){
+      alert("Accès réservé à l’admin.");
+      return false;
+    }
+
+    const max = typeof maxCalendarDay === "function"
+      ? maxCalendarDay()
+      : Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
+
+    const day = Number(state.currentDay || 1);
+    if(day >= max){
+      alert("Dernière journée atteinte.");
+      return false;
+    }
+
+    // Navigation simple de consultation admin. N’ouvre pas automatiquement la journée.
+    setDisplayedAdminDay(day + 1);
+    return true;
+  };
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    // Sécurise les handlers si le rendu HTML a gardé d'anciens onclick.
+    setTimeout(()=>{
+      const prev=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée précédente"));
+      const next=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée suivante"));
+      if(prev) prev.onclick=window.previousDay;
+      if(next) next.onclick=window.nextDay;
+    },500);
+  });
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV56Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(()=>{
+        const prev=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée précédente"));
+        const next=[...document.querySelectorAll("button")].find(b=>(b.textContent||"").includes("Journée suivante"));
+        if(prev) prev.onclick=window.previousDay;
+        if(next) next.onclick=window.nextDay;
+      },80);
+      return r;
+    };
+    window.renderAll.__bpV56Wrapped=true;
+  }
+})();
+</script>
+
+
+
+<script>
+/* V60 — Persistance Supabase stable */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
+  let saveTimer=null;
+  let saving=false;
+
+  function clone(x){ return JSON.parse(JSON.stringify(x || {})); }
+  function n(v){ return String(v ?? "").trim(); }
+  function betKey(b){ return `${Number(b.day)}|${n(b.matchId)}|${n(b.player)}`; }
+  function playerKey(p){ return n(p?.code) || n(p?.name).toLowerCase() || n(p?.pseudo).toLowerCase(); }
+
+  function sb(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) throw new Error("Supabase non configuré");
+    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+  }
+
+  async function fetchCloud(){
+    const res = await sb().from("app_state").select("data").eq("id", APP_ID).maybeSingle();
+    if(res.error) throw res.error;
+    return res.data && res.data.data ? clone(res.data.data) : {};
+  }
+
+  async function writeCloud(st){
+    const res = await sb().from("app_state").upsert({id:APP_ID,data:st,updated_at:new Date().toISOString()},{onConflict:"id"});
+    if(res.error) throw res.error;
+  }
+
+  function mergePlayers(local, cloud){
+    const map=new Map();
+    (cloud||[]).forEach(p=>{const k=playerKey(p); if(k) map.set(k,clone(p));});
+    (local||[]).forEach(lp=>{
+      const k=playerKey(lp); if(!k) return;
+      const cp=map.get(k)||{};
+      const m={...cp,...clone(lp)};
+      if(cp.secrets && Object.keys(cp.secrets||{}).length && (!lp.secrets || !Object.keys(lp.secrets||{}).length)) m.secrets=cp.secrets;
+      if(!m.avatar && cp.avatar) m.avatar=cp.avatar;
+      if(!m.pseudo && cp.pseudo) m.pseudo=cp.pseudo;
+      map.set(k,m);
+    });
+    return Array.from(map.values());
+  }
+
+  function mergeBets(local, cloud){
+    const map=new Map();
+    (cloud||[]).forEach(b=>map.set(betKey(b),clone(b)));
+    (local||[]).forEach(lb=>{
+      const k=betKey(lb);
+      const cb=map.get(k)||{};
+      const m={...cb,...clone(lb)};
+      if(String(cb.status).toUpperCase()==="VALIDATED" && String(lb.status).toUpperCase()!=="VALIDATED"){
+        m.status="VALIDATED";
+        m.validatedAt=cb.validatedAt||m.validatedAt;
+      }
+      map.set(k,m);
+    });
+    return Array.from(map.values());
+  }
+
+  function mergeMatches(local, cloud){
+    const map=new Map();
+    (cloud||[]).forEach(m=>map.set(String(m.id),clone(m)));
+    (local||[]).forEach(lm=>{
+      const cm=map.get(String(lm.id))||{};
+      const m={...cm,...clone(lm)};
+      if((lm.scoreA===undefined || lm.scoreA===null || lm.scoreA==="") && cm.scoreA!==undefined) m.scoreA=cm.scoreA;
+      if((lm.scoreB===undefined || lm.scoreB===null || lm.scoreB==="") && cm.scoreB!==undefined) m.scoreB=cm.scoreB;
+      map.set(String(lm.id),m);
+    });
+    return Array.from(map.values());
+  }
+
+  function mergeState(local, cloud){
+    const m={...clone(cloud),...clone(local)};
+    m.players=mergePlayers(local.players,cloud.players);
+    m.bets=mergeBets(local.bets,cloud.bets);
+    m.matches=mergeMatches(local.matches,cloud.matches);
+    m.closedDays={...(cloud.closedDays||{}),...(local.closedDays||{})};
+    m.adminForcedOpenDays={...(cloud.adminForcedOpenDays||{}),...(local.adminForcedOpenDays||{})};
+    m.settlementDetails=[...(cloud.settlementDetails||[]),...(local.settlementDetails||[])];
+    m.lastSavedAt=new Date().toISOString();
+    return m;
+  }
+
+  async function saveCloud(reason){
+    if(saving) return false;
+    saving=true;
+    try{
+      const cloud=await fetchCloud();
+      const merged=mergeState(state,cloud);
+      await writeCloud(merged);
+      state=merged;
+      try{sessionStorage.setItem("bp_wc_session_state",JSON.stringify(state));}catch(e){}
+      const box=document.getElementById("bpV60Status");
+      if(box) box.innerHTML='<span class="good">Supabase OK — '+(reason||"auto")+' — '+new Date().toLocaleTimeString("fr-FR")+'</span>';
+      return true;
+    }catch(e){
+      console.error(e);
+      const box=document.getElementById("bpV60Status");
+      if(box) box.innerHTML='<span class="bad">Erreur Supabase : '+(e.message||e)+'</span>';
+      throw e;
+    }finally{
+      saving=false;
+    }
+  }
+
+  async function loadCloud(showAlert){
+    try{
+      const cloud=await fetchCloud();
+      if(!cloud.players || !cloud.players.length){
+        if(showAlert) alert("Aucune donnée Supabase valide.");
+        return false;
+      }
+      state=cloud;
+      try{sessionStorage.setItem("bp_wc_session_state",JSON.stringify(state));}catch(e){}
+      if(typeof repairState==="function") repairState();
+      if(typeof renderAll==="function" && window.bpIsAuthenticated===true) renderAll();
+      if(showAlert) alert("Données Supabase chargées.");
+      return true;
+    }catch(e){
+      if(showAlert) alert("Erreur chargement Supabase : "+(e.message||e));
+      return false;
+    }
+  }
+
+  window.bpV60SaveCloud=saveCloud;
+  window.bpV60LoadCloud=loadCloud;
+  window.bpCloudSaveDebounced=function(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>saveCloud("auto").catch(console.error),600); };
+  window.bpCloudSave=async function(showAlert){ try{ await saveCloud("manuel"); if(showAlert!==false) alert("Sauvegarde Supabase OK."); return true; }catch(e){ if(showAlert!==false) alert("Erreur sauvegarde Supabase : "+(e.message||e)); return false; } };
+  window.bpCloudLoad=async function(showAlert){ return loadCloud(showAlert!==false); };
+  window.bpForceLoadSupabase=async function(){ const ok=await loadCloud(true); if(ok) setTimeout(()=>location.reload(),400); return ok; };
+
+  window.bpV60Audit=async function(){
+    try{
+      const cloud=await fetchCloud();
+      const players=cloud.players?.length||0;
+      const bets=cloud.bets?.length||0;
+      const validated=(cloud.bets||[]).filter(b=>String(b.status).toUpperCase()==="VALIDATED").length;
+      alert(`Audit Supabase V60\n\nJoueurs : ${players}\nPronostics : ${bets}\nValidés : ${validated}`);
+    }catch(e){ alert("Audit impossible : "+(e.message||e)); }
+  };
+
+  function currentPlayerSafe(){
+    if(window.currentRole==="user" && window.currentUserIndex!==null && state.players?.[window.currentUserIndex]) return state.players[window.currentUserIndex];
+    if(typeof player==="function") return player();
+    return null;
+  }
+  function currentDaySafe(){ return typeof currentPronoDay==="function" ? Number(currentPronoDay()) : Number(state.currentDay||1); }
+  function outcome(a,b){ return typeof outcomeFromScore==="function" ? outcomeFromScore(a,b) : (a>b?"A":b>a?"B":"N"); }
+  function readBet(matchId){
+    const scoreA=Number(document.querySelector(`.scoreA[data-match="${matchId}"]`)?.value ?? 0);
+    const scoreB=Number(document.querySelector(`.scoreB[data-match="${matchId}"]`)?.value ?? 0);
+    const stake=Number(document.querySelector(`.stake[data-match="${matchId}"]`)?.value ?? 1);
+    const prediction=outcome(scoreA,scoreB);
+    return {prediction,predictedOutcome:prediction,scoreA,scoreB,score:`${scoreA} - ${scoreB}`,stake};
+  }
+  function upsertBetLocal(matchId,data,status){
+    const p=currentPlayerSafe(); if(!p) throw new Error("Joueur introuvable");
+    const day=currentDaySafe();
+    state.bets=Array.isArray(state.bets)?state.bets:[];
+    state.bets=state.bets.filter(b=>!(Number(b.day)===day && String(b.matchId)===String(matchId) && String(b.player)===String(p.name)));
+    state.bets.push({day,matchId:String(matchId),player:p.name,...data,status,validatedAt:status==="VALIDATED"?new Date().toISOString():null,savedAt:new Date().toISOString()});
+  }
+
+  window.validateSingleBet=async function(matchId){
+    try{
+      upsertBetLocal(matchId,readBet(matchId),"VALIDATED");
+      await saveCloud("mise-validée");
+      if(typeof renderAll==="function") renderAll();
+      if(typeof bpAlert==="function") await bpAlert("Mise validée et sauvegardée dans Supabase.",{icon:"✅"});
+      return true;
+    }catch(e){
+      console.error(e);
+      alert("La mise n'a PAS été sauvegardée dans Supabase : "+(e.message||e));
+      return false;
+    }
+  };
+
+  const oldSave=window.save;
+  if(typeof oldSave==="function" && !oldSave.__bpV60Wrapped){
+    window.save=function(){ const r=oldSave.apply(this,arguments); window.bpCloudSaveDebounced(); return r; };
+    window.save.__bpV60Wrapped=true;
+  }
+
+  function wrapCritical(name,reason){
+    const fn=window[name];
+    if(typeof fn!=="function" || fn.__bpV60Wrapped) return;
+    window[name]=async function(){
+      const r=fn.apply(this,arguments);
+      if(r && typeof r.then==="function") await r;
+      await saveCloud(reason||name);
+      return r;
+    };
+    window[name].__bpV60Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",function(){
+    setTimeout(()=>loadCloud(false),300);
+    setTimeout(()=>["sealSecrets","openBets","closeBets","bpV55OpenSpecificDay","calculateGains","saveAdmin","saveScores"].forEach(n=>wrapCritical(n,n)),1000);
+    const backup=document.getElementById("backup");
+    if(backup && !document.getElementById("bpV60Panel")){
+      backup.insertAdjacentHTML("afterbegin",`
+        <div id="bpV60Panel" class="card" style="border-color:rgba(34,197,94,.45)">
+          <h2>☁️ Supabase — V60 stable</h2>
+          <div class="muted">Persistance simplifiée et compatible GitHub Pages.</div>
+          <button class="action" onclick="bpV60LoadCloud(true)">Charger Supabase</button>
+          <button class="action secondary" onclick="bpV60SaveCloud('manuel')">Forcer sauvegarde Supabase</button>
+          <button class="action secondary" onclick="bpV60Audit()">Auditer Supabase</button>
+          <div id="bpV60Status" class="help">Statut : prêt.</div>
+        </div>
+      `);
+    }
+  });
 })();
 </script>
 
