@@ -2128,6 +2128,15 @@ body.bp-user #navBackup{
 /* V61 — Synchro Supabase visible */
 #bpSyncPill{position:fixed;right:16px;bottom:16px;z-index:99999;padding:10px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(18,18,18,.94);color:#fff;font-weight:900;box-shadow:0 10px 28px rgba(0,0,0,.35);max-width:360px;font-size:13px}#bpSyncPill.ok{border-color:rgba(74,222,128,.45)}#bpSyncPill.warn{border-color:rgba(250,204,21,.45)}#bpSyncPill.bad{border-color:rgba(251,113,133,.55)}#bpSyncPill .muted{font-weight:700;font-size:11px}
 
+.fifa-team-link,.fifa-stadium-link{color:inherit;text-decoration:none}.fifa-team-link:hover,.fifa-stadium-link:hover{text-decoration:underline}.fifa-team-link{display:inline-flex;align-items:center;gap:5px}
+
+.fifa-team-link,.fifa-flag-link,.fifa-stadium-link{color:inherit;text-decoration:none}
+.fifa-team-link:hover,.fifa-flag-link:hover,.fifa-stadium-link:hover{text-decoration:underline}
+.fifa-team-link{display:inline-flex;align-items:center;gap:5px}
+.fifa-flag-link{display:inline-flex;align-items:center;justify-content:center}
+.fifa-team-link img.flag,.fifa-flag-link img.flag{display:inline-block!important;width:22px!important;height:auto!important;vertical-align:middle!important;opacity:1!important}
+.flag-wrap .fifa-flag-link img.flag{width:58px!important;border-radius:6px}
+
 </style>
 
 <!--
@@ -4862,10 +4871,35 @@ function migrateCalendar(){
   save();renderAll();alert("Calendrier réparé sans modifier les utilisateurs.");
 }
 function save(){localStorage.setItem("bp_wc_dev",JSON.stringify(state));}
-function f(team){let c=flagCodes[team];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${team}`:`<span class="muted">${team}</span>`;}
+
+const BP_FIFA_BASE="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026";
+const BP_CITY_TZ={"Mexico City":"America/Mexico_City","Guadalajara":"America/Mexico_City","Monterrey":"America/Mexico_City","Toronto":"America/Toronto","New York/New Jersey":"America/New_York","Philadelphia":"America/New_York","Boston":"America/New_York","Miami":"America/New_York","Atlanta":"America/New_York","Houston":"America/Chicago","Dallas":"America/Chicago","Kansas City":"America/Chicago","Los Angeles":"America/Los_Angeles","San Francisco Bay Area":"America/Los_Angeles","Seattle":"America/Los_Angeles","Vancouver":"America/Vancouver"};
+const BP_STADIUM_SLUG_BY_CITY={"Mexico City":"mexico-city","Guadalajara":"guadalajara","Monterrey":"monterrey","Toronto":"toronto","New York/New Jersey":"new-york-new-jersey","Philadelphia":"philadelphia","Boston":"boston","Miami":"miami","Atlanta":"atlanta","Houston":"houston","Dallas":"dallas","Kansas City":"kansas-city","Los Angeles":"los-angeles","San Francisco Bay Area":"san-francisco-bay-area","Seattle":"seattle","Vancouver":"vancouver"};
+const BP_TEAM_SLUGS={"Mexico":"mexico","South Africa":"south-africa","Korea Republic":"korea-republic","Czechia":"czechia","Canada":"canada","Bosnia and Herzegovina":"bosnia-and-herzegovina","United States":"united-states","Paraguay":"paraguay","Haiti":"haiti","Scotland":"scotland","Australia":"australia","Türkiye":"turkiye","Brazil":"brazil","Morocco":"morocco","Qatar":"qatar","Switzerland":"switzerland","Côte d’Ivoire":"cote-divoire","Côte d'Ivoire":"cote-divoire","Ecuador":"ecuador","Germany":"germany","Curaçao":"curacao","Netherlands":"netherlands","Japan":"japan","Sweden":"sweden","Tunisia":"tunisia","Saudi Arabia":"saudi-arabia","Uruguay":"uruguay","Spain":"spain","Cabo Verde":"cabo-verde","Iran":"iran","New Zealand":"new-zealand","Belgium":"belgium","Egypt":"egypt","France":"france","Senegal":"senegal","Iraq":"iraq","Norway":"norway","Argentina":"argentina","Algeria":"algeria","Austria":"austria","Jordan":"jordan","Ghana":"ghana","Panama":"panama","England":"england","Croatia":"croatia","Portugal":"portugal","Congo DR":"congo-dr","Uzbekistan":"uzbekistan","Colombia":"colombia"};
+function bpEsc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));}
+function bpSlug(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[’']/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");}
+function bpTeamUrl(team){return `${BP_FIFA_BASE}/teams/${BP_TEAM_SLUGS[team]||bpSlug(team)}`;}
+function bpStadiumUrl(m){return `${BP_FIFA_BASE}/stadiums/${BP_STADIUM_SLUG_BY_CITY[m.city]||bpSlug(m.city||m.venue)}`;}
+function bpParseDate(dateStr){if(!dateStr)return null;if(/^\d{4}-\d{2}-\d{2}/.test(dateStr))return dateStr.slice(0,10);const months={janvier:"01",février:"02",fevrier:"02",mars:"03",avril:"04",mai:"05",juin:"06",juillet:"07",août:"08",aout:"08",septembre:"09",octobre:"10",novembre:"11",décembre:"12",decembre:"12"};const m=String(dateStr).toLowerCase().match(/(\d{1,2})\s+([a-zéûôîàèùç]+)\s+(\d{4})/i);return m?`${m[3]}-${months[m[2]]||"01"}-${String(Number(m[1])).padStart(2,"0")}`:null;}
+function bpOffsetMinutes(date,tz){const parts=new Intl.DateTimeFormat("en-US",{timeZone:tz,timeZoneName:"shortOffset",hour:"2-digit"}).formatToParts(date);const val=parts.find(p=>p.type==="timeZoneName")?.value||"GMT+0";const m=val.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/);return m?(m[1]==="-"?-1:1)*(Number(m[2])*60+Number(m[3]||0)):0;}
+function bpLocalToUTC(isoDate,time,tz){const tm=String(time||"00:00").match(/(\d{1,2})[:hH](\d{2})?/);if(!isoDate||!tm)return null;const guess=new Date(Date.UTC(Number(isoDate.slice(0,4)),Number(isoDate.slice(5,7))-1,Number(isoDate.slice(8,10)),Number(tm[1]),Number(tm[2]||0)));return new Date(guess.getTime()-bpOffsetMinutes(guess,tz)*60000);}
+function bpParisFromMatch(m){const utc=bpLocalToUTC(bpParseDate(m.date),m.time,BP_CITY_TZ[m.city]||"America/New_York");if(!utc)return{date:m.date||"",time:m.time||""};const p=new Intl.DateTimeFormat("fr-FR",{timeZone:"Europe/Paris",day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(utc).reduce((a,x)=>{a[x.type]=x.value;return a;},{});return{date:`${Number(p.day)} ${p.month} ${p.year}`,time:`${p.hour}:${p.minute}`};}
+
+function f(team){
+  let c=flagCodes[team];
+  const label=bpEsc(team);
+  const img=c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="${label}" loading="lazy" referrerpolicy="no-referrer">`:"";
+  const content=c?`${img}${label}`:`<span class="muted">${label}</span>`;
+  return `<a href="${bpTeamUrl(team)}" target="_blank" rel="noopener noreferrer" class="fifa-team-link" title="FIFA — ${label}">${content}</a>`;
+}
+
 function flagOnly(team){
   let c=flagCodes[team];
-  return c ? `<img class="flag" src="https://flagcdn.com/${c}.svg" alt="${team}">` : `<span>${String(team||"").slice(0,2)}</span>`;
+  const label=bpEsc(team);
+  const content=c
+    ? `<img class="flag" src="https://flagcdn.com/${c}.svg" alt="${label}" loading="lazy" referrerpolicy="no-referrer">`
+    : `<span>${bpEsc(String(team||"").slice(0,2))}</span>`;
+  return `<a href="${bpTeamUrl(team)}" target="_blank" rel="noopener noreferrer" class="fifa-flag-link" title="FIFA — ${label}">${content}</a>`;
 }
 
 function scoreOptions(selected=0){
@@ -5401,20 +5435,20 @@ function betOutcomeHTML(b,m){
 
 
 function matchInfoHTML(m){
-  const venue = [m.venue, m.city].filter(Boolean).join(" · ");
-  const paris = m.time ? `${m.time} — heure de Paris` : "Heure à confirmer";
-  const parts = [
-    m.date ? `📅 ${m.date}` : "",
-    paris ? `🕒 ${paris}` : "",
-    venue ? `🏟️ ${venue}` : "",
-    m.group ? `🏷️ ${m.group}` : ""
+  const venue=[m.venue,m.city].filter(Boolean).join(" · ");
+  const paris=bpParisFromMatch(m);
+  const stadiumLink=venue?`<a href="${bpStadiumUrl(m)}" target="_blank" rel="noopener noreferrer" class="fifa-stadium-link" title="FIFA — ${bpEsc(venue)}">${bpEsc(venue)}</a>`:"";
+  const parts=[
+    paris.date?`📅 ${bpEsc(paris.date)}`:"",
+    paris.time?`🕒 ${bpEsc(paris.time)} — heure de Paris`:"",
+    stadiumLink?`🏟️ ${stadiumLink}`:"",
+    m.group?`🏷️ ${bpEsc(m.group)}`:""
   ].filter(Boolean).join('<span class="match-info-sep">•</span>');
   return `<div class="match-info-panel">
-    <div>${parts || "Informations du match à confirmer"}</div>
-    <div>Dernier face-à-face officiel : <b>à compléter</b></div>
+    <div>${parts||"Informations du match à confirmer"}</div>
+    <div class="muted">Heure convertie depuis l’heure locale du stade · liens FIFA cliquables</div>
   </div>`;
 }
-
 
 const H2H_DATA = {
   "Mexico|South Africa": {
@@ -10736,145 +10770,8 @@ function bpModalClose(){
 </script>
 
 
-<script>
-/* V62 — Heures Paris + liens FIFA stades/équipes */
-(function(){
-  const FIFA_BASE="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026";
 
-  const CITY_TZ={
-    "Mexico City":"America/Mexico_City",
-    "Guadalajara":"America/Mexico_City",
-    "Monterrey":"America/Mexico_City",
-    "Toronto":"America/Toronto",
-    "New York/New Jersey":"America/New_York",
-    "Philadelphia":"America/New_York",
-    "Boston":"America/New_York",
-    "Miami":"America/New_York",
-    "Atlanta":"America/New_York",
-    "Houston":"America/Chicago",
-    "Dallas":"America/Chicago",
-    "Kansas City":"America/Chicago",
-    "Los Angeles":"America/Los_Angeles",
-    "San Francisco Bay Area":"America/Los_Angeles",
-    "Seattle":"America/Los_Angeles",
-    "Vancouver":"America/Vancouver"
-  };
+<script>/* V63 — Remplacement direct FIFA links */</script>
 
-  const STADIUM_SLUG_BY_CITY={
-    "Mexico City":"mexico-city",
-    "Guadalajara":"guadalajara",
-    "Monterrey":"monterrey",
-    "Toronto":"toronto",
-    "New York/New Jersey":"new-york-new-jersey",
-    "Philadelphia":"philadelphia",
-    "Boston":"boston",
-    "Miami":"miami",
-    "Atlanta":"atlanta",
-    "Houston":"houston",
-    "Dallas":"dallas",
-    "Kansas City":"kansas-city",
-    "Los Angeles":"los-angeles",
-    "San Francisco Bay Area":"san-francisco-bay-area",
-    "Seattle":"seattle",
-    "Vancouver":"vancouver"
-  };
-
-  const TEAM_SLUGS={
-    "Mexico":"mexico","South Africa":"south-africa","Korea Republic":"korea-republic","Czechia":"czechia",
-    "Canada":"canada","Bosnia and Herzegovina":"bosnia-and-herzegovina","United States":"united-states","Paraguay":"paraguay",
-    "Haiti":"haiti","Scotland":"scotland","Australia":"australia","Türkiye":"turkiye","Brazil":"brazil","Morocco":"morocco","Qatar":"qatar","Switzerland":"switzerland",
-    "Côte d’Ivoire":"cote-divoire","Côte d'Ivoire":"cote-divoire","Ecuador":"ecuador","Germany":"germany","Curaçao":"curacao","Curacao":"curacao",
-    "Netherlands":"netherlands","Japan":"japan","Sweden":"sweden","Tunisia":"tunisia","Saudi Arabia":"saudi-arabia","Uruguay":"uruguay","Spain":"spain","Cabo Verde":"cabo-verde",
-    "Iran":"iran","New Zealand":"new-zealand","Belgium":"belgium","Egypt":"egypt","France":"france","Senegal":"senegal","Iraq":"iraq","Norway":"norway",
-    "Argentina":"argentina","Algeria":"algeria","Austria":"austria","Jordan":"jordan","Ghana":"ghana","Panama":"panama","England":"england","Croatia":"croatia",
-    "Portugal":"portugal","Congo DR":"congo-dr","Uzbekistan":"uzbekistan","Colombia":"colombia"
-  };
-
-  function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));}
-  function teamUrl(team){return `${FIFA_BASE}/teams/${TEAM_SLUGS[team]||slugify(team)}`;}
-  function stadiumUrl(m){return `${FIFA_BASE}/stadiums/${STADIUM_SLUG_BY_CITY[m.city]||slugify(m.city||m.venue)}`;}
-  function slugify(s){
-    return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()
-      .replace(/[’']/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-  }
-
-  function parseFrenchDate(dateStr){
-    if(!dateStr) return null;
-    if(/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return dateStr.slice(0,10);
-    const months={janvier:"01",février:"02",fevrier:"02",mars:"03",avril:"04",mai:"05",juin:"06",juillet:"07",août:"08",aout:"08",septembre:"09",octobre:"10",novembre:"11",décembre:"12",decembre:"12"};
-    const m=String(dateStr).toLowerCase().match(/(\d{1,2})\s+([a-zéûôîàèùç]+)\s+(\d{4})/i);
-    if(!m) return null;
-    return `${m[3]}-${months[m[2]]||"01"}-${String(Number(m[1])).padStart(2,"0")}`;
-  }
-
-  function tzOffsetMinutes(date,tz){
-    const parts=new Intl.DateTimeFormat("en-US",{timeZone:tz,timeZoneName:"shortOffset",hour:"2-digit"}).formatToParts(date);
-    const val=parts.find(p=>p.type==="timeZoneName")?.value||"GMT+0";
-    const m=val.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/);
-    if(!m) return 0;
-    const sign=m[1]==="-"?-1:1;
-    return sign*(Number(m[2])*60+Number(m[3]||0));
-  }
-
-  function localToUTC(isoDate,time,tz){
-    const tm=String(time||"00:00").match(/(\d{1,2})[:hH](\d{2})?/);
-    if(!isoDate||!tm) return null;
-    const h=Number(tm[1]), mi=Number(tm[2]||0);
-    let guess=new Date(Date.UTC(Number(isoDate.slice(0,4)),Number(isoDate.slice(5,7))-1,Number(isoDate.slice(8,10)),h,mi));
-    const off=tzOffsetMinutes(guess,tz);
-    return new Date(guess.getTime()-off*60000);
-  }
-
-  function parisFromMatch(m){
-    const iso=parseFrenchDate(m.date);
-    const tz=CITY_TZ[m.city]||"America/New_York";
-    const utc=localToUTC(iso,m.time,tz);
-    if(!utc) return {date:m.date||"",time:m.time||""};
-    const p=new Intl.DateTimeFormat("fr-FR",{timeZone:"Europe/Paris",day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(utc).reduce((a,x)=>{a[x.type]=x.value;return a;},{});
-    return {date:`${Number(p.day)} ${p.month} ${p.year}`,time:`${p.hour}:${p.minute}`};
-  }
-
-  window.bpV62ParisFromMatch=parisFromMatch;
-  window.bpV62TeamUrl=teamUrl;
-  window.bpV62StadiumUrl=stadiumUrl;
-
-  window.f=function(team){
-    const c=window.flagCodes?.[team];
-    const inner=c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="${esc(team)}">${esc(team)}`:`<span class="muted">${esc(team)}</span>`;
-    return `<a href="${teamUrl(team)}" target="_blank" rel="noopener noreferrer" class="fifa-team-link" title="FIFA — ${esc(team)}">${inner}</a>`;
-  };
-
-  window.flagOnly=function(team){
-    const c=window.flagCodes?.[team];
-    const inner=c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="${esc(team)}">`:`<span>${esc(String(team||"").slice(0,2))}</span>`;
-    return `<a href="${teamUrl(team)}" target="_blank" rel="noopener noreferrer" class="fifa-team-link" title="FIFA — ${esc(team)}">${inner}</a>`;
-  };
-
-  window.matchInfoHTML=function(m){
-    const venue=[m.venue,m.city].filter(Boolean).join(" · ");
-    const paris=parisFromMatch(m);
-    const stadiumLink=venue?`<a href="${stadiumUrl(m)}" target="_blank" rel="noopener noreferrer" class="fifa-stadium-link" title="FIFA — ${esc(venue)}">${esc(venue)}</a>`:"";
-    const parts=[
-      paris.date?`📅 ${esc(paris.date)}`:"",
-      paris.time?`🕒 ${esc(paris.time)} — heure de Paris`:"",
-      stadiumLink?`🏟️ ${stadiumLink}`:"",
-      m.group?`🏷️ ${esc(m.group)}`:""
-    ].filter(Boolean).join('<span class="match-info-sep">•</span>');
-    return `<div class="match-info-panel">
-      <div>${parts||"Informations du match à confirmer"}</div>
-      <div class="muted">Heure convertie en Europe/Paris depuis l’heure locale du stade. Liens vers les pages FIFA.</div>
-    </div>`;
-  };
-
-  // Ajoute un style léger pour les liens FIFA.
-  const st=document.createElement("style");
-  st.textContent=`.fifa-team-link,.fifa-stadium-link{color:inherit;text-decoration:none}.fifa-team-link:hover,.fifa-stadium-link:hover{text-decoration:underline}.fifa-team-link{display:inline-flex;align-items:center;gap:5px}`;
-  document.head.appendChild(st);
-
-  document.addEventListener("DOMContentLoaded",()=>{
-    setTimeout(()=>{ if(typeof renderAll==="function" && window.bpIsAuthenticated===true) renderAll(); },500);
-  });
-})();
-</script>
-
+<script>/* V64 — Restore flags with FIFA links */</script>
 </body></html>
