@@ -2134,6 +2134,29 @@ body.bp-user #navBackup{
 .flag-wrap{cursor:pointer}
 .flag-wrap img.flag{display:inline-block!important;opacity:1!important;visibility:visible!important}
 
+
+/* V66 — liens FIFA cliquables */
+.bp-fifa-link{
+  color:inherit!important;
+  text-decoration:none!important;
+  cursor:pointer!important;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+.bp-fifa-link:hover{text-decoration:underline!important}
+.flag-wrap .bp-fifa-link{
+  width:100%;
+  height:100%;
+  justify-content:center;
+}
+.flag-wrap .bp-fifa-link img.flag{
+  display:inline-block!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:none!important;
+}
+
 </style>
 
 <!--
@@ -10814,6 +10837,105 @@ function bpModalClose(){
   }
 
   document.addEventListener("DOMContentLoaded",()=>setTimeout(enhanceTeamClicks,800));
+})();
+</script>
+
+
+<script>
+/* V66 — Liens FIFA sans casser drapeaux */
+(function(){
+  function esc(s){
+    return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+  }
+
+  function getTeamUrl(team){
+    if(typeof bpTeamUrl==="function") return bpTeamUrl(team);
+    const slug=String(team||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[’']/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    return "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams/"+slug;
+  }
+
+  function wrapHtml(html, team){
+    return `<a class="bp-fifa-link" href="${getTeamUrl(team)}" target="_blank" rel="noopener noreferrer" title="FIFA — ${esc(team)}">${html}</a>`;
+  }
+
+  function restoreFunctionLinks(){
+    // Remplace f() et flagOnly() en gardant exactement les mêmes images qu'avant, mais dans un <a>.
+    window.f=function(team){
+      let c=window.flagCodes?.[team];
+      const content=c
+        ? `<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${esc(team)}`
+        : `<span class="muted">${esc(team)}</span>`;
+      return wrapHtml(content,team);
+    };
+
+    window.flagOnly=function(team){
+      let c=window.flagCodes?.[team];
+      const content=c
+        ? `<img class="flag" src="https://flagcdn.com/${c}.svg" alt="${esc(team)}">`
+        : `<span>${esc(String(team||"").slice(0,2))}</span>`;
+      return wrapHtml(content,team);
+    };
+  }
+
+  function addFallbackLinksToExistingDom(){
+    if(!window.state || !Array.isArray(state.matches)) return;
+
+    document.querySelectorAll(".bet-card").forEach(card=>{
+      const id=String(card.id||"").replace("betCard_","");
+      const m=(state.matches||[]).find(x=>String(x.id)===id);
+      if(!m) return;
+
+      const wraps=card.querySelectorAll(".flag-wrap");
+      [[wraps[0],m.teamA],[wraps[1],m.teamB]].forEach(([wrap,team])=>{
+        if(!wrap || wrap.querySelector("a.bp-fifa-link")) return;
+        const inner=wrap.innerHTML;
+        wrap.innerHTML=wrapHtml(inner,team);
+      });
+
+      // Rendre les drapeaux du titre cliquables si pas déjà dans un lien.
+      const h3=card.querySelector(".bet-title h3");
+      if(h3 && !h3.querySelector("a.bp-fifa-link") && !h3.dataset.bpV66Title){
+        h3.dataset.bpV66Title="1";
+        h3.style.cursor="pointer";
+        h3.title=`FIFA — ${m.teamA}`;
+        h3.addEventListener("click",e=>{
+          if(e.target.closest("a")) return;
+          window.open(getTeamUrl(m.teamA),"_blank","noopener,noreferrer");
+        });
+      }
+    });
+  }
+
+  restoreFunctionLinks();
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV66Wrapped){
+    window.renderAll=function(){
+      restoreFunctionLinks();
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(addFallbackLinksToExistingDom,80);
+      setTimeout(addFallbackLinksToExistingDom,400);
+      return r;
+    };
+    window.renderAll.__bpV66Wrapped=true;
+  }
+
+  const oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==="function" && !oldRenderBets.__bpV66Wrapped){
+    window.renderBets=function(){
+      restoreFunctionLinks();
+      const r=oldRenderBets.apply(this,arguments);
+      setTimeout(addFallbackLinksToExistingDom,80);
+      return r;
+    };
+    window.renderBets.__bpV66Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    restoreFunctionLinks();
+    setTimeout(addFallbackLinksToExistingDom,500);
+    setTimeout(addFallbackLinksToExistingDom,1200);
+  });
 })();
 </script>
 
