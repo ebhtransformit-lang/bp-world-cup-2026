@@ -2124,6 +2124,10 @@ body.bp-user #navBackup{
   display:none!important;
 }
 
+
+/* V61 — Synchro Supabase visible */
+#bpSyncPill{position:fixed;right:16px;bottom:16px;z-index:99999;padding:10px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(18,18,18,.94);color:#fff;font-weight:900;box-shadow:0 10px 28px rgba(0,0,0,.35);max-width:360px;font-size:13px}#bpSyncPill.ok{border-color:rgba(74,222,128,.45)}#bpSyncPill.warn{border-color:rgba(250,204,21,.45)}#bpSyncPill.bad{border-color:rgba(251,113,133,.55)}#bpSyncPill .muted{font-weight:700;font-size:11px}
+
 </style>
 
 <!--
@@ -10593,6 +10597,141 @@ function bpModalClose(){
       `);
     }
   });
+})();
+</script>
+
+
+<script>
+/* V61 — Synchro Supabase automatique */
+(function(){
+  const APP_ID=window.BP_SUPABASE_APP_ID||"bp-world-cup-2026";
+  let busy=false,timer=null,queued=null;
+  const clone=x=>JSON.parse(JSON.stringify(x||{}));
+  const bk=b=>`${Number(b.day)}|${String(b.matchId)}|${String(b.player)}`;
+  const pk=p=>String(p?.code||p?.name||p?.pseudo||"").trim().toLowerCase();
+
+  function pill(cls,msg){
+    let el=document.getElementById("bpSyncPill");
+    if(!el){el=document.createElement("div");el.id="bpSyncPill";document.body.appendChild(el);}
+    el.className=cls; el.innerHTML=msg;
+  }
+  function sb(){
+    if(!window.supabase||!window.BP_SUPABASE_URL||!window.BP_SUPABASE_ANON_KEY) throw new Error("Supabase non configuré");
+    return window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
+  }
+  async function fetchCloud(){
+    const {data,error}=await sb().from("app_state").select("data").eq("id",APP_ID).maybeSingle();
+    if(error) throw error;
+    return data?.data?clone(data.data):{};
+  }
+  async function writeCloud(st){
+    const {error}=await sb().from("app_state").upsert({id:APP_ID,data:st,updated_at:new Date().toISOString()},{onConflict:"id"});
+    if(error) throw error;
+  }
+  function mergePlayers(local,cloud){
+    const m=new Map();
+    (cloud||[]).forEach(p=>{const k=pk(p);if(k)m.set(k,clone(p));});
+    (local||[]).forEach(lp=>{
+      const k=pk(lp); if(!k)return;
+      const cp=m.get(k)||{}, v={...cp,...clone(lp)};
+      if(cp.secrets&&Object.keys(cp.secrets||{}).length&&(!lp.secrets||!Object.keys(lp.secrets||{}).length)) v.secrets=cp.secrets;
+      if(!v.avatar&&cp.avatar)v.avatar=cp.avatar;
+      if(!v.pseudo&&cp.pseudo)v.pseudo=cp.pseudo;
+      m.set(k,v);
+    });
+    return [...m.values()];
+  }
+  function mergeBets(local,cloud){
+    const m=new Map();
+    (cloud||[]).forEach(b=>m.set(bk(b),clone(b)));
+    (local||[]).forEach(lb=>{
+      const cb=m.get(bk(lb))||{}, v={...cb,...clone(lb)};
+      if(String(cb.status).toUpperCase()==="VALIDATED"&&String(lb.status).toUpperCase()!=="VALIDATED"){
+        v.status="VALIDATED"; v.validatedAt=cb.validatedAt||v.validatedAt;
+      }
+      m.set(bk(lb),v);
+    });
+    return [...m.values()];
+  }
+  function mergeMatches(local,cloud){
+    const m=new Map();
+    (cloud||[]).forEach(x=>m.set(String(x.id),clone(x)));
+    (local||[]).forEach(lx=>{
+      const cx=m.get(String(lx.id))||{}, v={...cx,...clone(lx)};
+      if((lx.scoreA===undefined||lx.scoreA===null||lx.scoreA==="")&&cx.scoreA!==undefined)v.scoreA=cx.scoreA;
+      if((lx.scoreB===undefined||lx.scoreB===null||lx.scoreB==="")&&cx.scoreB!==undefined)v.scoreB=cx.scoreB;
+      m.set(String(lx.id),v);
+    });
+    return [...m.values()];
+  }
+  function mergeState(local,cloud){
+    const v={...clone(cloud),...clone(local)};
+    v.players=mergePlayers(local.players,cloud.players);
+    v.bets=mergeBets(local.bets,cloud.bets);
+    v.matches=mergeMatches(local.matches,cloud.matches);
+    v.closedDays={...(cloud.closedDays||{}),...(local.closedDays||{})};
+    v.adminForcedOpenDays={...(cloud.adminForcedOpenDays||{}),...(local.adminForcedOpenDays||{})};
+    v.settlementDetails=[...(cloud.settlementDetails||[]),...(local.settlementDetails||[])];
+    v.schemaVersion="v61"; v.lastSavedAt=new Date().toISOString();
+    return v;
+  }
+  async function saveCloud(reason="auto"){
+    if(busy){queued=reason;return false;}
+    busy=true;
+    try{
+      pill("warn",`☁️ Sauvegarde... <span class="muted">${reason}</span>`);
+      const cloud=await fetchCloud(), merged=mergeState(state,cloud);
+      await writeCloud(merged); state=merged;
+      try{sessionStorage.setItem("bp_wc_session_state",JSON.stringify(state));}catch(e){}
+      pill("ok",`☁️ Synchro OK <span class="muted">${reason} · ${new Date().toLocaleTimeString("fr-FR")}</span>`);
+      return true;
+    }catch(e){pill("bad",`☁️ Erreur : ${e.message||e}`);throw e;}
+    finally{busy=false; const q=queued; queued=null; if(q)setTimeout(()=>saveCloud(q).catch(console.error),400);}
+  }
+  async function loadCloud(showAlert=false){
+    try{
+      pill("warn","☁️ Chargement...");
+      const cloud=await fetchCloud();
+      if(!cloud?.players?.length){pill("bad","☁️ Supabase vide");return false;}
+      state=cloud; state.schemaVersion="v61";
+      try{sessionStorage.setItem("bp_wc_session_state",JSON.stringify(state));}catch(e){}
+      if(typeof repairState==="function")repairState();
+      if(typeof renderAll==="function"&&window.bpIsAuthenticated===true)renderAll();
+      pill("ok",`☁️ Synchro OK <span class="muted">chargé ${new Date().toLocaleTimeString("fr-FR")}</span>`);
+      if(showAlert)alert("Données Supabase chargées.");
+      return true;
+    }catch(e){pill("bad",`☁️ Erreur chargement : ${e.message||e}`); if(showAlert)alert("Erreur chargement Supabase : "+(e.message||e)); return false;}
+  }
+  function schedule(reason){clearTimeout(timer);timer=setTimeout(()=>saveCloud(reason).catch(console.error),700);}
+  window.bpV61LoadCloud=loadCloud; window.bpV61SaveCloud=saveCloud;
+  window.bpCloudLoad=async show=>loadCloud(show!==false);
+  window.bpCloudSave=async show=>{try{await saveCloud("manuel");if(show!==false)alert("Sauvegarde Supabase OK.");return true;}catch(e){if(show!==false)alert("Erreur sauvegarde Supabase : "+(e.message||e));return false;}};
+  window.bpCloudSaveDebounced=()=>schedule("auto");
+  window.bpForceLoadSupabase=async()=>{const ok=await loadCloud(true); if(ok)setTimeout(()=>location.reload(),400); return ok;};
+  window.bpV61Audit=async()=>{
+    try{const c=await fetchCloud();alert(`Audit Supabase V61\n\nJoueurs : ${c.players?.length||0}\nPronostics : ${c.bets?.length||0}\nValidés : ${(c.bets||[]).filter(b=>String(b.status).toUpperCase()==="VALIDATED").length}\nQuestions secrètes : ${(c.players||[]).filter(p=>p.secrets&&p.secrets.sealed).length}\nVersion BDD : ${c.schemaVersion||"—"}`);}
+    catch(e){alert("Audit impossible : "+(e.message||e));}
+  };
+  function wrap(name,reason){
+    const fn=window[name]; if(typeof fn!=="function"||fn.__bpV61Wrapped)return;
+    window[name]=async function(){const r=fn.apply(this,arguments); if(r&&typeof r.then==="function")await r; await saveCloud(reason||name); return r;};
+    window[name].__bpV61Wrapped=true;
+  }
+  const oldSave=window.save;
+  if(typeof oldSave==="function"&&!oldSave.__bpV61Wrapped){
+    window.save=function(){const r=oldSave.apply(this,arguments);schedule("save()");return r;};
+    window.save.__bpV61Wrapped=true;
+  }
+  document.addEventListener("DOMContentLoaded",()=>{
+    pill("warn","☁️ Initialisation...");
+    setTimeout(()=>loadCloud(false),250);
+    setTimeout(()=>["validateSingleBet","saveBets","sealSecrets","openBets","closeBets","bpV55OpenSpecificDay","calculateGains","saveAdmin","saveScores","workflowNextStep"].forEach(n=>wrap(n,n)),1000);
+    const backup=document.getElementById("backup");
+    if(backup&&!document.getElementById("bpV61Panel")){
+      backup.insertAdjacentHTML("afterbegin",`<div id="bpV61Panel" class="card" style="border-color:rgba(34,197,94,.45)"><h2>☁️ Synchro Supabase automatique</h2><div class="muted">Chargement au démarrage et sauvegarde après action critique.</div><button class="action" onclick="bpV61LoadCloud(true)">Charger Supabase</button> <button class="action secondary" onclick="bpV61SaveCloud('manuel')">Forcer sauvegarde</button> <button class="action secondary" onclick="bpV61Audit()">Auditer Supabase</button></div>`);
+    }
+  });
+  document.addEventListener("change",e=>{if(e.target&&/^s[ab]_/.test(e.target.id||""))schedule("score-officiel");},true);
 })();
 </script>
 
