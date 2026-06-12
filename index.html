@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V89 CLASSEMENT SCORE VISIBLE</title>
+<title>B Partner FIFA World Cup 2026 - V90 EARLY BDD MASTER FIX</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -2199,7 +2199,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>window.BP_APP_VERSION = "v83-sync-clean-bdd";</script>
+<script>window.BP_APP_VERSION = "v90-early-bdd-master-fix";</script>
 <script>
 /* V83 EARLY GUARD — bloque les anciens timers de synchro avant leur création */
 (function(){
@@ -14898,6 +14898,27 @@ window.BP_LOCAL_ONLY = true;
 
   document.addEventListener('DOMContentLoaded', schedule);
   setInterval(injectScores, 2000);
+})();
+</script>
+
+
+<script>
+/* V90 STATE GUARD */
+(function(){
+  function apply(){
+    try{
+      if(window.__BP_V90_CLOUD_BOOT_STATE__ && window.state){
+        Object.keys(window.state).forEach(function(k){ delete window.state[k]; });
+        Object.assign(window.state, JSON.parse(JSON.stringify(window.__BP_V90_CLOUD_BOOT_STATE__)));
+        localStorage.setItem("bp_wc_dev", JSON.stringify(window.state));
+        if(typeof window.renderAll === "function") window.renderAll();
+      }
+    }catch(e){ console.warn("[V90] State guard", e); }
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply);
+  else setTimeout(apply, 0);
+  setTimeout(apply, 300);
+  setTimeout(apply, 1000);
 })();
 </script>
 
