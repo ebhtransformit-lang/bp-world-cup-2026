@@ -11711,4 +11711,169 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V72 — Suppression code Admin secondaire + correction édition mise
+   - L'admin est déterminé uniquement par la session principale currentRole === "admin".
+   - Le bloc "Accès Admin" est retiré de l'interface.
+   - Éditer une mise validée repasse réellement la mise en brouillon, sans revenir aux anciennes valeurs.
+   - La mise éditée est écrite directement dans Supabase pour éviter que l'ancien statut VALIDATED cloud ne réécrase l'édition.
+*/
+(function(){
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return x;} }
+  function now(){ return new Date().toISOString(); }
+  function currentPlayerSafe(){
+    if(window.currentRole==='user' && window.currentUserIndex!==null && state.players && state.players[window.currentUserIndex]) return state.players[window.currentUserIndex];
+    if(typeof player==='function') return player();
+    const idx=Number(document.getElementById('activePlayer')?.value||0);
+    return (state.players||[])[idx]||null;
+  }
+  function currentDaySafe(){
+    if(typeof currentPronoDay==='function') return Number(currentPronoDay());
+    if(typeof pronoDayDisplayed!=='undefined') return Number(pronoDayDisplayed||state.currentDay||1);
+    return Number(state.currentDay||1);
+  }
+  function saveLocalSafe(){
+    try{
+      const slim=clone(state);
+      if(Array.isArray(slim.logs)) slim.logs=slim.logs.slice(-300);
+      localStorage.setItem('bp_wc_dev',JSON.stringify(slim));
+    }catch(e){ console.warn('[BP V72 local save]',e); }
+  }
+  function compactForCloud(st){
+    const c=clone(st||{});
+    if(Array.isArray(c.logs)) c.logs=c.logs.slice(-300);
+    delete c.__backupHistory;
+    delete c.backupHistory;
+    delete c.dailyBackups;
+    delete c.autoBackups;
+    return c;
+  }
+  function sbClient(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) return null;
+    return window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
+  }
+  async function forceWriteCloud(reason){
+    const sb=sbClient();
+    if(!sb) return false;
+    const appId=window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+    const payload=compactForCloud(window.state||{});
+    const res=await sb.from('app_state').upsert({id:appId,data:payload,updated_at:now()},{onConflict:'id'});
+    if(res.error) throw res.error;
+    try{ if(typeof bpSetSyncPill==='function') bpSetSyncPill('ok','☁️ Synchro OK <span class="muted">'+(reason||'V72')+'</span>'); }catch(e){}
+    return true;
+  }
+
+  function removeAdminSecondLock(){
+    const lock=document.getElementById('adminLock');
+    const panel=document.getElementById('adminPanel');
+    if(lock) lock.remove();
+    if(panel && window.currentRole==='admin') panel.style.display='block';
+    document.querySelectorAll('input#adminCode, #adminError').forEach(el=>el.remove());
+  }
+
+  window.checkAdmin=function(){
+    removeAdminSecondLock();
+    const panel=document.getElementById('adminPanel');
+    if(panel) panel.style.display='block';
+    if(typeof renderAdmin==='function') renderAdmin();
+    return true;
+  };
+
+  const oldTab=window.tab;
+  if(typeof oldTab==='function' && !oldTab.__bpV72Wrapped){
+    window.tab=function(id,btn){
+      const r=oldTab.apply(this,arguments);
+      if(id==='admin') setTimeout(removeAdminSecondLock,0);
+      return r;
+    };
+    window.tab.__bpV72Wrapped=true;
+  }
+
+  function unlockBetCard(matchId, bet){
+    const card=document.getElementById('betCard_'+matchId);
+    if(!card) return false;
+    card.classList.remove('lockedCard');
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(el=>{ el.disabled=false; });
+    const badge=card.querySelector('.bet-title .badge');
+    if(badge){ badge.textContent='Brouillon'; badge.className='badge'; }
+    const status=card.querySelector('.bet-status');
+    if(status) status.innerHTML='<span class="warn">Modification ouverte. Change le score puis valide à nouveau la mise.</span>';
+    const btn=[...card.querySelectorAll('button')].find(b=>/modifier|valider/i.test(b.textContent||''));
+    if(btn){
+      btn.textContent='Valider la mise';
+      btn.classList.remove('editBtn');
+      btn.disabled=false;
+      btn.onclick=function(){ return window.validateSingleBet(matchId); };
+    }
+    const a=card.querySelector('.scoreA[data-match="'+matchId+'"]');
+    const b=card.querySelector('.scoreB[data-match="'+matchId+'"]');
+    const st=card.querySelector('.stake[data-match="'+matchId+'"]');
+    if(a && bet) a.value=Number(bet.scoreA ?? 0);
+    if(b && bet) b.value=Number(bet.scoreB ?? 0);
+    if(st && bet) st.value=String(Number(bet.stake || 1));
+    return true;
+  }
+
+  window.editBet=async function(matchId){
+    try{
+      const day=currentDaySafe();
+      if(typeof pronoDayIsAvailable==='function' && !pronoDayIsAvailable(day)){
+        if(typeof bpAlert==='function') return bpAlert('Les pronostics sont clôturés.',{icon:'🔒'});
+        alert('Les pronostics sont clôturés.');
+        return false;
+      }
+      const p=currentPlayerSafe();
+      if(!p) throw new Error('Joueur introuvable.');
+      state.bets=Array.isArray(state.bets)?state.bets:[];
+      let bet=state.bets.find(x=>Number(x.day)===Number(day)&&String(x.matchId)===String(matchId)&&String(x.player)===String(p.name));
+      if(!bet){
+        bet={day,matchId:String(matchId),player:p.name,scoreA:0,scoreB:0,score:'0 - 0',stake:1,prediction:'N',status:'DRAFT'};
+        state.bets.push(bet);
+      }
+      bet.status='DRAFT';
+      bet.validatedAt=null;
+      bet.editUnlockedAt=now();
+      bet.savedAt=now();
+      bet.code=p.code||bet.code||'';
+      if(typeof log==='function') try{ log(p.name,'Mise repassée en brouillon '+matchId,0); }catch(e){}
+      saveLocalSafe();
+      unlockBetCard(matchId,bet);
+      try{ await forceWriteCloud('édition mise'); }
+      catch(e){ console.warn('[BP V72 cloud edit]',e); if(typeof bpSetSyncPill==='function') bpSetSyncPill('warn','☁️ Édition locale, synchro à réessayer'); }
+      if(typeof bpAlert==='function') bpAlert('Mise ouverte en modification. Change le score puis valide à nouveau.',{icon:'✏️'});
+      return true;
+    }catch(e){
+      console.error(e);
+      alert('Erreur édition mise : '+(e.message||e));
+      return false;
+    }
+  };
+
+  // Empêche les anciens wrappers de remettre un bouton validé si la mise vient d'être repassée en brouillon.
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function' && !oldRenderAll.__bpV72Wrapped){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(()=>{
+        removeAdminSecondLock();
+        const p=currentPlayerSafe();
+        const day=currentDaySafe();
+        if(!p) return;
+        (state.bets||[]).filter(b=>Number(b.day)===Number(day)&&String(b.player)===String(p.name)&&String(b.status).toUpperCase()!=='VALIDATED')
+          .forEach(b=>unlockBetCard(String(b.matchId),b));
+      },60);
+      return r;
+    };
+    window.renderAll.__bpV72Wrapped=true;
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    removeAdminSecondLock();
+    setInterval(removeAdminSecondLock,1000);
+  });
+})();
+</script>
+
 </body></html>
