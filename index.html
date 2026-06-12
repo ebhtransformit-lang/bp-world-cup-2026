@@ -14060,4 +14060,163 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V85 ADMIN DELETE IMMEDIATE — suppression sans confirmation, disparition immédiate, tombstone Supabase vérifié.
+   Ne touche pas aux mises ni aux scores déjà validés OK. */
+(function(){
+  'use strict';
+  if(window.__BP_V85_DELETE_IMMEDIATE__) return;
+  window.__BP_V85_DELETE_IMMEDIATE__ = true;
+  const APP_ID = 'bp-world-cup-2026';
+  const TABLE = 'app_state';
+  let client = null;
+  let lastBtn = null;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .bp-v85-busy{opacity:.72!important;pointer-events:none!important}
+    .bp-v85-spin{display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:bpV85Spin .75s linear infinite}
+    @keyframes bpV85Spin{to{transform:rotate(360deg)}}
+  `;
+  document.head.appendChild(style);
+
+  function S(){ return window.state || (window.state = {}); }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x || {}));}catch(e){return{};} }
+  function now(){ return new Date().toISOString(); }
+  function norm(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+  function uniq(arr){ return Array.from(new Set((arr||[]).map(norm).filter(Boolean))); }
+  function keysOf(p){ return uniq([p && p.code, p && p.name, p && p.pseudo]); }
+  function supa(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){ throw new Error('Supabase non configuré'); }
+    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return client;
+  }
+  function log(type,msg){
+    let el = document.getElementById('bpV84Log') || document.getElementById('bpSyncPill');
+    if(!el){ el=document.createElement('div'); el.id='bpV84Log'; el.style.cssText='position:fixed;right:14px;bottom:14px;z-index:999999;max-width:420px;padding:10px 13px;border-radius:14px;background:#111;color:#fff;border:1px solid #444;box-shadow:0 12px 30px rgba(0,0,0,.4);font:12px Arial'; document.body.appendChild(el); }
+    if(el.id === 'bpV84Log') el.style.borderColor = type==='ok'?'rgba(74,222,128,.6)':type==='bad'?'rgba(251,113,133,.7)':'rgba(250,204,21,.7)';
+    el.innerHTML = '<b>BDD Supabase V85</b><br>' + String(msg || '');
+  }
+  function setBusy(btn,on,label){
+    if(!btn) return;
+    if(on){ if(!btn.dataset.v85Old) btn.dataset.v85Old = btn.innerHTML; btn.disabled = true; btn.classList.add('bp-v85-busy'); btn.innerHTML = '<span class="bp-v85-spin"></span>' + (label || 'Suppression…'); }
+    else { btn.disabled = false; btn.classList.remove('bp-v85-busy'); if(btn.dataset.v85Old){ btn.innerHTML = btn.dataset.v85Old; delete btn.dataset.v85Old; } }
+  }
+  async function readRawBDD(){
+    const r = await supa().from(TABLE).select('data').eq('id', APP_ID).single();
+    if(r.error) throw r.error;
+    const d = clone(r.data && r.data.data);
+    if(!Array.isArray(d.players)) d.players = [];
+    if(!Array.isArray(d.bets)) d.bets = [];
+    if(!Array.isArray(d.deletedPlayerKeys)) d.deletedPlayerKeys = [];
+    return d;
+  }
+  async function writeRawBDD(d){
+    d = clone(d);
+    d.deletedPlayerKeys = uniq(d.deletedPlayerKeys || []);
+    d.schemaVersion = 'v85-admin-delete-immediate';
+    d.lastSavedAt = now();
+    const r = await supa().from(TABLE).upsert({id:APP_ID, data:d, updated_at:now()}, {onConflict:'id'});
+    if(r.error) throw r.error;
+    Object.keys(S()).forEach(k => delete S()[k]);
+    Object.assign(S(), d);
+    try{ localStorage.setItem('bpwc_state_v1', JSON.stringify(d)); }catch(e){}
+    return d;
+  }
+  function adminCardFromButton(btn){ return btn && btn.closest ? btn.closest('.admin-player-card') : null; }
+  function identityFromCard(card){
+    const inputs = card ? Array.from(card.querySelectorAll('input')).map(i => i.value.trim()).filter(Boolean) : [];
+    const codeText = card ? (card.querySelector('.user-code')?.textContent || '').trim() : '';
+    const name = inputs[0] || card?.dataset?.playerName || '';
+    const pseudo = inputs[1] || name;
+    const code = codeText || card?.dataset?.playerCode || inputs.find(v => /^\d{3,}$/.test(v)) || '';
+    return {name, pseudo, code};
+  }
+  function visibleLabel(p){ return (p && (p.name || p.pseudo || p.code)) || 'utilisateur'; }
+  function matchPlayer(p, hint, index){
+    const h = keysOf(hint);
+    if(index != null && Number.isFinite(Number(index))) return false;
+    return keysOf(p).some(k => h.includes(k));
+  }
+  function findPlayer(d, hint, index){
+    if(index != null && Number.isFinite(Number(index))){
+      const fromState = (S().players || [])[Number(index)];
+      if(fromState){
+        const stateKeys = keysOf(fromState);
+        const byState = d.players.find(p => keysOf(p).some(k => stateKeys.includes(k)));
+        if(byState) return byState;
+      }
+      if(d.players[Number(index)]) return d.players[Number(index)];
+    }
+    const h = keysOf(hint);
+    return d.players.find(p => keysOf(p).some(k => h.includes(k))) || null;
+  }
+  function removeImmediately(card, hint){
+    if(card){
+      card.dataset.v85Deleted = '1';
+      card.style.transition = 'opacity .18s ease, transform .18s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(12px)';
+      setTimeout(() => { try{ card.remove(); }catch(e){} }, 180);
+    }
+    const h = keysOf(hint);
+    if(h.length && Array.isArray(S().players)) S().players = S().players.filter(p => !keysOf(p).some(k => h.includes(k)));
+    if(typeof window.renderAdmin === 'function') setTimeout(() => { try{ window.renderAdmin(); }catch(e){} }, 260);
+  }
+  async function deletePlayerImmediate(index, btn){
+    btn = btn || lastBtn || (document.activeElement && document.activeElement.closest && document.activeElement.closest('button'));
+    const card = adminCardFromButton(btn);
+    const hint = card ? identityFromCard(card) : ((S().players || [])[Number(index)] || {});
+    const guessedLabel = visibleLabel(hint);
+
+    // Exigence utilisateur : pas de confirmation, retrait immédiat de l'interface.
+    removeImmediately(card, hint);
+    setBusy(btn, true, 'Suppression BDD…');
+    log('warn', 'Suppression immédiate de ' + guessedLabel + '…');
+
+    try{
+      const d = await readRawBDD();
+      const p = findPlayer(d, hint, index);
+      if(!p) throw new Error('Utilisateur introuvable en BDD : ' + guessedLabel);
+      const delKeys = uniq([...(d.deletedPlayerKeys || []), ...keysOf(p), ...keysOf(hint)]);
+      d.deletedPlayerKeys = delKeys;
+      const delSet = new Set(delKeys);
+      d.players = (d.players || []).filter(x => !keysOf(x).some(k => delSet.has(k)));
+      // On ne touche pas aux mises/scores validés : seule la présence utilisateur est supprimée.
+      await writeRawBDD(d);
+      const chk = await readRawBDD();
+      const chkDel = new Set(uniq(chk.deletedPlayerKeys || []));
+      const persisted = keysOf(p).some(k => chkDel.has(k)) || keysOf(hint).some(k => chkDel.has(k));
+      if(!persisted) throw new Error('Suppression non enregistrée dans deletedPlayerKeys.');
+      log('ok', visibleLabel(p) + ' supprimé en BDD — refresh OK.');
+      setBusy(btn, false);
+      if(typeof window.renderAll === 'function') setTimeout(() => { try{ window.renderAll(); }catch(e){} }, 350);
+      return true;
+    }catch(e){
+      log('bad', 'Erreur suppression : ' + (e.message || e));
+      alert('Erreur suppression BDD : ' + (e.message || e));
+      setBusy(btn, false);
+      if(typeof window.renderAll === 'function') try{ window.renderAll(); }catch(err){}
+      return false;
+    }
+  }
+
+  window.safeDeletePlayer = function(index){ return deletePlayerImmediate(index, lastBtn); };
+  window.safeDeletePlayerByIdentity = function(p, btn){ return deletePlayerImmediate(null, btn || lastBtn); };
+
+  document.addEventListener('click', function(e){
+    const b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(b) lastBtn = b;
+    if(!b) return;
+    const txt = (b.textContent || '').trim().toLowerCase();
+    if(b.closest('.admin-player-card') && (txt.includes('suppr') || txt.includes('supprimer'))){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      deletePlayerImmediate(null, b);
+    }
+  }, true);
+})();
+</script>
+
 </body></html>
