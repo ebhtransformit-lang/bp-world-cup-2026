@@ -11510,4 +11510,205 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V71 — Correctif quota + synchro journées admin/user
+   - Ne stocke plus les grosses sauvegardes locales qui saturent localStorage.
+   - Compacte bp_wc_dev avant stockage local.
+   - Réactive la synchro Supabase avec erreurs non bloquantes.
+   - Charge/poll Supabase côté user pour récupérer l'ouverture J2 faite par ADMIN.
+   - Alias saveScores -> saveOfficialScoresDay.
+*/
+(function(){
+  window.BP_LOCAL_ONLY = false;
+  const APP_ID = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
+  let sbClient=null, saveTimer=null, loadTimer=null, saving=false, loading=false;
+
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return {};}}
+  function configured(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
+  function sb(){ if(!configured()) throw new Error("Supabase non configuré ou inaccessible"); if(!sbClient) sbClient=window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
+  function pill(kind,msg){
+    let el=document.getElementById('bpSyncPill');
+    if(!el){ el=document.createElement('div'); el.id='bpSyncPill'; document.body.appendChild(el); }
+    el.className=kind||'warn'; el.innerHTML=msg;
+  }
+  function dayMax(){ try{return typeof maxCalendarDay==='function'?Number(maxCalendarDay())||1:Math.max(1,...(state.matches||[]).map(m=>Number(m.day||1)));}catch(e){return 1;} }
+
+  function compactState(st){
+    const s=clone(st||window.state||{});
+    s.logs=(s.logs||[]).slice(0,150);
+    s.settlementDetails=(s.settlementDetails||[]).slice(-1200);
+    delete s._cache; delete s.debug; delete s.htmlPreview;
+    if(Array.isArray(s.players)){
+      s.players=s.players.map(p=>{
+        const q={...p};
+        if(typeof q.avatar==='string' && q.avatar.length>50000){ q.avatar=''; q.avatarRemovedForQuota=true; }
+        if(typeof q.photo==='string' && q.photo.length>50000){ q.photo=''; }
+        return q;
+      });
+    }
+    s.lastSavedAt=new Date().toISOString();
+    return s;
+  }
+
+  function cleanupLocalStorage(){
+    try{
+      const toRemove=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i)||'';
+        if(k.startsWith('bp_wc_dev_backup') || k.includes('CORRUPTED_BACKUP') || k.includes('last_restore_report')) toRemove.push(k);
+      }
+      toRemove.forEach(k=>localStorage.removeItem(k));
+    }catch(e){}
+  }
+
+  function safeLocalSave(){
+    cleanupLocalStorage();
+    const compact=compactState(window.state||{});
+    const txt=JSON.stringify(compact);
+    try{ localStorage.setItem('bp_wc_dev',txt); }
+    catch(e){
+      try{ sessionStorage.setItem('bp_wc_session_state',txt); }catch(_e){}
+      pill('warn','⚠️ Stockage local plein : session utilisée. La synchro cloud reste prioritaire.');
+    }
+  }
+
+  // Empêche les anciens blocs de recréer des backups énormes et protège bp_wc_dev.
+  try{
+    const nativeSet=Storage.prototype.setItem;
+    if(!Storage.prototype.setItem.__bpV71Wrapped){
+      Storage.prototype.setItem=function(key,value){
+        if(this===localStorage && String(key).startsWith('bp_wc_dev_backup')) return;
+        if(this===localStorage && String(key)==='bp_wc_dev'){
+          try{ value=JSON.stringify(compactState(JSON.parse(value))); }catch(e){}
+          cleanupLocalStorage();
+          try{return nativeSet.call(this,key,value);}catch(e){ try{sessionStorage.setItem('bp_wc_session_state',value);}catch(_e){}; pill('warn','⚠️ Stockage local plein : sauvegarde cloud/session utilisée.'); return; }
+        }
+        return nativeSet.call(this,key,value);
+      };
+      Storage.prototype.setItem.__bpV71Wrapped=true;
+    }
+  }catch(e){}
+
+  async function fetchCloud(){
+    const res=await sb().from('app_state').select('data,updated_at').eq('id',APP_ID).maybeSingle();
+    if(res.error) throw res.error;
+    return res.data && res.data.data ? clone(res.data.data) : null;
+  }
+  async function writeCloud(st){
+    const res=await sb().from('app_state').upsert({id:APP_ID,data:compactState(st),updated_at:new Date().toISOString()},{onConflict:'id'});
+    if(res.error) throw res.error;
+  }
+  function keyBet(b){ return [Number(b.day||0), String(b.matchId||''), String(b.player||''), String(b.code||'')].join('|'); }
+  function mergeBets(local,cloud){
+    const map=new Map();
+    (cloud||[]).forEach(b=>map.set(keyBet(b),clone(b)));
+    (local||[]).forEach(b=>{
+      const k=keyBet(b), old=map.get(k)||{};
+      const merged={...old,...clone(b)};
+      if(String(old.status||'').toUpperCase()==='VALIDATED') { merged.status='VALIDATED'; merged.validatedAt=old.validatedAt||merged.validatedAt; }
+      map.set(k,merged);
+    });
+    return Array.from(map.values());
+  }
+  function mergeMatches(local,cloud){
+    const map=new Map();
+    (local||[]).forEach(m=>map.set(String(m.id),clone(m)));
+    (cloud||[]).forEach(cm=>{
+      const k=String(cm.id), lm=map.get(k)||{};
+      map.set(k,{...lm,...clone(cm)});
+    });
+    return Array.from(map.values());
+  }
+  function mergePlayers(local,cloud){
+    const k=p=>String(p.code||p.name||p.pseudo||'').trim().toLowerCase();
+    const map=new Map();
+    (cloud||[]).forEach(p=>{if(k(p))map.set(k(p),clone(p));});
+    (local||[]).forEach(p=>{if(!k(p))return; const cp=map.get(k(p))||{}; map.set(k(p),{...cp,...clone(p),secrets:Object.keys(p.secrets||{}).length?p.secrets:cp.secrets});});
+    return Array.from(map.values());
+  }
+  function mergeState(local,cloud,preferCloudAdmin=true){
+    if(!cloud) return compactState(local);
+    const l=clone(local), c=clone(cloud), m={...c,...l};
+    m.players=mergePlayers(l.players,c.players);
+    m.bets=mergeBets(l.bets,c.bets);
+    m.matches=mergeMatches(l.matches,c.matches);
+    // Les statuts de journées viennent du cloud pour que les users voient l'ouverture admin.
+    m.closedDays=preferCloudAdmin ? {...(l.closedDays||{}),...(c.closedDays||{})} : {...(c.closedDays||{}),...(l.closedDays||{})};
+    m.currentDay=preferCloudAdmin ? Number(c.currentDay||l.currentDay||1) : Number(l.currentDay||c.currentDay||1);
+    m.closed=!!(m.closedDays && m.closedDays[m.currentDay]===true);
+    m.officialScoresSavedDays={...(c.officialScoresSavedDays||{}),...(l.officialScoresSavedDays||{})};
+    m.gainsCalculatedDays={...(c.gainsCalculatedDays||{}),...(l.gainsCalculatedDays||{})};
+    return compactState(m);
+  }
+
+  async function cloudSave(reason){
+    if(saving) return false; saving=true;
+    try{
+      const cloud=await fetchCloud().catch(()=>null);
+      const merged=mergeState(window.state||{},cloud,false);
+      await writeCloud(merged);
+      window.state=merged;
+      safeLocalSave();
+      pill('ok','☁️ Synchro OK <span class="muted">'+(reason||'auto')+'</span>');
+      return true;
+    }catch(e){
+      console.warn('[BP V71 cloud save]',e);
+      pill('warn','☁️ Synchro différée : '+(e.message||e));
+      return false;
+    }finally{ saving=false; }
+  }
+  async function cloudLoad(showAlert=false){
+    if(loading) return false; loading=true;
+    try{
+      const cloud=await fetchCloud();
+      if(!cloud){ if(showAlert) alert('Aucune donnée cloud trouvée.'); return false; }
+      window.state=mergeState(window.state||{},cloud,true);
+      if(typeof repairState==='function') try{repairState();}catch(e){}
+      safeLocalSave();
+      if(typeof renderAll==='function') renderAll();
+      pill('ok','☁️ Données à jour <span class="muted">J'+(state.currentDay||1)+' '+(state.closedDays?.[state.currentDay]===false?'ouverte':'fermée')+'</span>');
+      if(showAlert) alert('Données cloud chargées.');
+      return true;
+    }catch(e){
+      console.warn('[BP V71 cloud load]',e);
+      pill('warn','☁️ Chargement cloud impossible : '+(e.message||e));
+      if(showAlert) alert('Erreur chargement cloud : '+(e.message||e));
+      return false;
+    }finally{ loading=false; }
+  }
+
+  window.bpCloudSaveDebounced=function(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>cloudSave('auto'),700); };
+  window.bpCloudSave=async function(showAlert=true){ const ok=await cloudSave('manuel'); if(showAlert) alert(ok?'Sauvegarde cloud OK.':'Sauvegarde cloud impossible pour le moment.'); return ok; };
+  window.bpCloudLoad=async function(showAlert=true){ return cloudLoad(showAlert); };
+  window.bpForceLoadSupabase=async function(){ return cloudLoad(true); };
+  window.save=function(){ safeLocalSave(); window.bpCloudSaveDebounced(); };
+  window.saveScores=window.saveOfficialScoresDay || window.saveScores;
+
+  function afterAdminDayChange(){
+    safeLocalSave();
+    window.bpCloudSaveDebounced();
+    setTimeout(()=>cloudSave('journée'),100);
+  }
+  ['openBets','closeBets','setAdminViewDay'].forEach(name=>{
+    const old=window[name];
+    if(typeof old==='function' && !old.__bpV71Wrapped){
+      window[name]=async function(){ const r=await old.apply(this,arguments); afterAdminDayChange(); return r; };
+      window[name].__bpV71Wrapped=true;
+    }
+  });
+
+  function startPolling(){
+    clearInterval(loadTimer);
+    cloudLoad(false);
+    loadTimer=setInterval(()=>cloudLoad(false),8000);
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    cleanupLocalStorage();
+    setTimeout(()=>{ safeLocalSave(); startPolling(); },600);
+  });
+})();
+</script>
+
 </body></html>
