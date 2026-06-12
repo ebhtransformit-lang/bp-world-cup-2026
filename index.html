@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V78 STABLE</title>
+<title>B Partner FIFA World Cup 2026 - V86 UI DELETE HARD FIX</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -14216,6 +14216,194 @@ window.BP_LOCAL_ONLY = true;
       deletePlayerImmediate(null, b);
     }
   }, true);
+})();
+</script>
+
+
+
+<script>
+/* V86 — HARD FIX suppression UI joueurs
+   Objectif : même si la BDD/Supabase réinjecte un joueur supprimé, l'UI garde la suppression.
+   - Tombstone locale prioritaire et persistante dans localStorage.
+   - Filtrage immédiat de state.players avant chaque rendu/sauvegarde/chargement cloud.
+   - Interception robuste du bouton Suppr. dans la carte admin.
+   - Écriture BDD tentée en bonus, mais l'UI ne dépend plus de sa réussite.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V86_UI_DELETE_HARD_FIX__) return;
+  window.__BP_V86_UI_DELETE_HARD_FIX__ = true;
+
+  const LS_KEYS = ['bp_v86_deleted_player_keys','bp_v85_deleted_player_keys','bp_deleted_player_keys_ui'];
+  const STATE_KEYS = ['bpwc_state_v1','bp_wc_dev'];
+  const APP_ID = 'bp-world-cup-2026';
+  const TABLE = 'app_state';
+  let client = null;
+  let lastDeleteButton = null;
+  let applying = false;
+
+  function S(){ return window.state || (window.state = {}); }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return{};} }
+  function norm(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+  function uniq(a){ return Array.from(new Set((a||[]).map(norm).filter(Boolean))); }
+  function keysOf(p){ return uniq([p && p.code, p && p.name, p && p.pseudo]); }
+  function labelOf(p){ return (p && (p.name || p.pseudo || p.code)) || 'utilisateur'; }
+  function samePlayer(p, keys){ const set = new Set(keys||[]); return keysOf(p).some(k => set.has(k)); }
+  function deletedKeys(){
+    const all = [];
+    LS_KEYS.forEach(k => { try{ all.push(...JSON.parse(localStorage.getItem(k)||'[]')); }catch(e){} });
+    try{ all.push(...(S().deletedPlayerKeys||[])); }catch(e){}
+    return uniq(all);
+  }
+  function persistDeleted(keys){
+    keys = uniq(keys);
+    LS_KEYS.forEach(k => { try{ localStorage.setItem(k, JSON.stringify(keys)); }catch(e){} });
+    try{ S().deletedPlayerKeys = uniq([...(S().deletedPlayerKeys||[]), ...keys]); }catch(e){}
+    return keys;
+  }
+  function persistStateLocal(){
+    STATE_KEYS.forEach(k => { try{ localStorage.setItem(k, JSON.stringify(S())); }catch(e){} });
+  }
+  function compact(st){
+    const c = clone(st);
+    if(Array.isArray(c.logs)) c.logs = c.logs.slice(-300);
+    if(Array.isArray(c.settlementDetails)) c.settlementDetails = c.settlementDetails.slice(-3000);
+    delete c.debug; delete c.htmlPreview; delete c._cache;
+    c.schemaVersion = 'v86-ui-delete-hard-fix';
+    c.lastSavedAt = new Date().toISOString();
+    return c;
+  }
+  function supa(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) return null;
+    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return client;
+  }
+  function toast(type,msg){
+    let el = document.getElementById('bpV86DeleteToast');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'bpV86DeleteToast';
+      el.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:999999;max-width:420px;padding:11px 14px;border-radius:14px;background:#111;color:#fff;border:1px solid #444;box-shadow:0 12px 30px rgba(0,0,0,.45);font:12px Arial';
+      document.body.appendChild(el);
+    }
+    el.style.borderColor = type==='ok' ? 'rgba(74,222,128,.65)' : type==='bad' ? 'rgba(251,113,133,.75)' : 'rgba(250,204,21,.75)';
+    el.innerHTML = '<b>Suppression UI V86</b><br>' + String(msg||'');
+  }
+  function applyTombstones(options){
+    if(applying) return false;
+    applying = true;
+    try{
+      const keys = persistDeleted(deletedKeys());
+      if(!keys.length || !Array.isArray(S().players)) return false;
+      const before = S().players.length;
+      S().players = S().players.filter(p => !samePlayer(p, keys));
+      const changed = S().players.length !== before;
+      if(changed || options?.forceSave) persistStateLocal();
+      return changed;
+    }catch(e){ console.warn('[BP V86 apply tombstones]', e); return false; }
+    finally{ applying = false; }
+  }
+  function playerFromCard(card){
+    const inputs = card ? Array.from(card.querySelectorAll('input')).map(i => (i.value||'').trim()).filter(Boolean) : [];
+    const code = (card?.querySelector('.user-code')?.textContent || '').trim();
+    return { name: inputs[0] || card?.dataset?.playerName || '', pseudo: inputs[1] || inputs[0] || '', code: code || card?.dataset?.playerCode || '' };
+  }
+  function findByIndexOrCard(index, card){
+    const byCard = playerFromCard(card);
+    const cardKeys = keysOf(byCard);
+    if(cardKeys.length){
+      const p = (S().players||[]).find(x => samePlayer(x, cardKeys));
+      if(p) return p;
+      return byCard;
+    }
+    const i = Number(index);
+    return Number.isFinite(i) ? ((S().players||[])[i] || {}) : {};
+  }
+  async function tryCloudDelete(keys){
+    const c = supa();
+    if(!c || !keys.length) return false;
+    const r = await c.from(TABLE).select('data').eq('id', APP_ID).single();
+    if(r.error) throw r.error;
+    const d = clone(r.data && r.data.data);
+    if(!Array.isArray(d.players)) d.players = [];
+    d.deletedPlayerKeys = uniq([...(d.deletedPlayerKeys||[]), ...keys]);
+    const delSet = new Set(d.deletedPlayerKeys);
+    d.players = d.players.filter(p => !keysOf(p).some(k => delSet.has(k)));
+    const w = await c.from(TABLE).upsert({id:APP_ID, data:compact(d), updated_at:new Date().toISOString()}, {onConflict:'id'});
+    if(w.error) throw w.error;
+    return true;
+  }
+  async function hardDeletePlayer(index, btn){
+    btn = btn || lastDeleteButton || document.activeElement?.closest?.('button') || null;
+    const card = btn?.closest?.('.admin-player-card') || null;
+    const p = findByIndexOrCard(index, card);
+    const keys = keysOf(p);
+    if(!keys.length){ alert('Suppression impossible : identité joueur introuvable dans la carte UI.'); return false; }
+
+    persistDeleted([ ...deletedKeys(), ...keys ]);
+    if(card){
+      card.style.transition = 'opacity .15s ease, transform .15s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(12px)';
+      setTimeout(()=>{ try{ card.remove(); }catch(e){} }, 160);
+    }
+    applyTombstones({forceSave:true});
+    toast('warn', labelOf(p) + ' supprimé de l’interface. Écriture BDD en cours…');
+    try{ if(typeof window.renderAdmin === 'function') window.renderAdmin(); }catch(e){}
+    try{ if(typeof window.renderAll === 'function') setTimeout(()=>window.renderAll(), 80); }catch(e){}
+
+    try{
+      await tryCloudDelete(keys);
+      toast('ok', labelOf(p) + ' supprimé côté UI + tombstone BDD enregistrée.');
+      try{ if(typeof window.bpCloudSave === 'function') await window.bpCloudSave(false); }catch(e){}
+    }catch(e){
+      // La règle métier demandée : la suppression UI reste prioritaire même si Supabase refuse/échoue.
+      toast('bad', labelOf(p) + ' reste supprimé côté UI. BDD non bloquante : ' + (e.message || e));
+      console.warn('[BP V86 cloud delete non bloquant]', e);
+    }
+    applyTombstones({forceSave:true});
+    return true;
+  }
+
+  window.bpV86ApplyDeletedPlayers = applyTombstones;
+  window.bpV86DeletedPlayerKeys = deletedKeys;
+  window.safeDeletePlayer = function(index){ return hardDeletePlayer(index, lastDeleteButton); };
+  window.safeDeletePlayerByIdentity = function(p, btn){ persistDeleted([ ...deletedKeys(), ...keysOf(p) ]); return hardDeletePlayer(null, btn); };
+
+  function wrap(name){
+    const old = window[name];
+    if(typeof old !== 'function' || old.__bpV86Wrapped) return;
+    window[name] = function(){
+      applyTombstones();
+      const r = old.apply(this, arguments);
+      if(r && typeof r.then === 'function') return r.then(v => { applyTombstones({forceSave:true}); return v; });
+      applyTombstones({forceSave:true});
+      return r;
+    };
+    window[name].__bpV86Wrapped = true;
+  }
+  function installWraps(){ ['renderAll','renderAdmin','save','bpCloudLoad','bpForceLoadSupabase','bpV84Start','bpV84WriteBDD','bpV85ReadBDD'].forEach(wrap); }
+
+  document.addEventListener('click', function(e){
+    const b = e.target?.closest?.('button');
+    if(!b) return;
+    const txt = (b.textContent || '').trim().toLowerCase();
+    if(b.closest('.admin-player-card') && (txt.includes('suppr') || txt.includes('supprimer'))){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      lastDeleteButton = b;
+      hardDeletePlayer(null, b);
+    }
+  }, true);
+
+  document.addEventListener('DOMContentLoaded', function(){
+    applyTombstones({forceSave:true});
+    installWraps();
+    setInterval(function(){ installWraps(); if(applyTombstones()) { try{ if(typeof window.renderAdmin==='function') window.renderAdmin(); }catch(e){} } }, 700);
+  });
+  if(document.readyState !== 'loading'){
+    applyTombstones({forceSave:true});
+    installWraps();
+  }
 })();
 </script>
 
