@@ -12381,4 +12381,181 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V77 — BDD Supabase stricte : scores officiels + suppressions utilisateurs persistants
+   Objectif : ne jamais perdre un score officiel enregistré, même 0-0, et ne pas réimporter les users supprimés. */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const SCORE_KEY = 'bp_wc_official_scores_v77_cache';
+  let sbClient = null;
+  let loading = false;
+
+  function ready(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
+  function sb(){ if(!ready()) return null; if(!sbClient) sbClient = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
+  function st(){ return window.state || {}; }
+  function maxDay(){ try{return typeof maxCalendarDay==='function'?Number(maxCalendarDay())||1:Math.max(1,...(st().matches||[]).map(m=>Number(m.day||1)));}catch(e){return 1;} }
+  function nDay(day){ return Math.max(1, Math.min(maxDay(), Number(day||st().currentDay||1))); }
+  function closed(day){ return !!(st().closedDays && st().closedDays[nDay(day)]===true); }
+  function scoreDay(){ const d=nDay(st().currentDay||1); return closed(d) ? d : Math.max(1,d-1); }
+  function matches(day){ return (st().matches||[]).filter(m=>Number(m.day)===Number(day)); }
+  function input(id,p){ return document.getElementById(p+id); }
+  function readCache(){ try{return JSON.parse(localStorage.getItem(SCORE_KEY)||'{}')||{};}catch(e){return{};} }
+  function writeCache(x){ try{localStorage.setItem(SCORE_KEY,JSON.stringify(x||{}));}catch(e){} }
+  function saveLocal(){ try{localStorage.setItem('bp_wc_dev', JSON.stringify(st()));}catch(e){} }
+  function toast(msg, cls){
+    let el=document.getElementById('bpSyncPill');
+    if(!el){ el=document.createElement('div'); el.id='bpSyncPill'; document.body.appendChild(el); }
+    el.className=cls||'ok'; el.innerHTML=msg;
+  }
+
+  function ensureScoreMap(){
+    if(!st().officialScoresByDay || typeof st().officialScoresByDay!=='object') st().officialScoresByDay={};
+    if(!st().officialScoresSavedDays || typeof st().officialScoresSavedDays!=='object') st().officialScoresSavedDays={};
+  }
+  function storeScores(day, bucket){
+    ensureScoreMap();
+    const d=String(day);
+    st().officialScoresByDay[d] = Object.assign({}, st().officialScoresByDay[d]||{}, bucket||{});
+    st().officialScoresSavedDays[day]=true;
+    const cache=readCache(); cache[d]=Object.assign({}, cache[d]||{}, bucket||{}); writeCache(cache);
+  }
+  function getBucket(day){
+    ensureScoreMap();
+    const d=String(day);
+    return Object.assign({}, readCache()[d]||{}, st().officialScoresByDay[d]||{});
+  }
+  function applyScores(day){
+    const bucket=getBucket(day);
+    matches(day).forEach(m=>{
+      const s=bucket[String(m.id)];
+      if(s && s.a!==undefined && s.b!==undefined && s.a!==null && s.b!==null){
+        m.scoreA=Number(s.a); m.scoreB=Number(s.b); m.status='done';
+      }
+    });
+    if(Object.keys(bucket).length){ ensureScoreMap(); st().officialScoresSavedDays[day]=true; }
+  }
+  function restoreInputs(day){
+    const bucket=getBucket(day);
+    matches(day).forEach(m=>{
+      const sa=input(m.id,'sa_'), sb=input(m.id,'sb_');
+      const s=bucket[String(m.id)];
+      const a=(s&&s.a!==undefined)?s.a:m.scoreA;
+      const b=(s&&s.b!==undefined)?s.b:m.scoreB;
+      if(sa && a!==null && a!==undefined) sa.value=String(Number(a));
+      if(sb && b!==null && b!==undefined) sb.value=String(Number(b));
+    });
+  }
+  function capture(day){
+    const out={};
+    for(const m of matches(day)){
+      const sa=input(m.id,'sa_'), sb=input(m.id,'sb_');
+      if(!sa || !sb || sa.value==='' || sb.value==='') return null;
+      out[String(m.id)]={a:Number(sa.value), b:Number(sb.value), day:Number(day), savedAt:new Date().toISOString()};
+    }
+    return out;
+  }
+  async function forceCloudSave(reason){
+    const c=sb();
+    if(!c){ toast('BDD non configurée — sauvegarde locale uniquement','warn'); return false; }
+    try{
+      const payload={id:APP_ID, data:st(), updated_at:new Date().toISOString(), reason:reason||'save'};
+      const {error}=await c.from('app_state').upsert(payload,{onConflict:'id'});
+      if(error) throw error;
+      toast('BDD Supabase OK<br><span class="muted">'+(reason||'sauvegarde')+'</span>','ok');
+      return true;
+    }catch(e){ console.error('[V77 BDD save]',e); toast('Erreur BDD : '+(e.message||e),'bad'); return false; }
+  }
+  async function cloudLoadMerge(){
+    const c=sb(); if(!c || loading) return false;
+    loading=true;
+    try{
+      const localScores = JSON.parse(JSON.stringify(st().officialScoresByDay||{}));
+      const localDeleted = Array.isArray(st().deletedPlayerKeys) ? st().deletedPlayerKeys.slice() : [];
+      const {data,error}=await c.from('app_state').select('data,updated_at').eq('id',APP_ID).maybeSingle();
+      if(error) throw error;
+      if(data && data.data){
+        const remote=data.data;
+        const deletedSet=new Set([...(remote.deletedPlayerKeys||[]),...localDeleted].map(x=>String(x).toLowerCase().trim()));
+        Object.assign(st(), remote);
+        st().deletedPlayerKeys=Array.from(deletedSet);
+        if(deletedSet.size){ st().players=(st().players||[]).filter(p=>![p.code,p.name,p.pseudo].some(v=>deletedSet.has(String(v||'').toLowerCase().trim()))); }
+        // Fusion anti-perte : les scores locaux déjà sauvés ne sont jamais écrasés par null/0 par défaut.
+        ensureScoreMap();
+        for(const [d,b] of Object.entries(localScores||{})) st().officialScoresByDay[d]=Object.assign({}, st().officialScoresByDay[d]||{}, b||{});
+        for(let d=1; d<=maxDay(); d++) applyScores(d);
+        saveLocal();
+        if(typeof repairState==='function') try{repairState();}catch(e){}
+        if(typeof renderAll==='function') try{renderAll();}catch(e){}
+        setTimeout(()=>restoreInputs(scoreDay()),150);
+        toast('Données BDD chargées + scores fusionnés','ok');
+      }
+      return true;
+    }catch(e){ console.warn('[V77 BDD load]',e); toast('Chargement BDD impossible : '+(e.message||e),'bad'); return false; }
+    finally{ loading=false; }
+  }
+
+  window.scoreEntryDay = scoreDay;
+  window.bpV77ForceCloudSave = forceCloudSave;
+  window.bpV77CloudLoadMerge = cloudLoadMerge;
+
+  window.saveOfficialScoresDay = async function(showAlert=true){
+    try{
+      if(window.currentRole && window.currentRole!=='admin') return alert('Accès réservé à l’admin.');
+      const day=scoreDay();
+      const ms=matches(day);
+      if(!ms.length) return alert('Aucun match trouvé pour la journée '+day+'.');
+      const bucket=capture(day);
+      if(!bucket) return alert('Score manquant : tous les scores doivent être renseignés. Le score 0-0 est accepté.');
+      storeScores(day,bucket);
+      ms.forEach(m=>{ const s=bucket[String(m.id)]; m.scoreA=Number(s.a); m.scoreB=Number(s.b); m.status='done'; });
+      saveLocal();
+      await forceCloudSave('scores officiels J'+day);
+      restoreInputs(day);
+      if(showAlert) alert('Scores officiels J'+day+' enregistrés dans la BDD.');
+      return true;
+    }catch(e){ console.error('[V77 scores]',e); alert('Erreur sauvegarde scores BDD : '+(e.message||e)); return false; }
+  };
+  window.saveScores=window.saveOfficialScoresDay;
+
+  const oldCalc=window.calculateGains;
+  window.calculateGains = async function(showAlert=true, force=false){
+    const day=scoreDay(); applyScores(day); restoreInputs(day);
+    const complete = matches(day).every(m=>m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined);
+    if(!complete){ const ok=await window.saveOfficialScoresDay(false); if(!ok) return false; }
+    saveLocal(); await forceCloudSave('avant calcul gains J'+day);
+    const r = (typeof oldCalc==='function') ? await oldCalc.call(this,showAlert,force) : false;
+    saveLocal(); await forceCloudSave('après calcul gains J'+day);
+    return r;
+  };
+
+  const oldDelete=window.safeDeletePlayer;
+  window.safeDeletePlayer = async function(index){
+    if(!st().players || !st().players[index]) return;
+    const p=JSON.parse(JSON.stringify(st().players[index]));
+    const name=p.name||p.pseudo||p.code||'utilisateur';
+    if(!confirm('Supprimer uniquement "'+name+'" ?\n\nLa suppression sera écrite dans la BDD.')) return;
+    const keys=[p.code,p.name,p.pseudo].map(v=>String(v||'').toLowerCase().trim()).filter(Boolean);
+    const set=new Set((st().deletedPlayerKeys||[]).map(v=>String(v).toLowerCase().trim())); keys.forEach(k=>set.add(k));
+    st().deletedPlayerKeys=Array.from(set);
+    st().players=(st().players||[]).filter(x=>![x.code,x.name,x.pseudo].some(v=>set.has(String(v||'').toLowerCase().trim())));
+    saveLocal(); await forceCloudSave('suppression utilisateur '+name);
+    if(typeof renderAll==='function') renderAll();
+    alert('Utilisateur supprimé et sauvegardé en BDD : '+name+'.');
+  };
+
+  function afterRender(){ try{ const d=scoreDay(); applyScores(d); restoreInputs(d); }catch(e){} }
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function' && !oldRenderAll.__bpV77){
+    window.renderAll=function(){ const r=oldRenderAll.apply(this,arguments); setTimeout(afterRender,80); setTimeout(afterRender,400); return r; };
+    window.renderAll.__bpV77=true;
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    setTimeout(async()=>{ await cloudLoadMerge(); afterRender(); },500);
+    setInterval(afterRender,1500);
+  });
+})();
+</script>
+
 </body></html>
