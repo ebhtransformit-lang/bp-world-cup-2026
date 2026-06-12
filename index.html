@@ -5627,12 +5627,14 @@ function getH2H(m){
 function matchInfoHTML(m){
   const h = getH2H(m);
   const venue = [m.venue, m.city].filter(Boolean).join(" · ");
+  const paris = (typeof bpParisFromMatch === "function") ? bpParisFromMatch(m) : {date:m.date||"", time:m.time||""};
+  const stadiumHtml = venue ? `🏟️ <span class="bp-stadium-click" data-match="${bpEsc(m.id)}" title="Ouvrir la page FIFA du stade">${bpEsc(venue)}</span>` : "";
   const matchBits = [
-    m.date ? `📅 ${m.date}` : "",
-    m.time ? `🕒 ${m.time} — heure de Paris` : "🕒 Heure de Paris : à confirmer",
-    venue ? `🏟️ ${venue}` : "",
-    m.group ? `🏷️ ${m.group}` : "",
-    m.phase ? `🏆 ${m.phase}` : ""
+    paris.date ? `📅 ${bpEsc(paris.date)}` : (m.date ? `📅 ${bpEsc(m.date)}` : ""),
+    paris.time ? `🕒 ${bpEsc(paris.time)} — heure de Paris` : "🕒 Heure de Paris : à confirmer",
+    stadiumHtml,
+    m.group ? `🏷️ ${bpEsc(m.group)}` : "",
+    m.phase ? `🏆 ${bpEsc(m.phase)}` : ""
   ].filter(Boolean).join('<span class="match-info-sep">•</span>');
 
   const h2h = h
@@ -11626,9 +11628,10 @@ window.BP_LOCAL_ONLY = true;
   }
   function mergePlayers(local,cloud){
     const k=p=>String(p.code||p.name||p.pseudo||'').trim().toLowerCase();
+    const deleted = new Set([...(window.state?.deletedPlayerKeys||[]), ...(local?.deletedPlayerKeys||[]), ...(cloud?.deletedPlayerKeys||[])].map(x=>String(x).trim().toLowerCase()).filter(Boolean));
     const map=new Map();
-    (cloud||[]).forEach(p=>{if(k(p))map.set(k(p),clone(p));});
-    (local||[]).forEach(p=>{if(!k(p))return; const cp=map.get(k(p))||{}; map.set(k(p),{...cp,...clone(p),secrets:Object.keys(p.secrets||{}).length?p.secrets:cp.secrets});});
+    (cloud||[]).forEach(p=>{const key=k(p); if(key && !deleted.has(key))map.set(key,clone(p));});
+    (local||[]).forEach(p=>{const key=k(p); if(!key || deleted.has(key))return; const cp=map.get(key)||{}; map.set(key,{...cp,...clone(p),secrets:Object.keys(p.secrets||{}).length?p.secrets:cp.secrets});});
     return Array.from(map.values());
   }
   function mergeState(local,cloud,preferCloudAdmin=true){
@@ -12284,6 +12287,97 @@ window.BP_LOCAL_ONLY = true;
     window.renderAdmin.__bpV75Wrapped=true;
   }
   document.addEventListener('DOMContentLoaded',function(){ window.bpV75ApplyStoredScores(); setTimeout(patchAfterRender,400); setTimeout(patchAfterRender,1200); });
+})();
+</script>
+
+
+
+<script>
+/* V76 — Fix final heures Paris + suppressions utilisateurs + scores officiels robustes */
+(function(){
+  function playerKeys(p){
+    return [p&&p.code,p&&p.name,p&&p.pseudo].map(v=>String(v||'').trim().toLowerCase()).filter(Boolean);
+  }
+  function markDeletedPlayer(p){
+    if(!window.state) return;
+    if(!Array.isArray(state.deletedPlayerKeys)) state.deletedPlayerKeys=[];
+    const set=new Set(state.deletedPlayerKeys.map(x=>String(x).trim().toLowerCase()));
+    playerKeys(p).forEach(k=>set.add(k));
+    state.deletedPlayerKeys=Array.from(set);
+    state.players=(state.players||[]).filter(x=>!playerKeys(x).some(k=>set.has(k)));
+    try{localStorage.setItem('bp_wc_admin_managed','1');}catch(e){}
+  }
+  const oldDelete=window.safeDeletePlayer;
+  window.safeDeletePlayer=async function(index){
+    if(!state || !Array.isArray(state.players) || !state.players[index]) return;
+    const p=JSON.parse(JSON.stringify(state.players[index]));
+    const name=p.name||p.pseudo||p.code||'utilisateur';
+    if(!confirm(`Supprimer uniquement "${name}" ?\n\nLa suppression sera sauvegardée en local et dans Supabase.`)) return;
+    try{ if(typeof backupUsers==='function') backupUsers('delete'); }catch(e){}
+    markDeletedPlayer(p);
+    try{ (state.bets||[]).forEach(b=>{ if(playerKeys(p).includes(String(b.player||'').trim().toLowerCase())) b.deletedPlayer=true; }); }catch(e){}
+    if(typeof save==='function') save(); else localStorage.setItem('bp_wc_dev',JSON.stringify(state));
+    try{ if(typeof bpCloudSave==='function') await bpCloudSave(false); }catch(e){ console.warn('[V76 delete cloud]',e); }
+    if(typeof renderAll==='function') renderAll();
+    alert(`Utilisateur supprimé : ${name}.`);
+  };
+
+  // Réécrit les infos match en heure Europe/Paris, y compris la version H2H qui écrasait l'ancien correctif.
+  if(typeof window.bpParisFromMatch==='function'){
+    window.matchInfoHTML=function(m){
+      const h = (typeof getH2H==='function') ? getH2H(m) : null;
+      const venue = [m.venue, m.city].filter(Boolean).join(' · ');
+      const paris = bpParisFromMatch(m);
+      const esc = (typeof bpEsc==='function') ? bpEsc : (v=>String(v??''));
+      const stadiumHtml = venue ? `🏟️ <span class="bp-stadium-click" data-match="${esc(m.id)}" title="Ouvrir la page FIFA du stade">${esc(venue)}</span>` : '';
+      const matchBits = [
+        paris.date ? `📅 ${esc(paris.date)}` : '',
+        paris.time ? `🕒 ${esc(paris.time)} — heure de Paris` : '🕒 Heure de Paris : à confirmer',
+        stadiumHtml,
+        m.group ? `🏷️ ${esc(m.group)}` : '',
+        m.phase ? `🏆 ${esc(m.phase)}` : ''
+      ].filter(Boolean).join('<span class="match-info-sep">•</span>');
+      const h2h = h ? `<b>${esc(h.score)}</b><br><span>📅 ${esc(h.date)}</span><br><span>🏆 ${esc(h.competition)}</span><br><span>🏟️ ${esc([h.venue,h.city].filter(Boolean).join(' · '))}</span>` : `<b>NA</b><br><span class="muted">Aucun dernier face-à-face fiable intégré pour cette affiche.</span>`;
+      return `<div class="match-info-panel"><div><div class="match-info-title">Infos match</div><div>${matchBits}</div></div><div><div class="match-info-title">Dernier face-à-face officiel</div><div>${h2h}</div></div></div>`;
+    };
+  }
+
+  // Sécurise les scores officiels : 0-0 est accepté et les valeurs DOM sont conservées avant calcul.
+  function day(){ try{return typeof scoreEntryDay==='function'?Number(scoreEntryDay()):Number(state.currentDay||1);}catch(e){return Number(state.currentDay||1)||1;} }
+  function matches(d){ return (state&&state.matches||[]).filter(m=>Number(m.day)===Number(d)); }
+  function val(id,prefix){ const el=document.getElementById(prefix+id); return el ? el.value : ''; }
+  window.bpV76SaveScoresNow=function(){
+    const d=day(); const ms=matches(d); if(!ms.length) return false;
+    let ok=true;
+    ms.forEach(m=>{
+      const a=val(m.id,'sa_'), b=val(m.id,'sb_');
+      if(a==='' || b==='') ok=false;
+      else { m.scoreA=Number(a); m.scoreB=Number(b); m.status='done'; }
+    });
+    if(!ok) return false;
+    state.officialScoresSavedDays=state.officialScoresSavedDays||{}; state.officialScoresSavedDays[d]=true;
+    if(typeof save==='function') save(); else localStorage.setItem('bp_wc_dev',JSON.stringify(state));
+    return true;
+  };
+  const oldCalc=window.calculateGains;
+  if(typeof oldCalc==='function'){
+    window.calculateGains=async function(){
+      bpV76SaveScoresNow();
+      return oldCalc.apply(this,arguments);
+    };
+  }
+
+  document.addEventListener('click',function(e){
+    const t=e.target.closest('.bp-stadium-click,.flag-wrap,.bet-title h3,a.fifa-stadium-link');
+    if(!t) return;
+    const mId=t.dataset&&t.dataset.match;
+    if(mId && typeof bpStadiumUrl==='function'){
+      const m=(state.matches||[]).find(x=>String(x.id)===String(mId));
+      if(m){ e.preventDefault(); e.stopPropagation(); window.open(bpStadiumUrl(m),'_blank','noopener,noreferrer'); }
+    }
+  },true);
+
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{ try{ if(typeof renderAll==='function') renderAll(); }catch(e){} },350));
 })();
 </script>
 
