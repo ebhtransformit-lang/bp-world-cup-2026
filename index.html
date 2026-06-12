@@ -13612,4 +13612,218 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V82 — Flow propre du bouton Mise + sauvegarde BDD attendue
+   Règles :
+   1) aucune mise => bouton "Réaliser une mise", champs ouverts
+   2) saisie/modification => bouton "Sauvegarder la mise", écriture BDD attendue
+   3) mise sauvegardée => bouton "Modifier cette mise", champs verrouillés
+   4) clic modifier => champs ouverts + état DRAFT écrit en BDD
+*/
+(function(){
+  if(window.__BP_V82_BET_FLOW__) return;
+  window.__BP_V82_BET_FLOW__ = true;
+
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  let sbClient = null;
+
+  function S(){ return window.state || {}; }
+  function iso(){ return new Date().toISOString(); }
+  function clone(o){ return JSON.parse(JSON.stringify(o || {})); }
+  function ready(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
+  function sb(){
+    if(!ready()) throw new Error('Supabase non configuré.');
+    if(!sbClient) sbClient = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return sbClient;
+  }
+  function compactState(){
+    const c = clone(S());
+    if(Array.isArray(c.logs)) c.logs = c.logs.slice(-300);
+    delete c.__backupHistory; delete c.backupHistory; delete c.dailyBackups; delete c.autoBackups;
+    c.lastSavedAt = iso();
+    c.lastSavedBy = 'V82_BET_FLOW';
+    return c;
+  }
+  function saveLocal(){
+    try{ localStorage.setItem('bp_wc_dev', JSON.stringify(compactState())); }catch(e){ console.warn('[V82 local]', e); }
+  }
+  async function writeBDD(reason){
+    if(typeof window.bpClearEditLock === 'function') try{ window.bpClearEditLock(); }catch(e){}
+    const payload = {id: APP_ID, data: compactState(), updated_at: iso()};
+    const {error} = await sb().from('app_state').upsert(payload, {onConflict:'id'});
+    if(error) throw error;
+    try{
+      if(typeof window.bpSetSyncPill === 'function') window.bpSetSyncPill('ok','☁️ BDD OK <span class="muted">'+(reason||'mise')+'</span>');
+    }catch(e){}
+    return true;
+  }
+  function setBusy(btn, label){
+    if(!btn) return function(){};
+    const old = btn.innerHTML;
+    btn.disabled = true;
+    btn.dataset.v82Busy = '1';
+    btn.innerHTML = '<span class="bp-mini-spinner" style="display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:bpSpin .75s linear infinite;margin-right:8px;vertical-align:-2px"></span>' + label;
+    return function(){ btn.disabled = false; delete btn.dataset.v82Busy; btn.innerHTML = old; };
+  }
+  async function withBusy(btn,label,fn){
+    const done = setBusy(btn,label);
+    try{ return await fn(); }
+    catch(e){ console.error('[V82]', e); alert('Erreur BDD : ' + (e.message || e)); return false; }
+    finally{ done(); }
+  }
+  if(!document.getElementById('bpV82SpinStyle')){
+    const style=document.createElement('style');
+    style.id='bpV82SpinStyle';
+    style.textContent='@keyframes bpSpin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(style);
+  }
+
+  function currentDay(){
+    if(typeof window.currentPronoDay === 'function') return Number(window.currentPronoDay());
+    if(typeof window.pronoDayDisplayed !== 'undefined') return Number(window.pronoDayDisplayed || S().currentDay || 1);
+    return Number(S().currentDay || 1);
+  }
+  function currentPlayer(){
+    if(window.currentRole === 'user' && window.currentUserIndex !== null && S().players && S().players[window.currentUserIndex]) return S().players[window.currentUserIndex];
+    const sel = document.getElementById('activePlayer');
+    const idx = Number(sel?.value || 0);
+    return (S().players || [])[idx] || null;
+  }
+  function matchIdFromCard(card){ return String(card?.id || '').replace('betCard_','') || card?.querySelector('[data-match]')?.dataset?.match || ''; }
+  function findBet(matchId){
+    const p = currentPlayer(); const day = currentDay();
+    if(!p) return null;
+    return (S().bets || []).find(b => Number(b.day) === Number(day) && String(b.matchId) === String(matchId) && String(b.player) === String(p.name)) || null;
+  }
+  function formData(card){
+    const a = Math.max(0, Number(card.querySelector('.scoreA')?.value ?? 0));
+    const b = Math.max(0, Number(card.querySelector('.scoreB')?.value ?? 0));
+    const stake = Math.max(1, Number(card.querySelector('.stake')?.value ?? 1));
+    const prediction = (typeof window.outcomeFromScore === 'function') ? window.outcomeFromScore(a,b) : (a>b?'A':b>a?'B':'N');
+    return {scoreA:a, scoreB:b, score:`${a} - ${b}`, stake, prediction, predictedOutcome:prediction};
+  }
+  function upsertBet(matchId, data, status){
+    const p = currentPlayer(); const day = currentDay();
+    if(!p) throw new Error('Joueur introuvable.');
+    S().bets = Array.isArray(S().bets) ? S().bets : [];
+    S().bets = S().bets.filter(b => !(Number(b.day) === Number(day) && String(b.matchId) === String(matchId) && String(b.player) === String(p.name)));
+    S().bets.push({day, matchId:String(matchId), player:p.name, code:p.code || '', ...data, status, validatedAt: status === 'VALIDATED' ? iso() : null, updatedAt: iso(), savedBy:'V82'});
+    return S().bets[S().bets.length-1];
+  }
+  function getButton(card){ return Array.from(card.querySelectorAll('button')).find(b => /mise|valider|modifier|sauvegarder|réaliser|realiser/i.test(b.textContent || '')); }
+  function setFields(card, enabled){
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(el => { el.disabled = !enabled; });
+    card.classList.toggle('lockedCard', !enabled);
+  }
+  function setBadge(card, mode){
+    const badge = card.querySelector('.bet-title .badge');
+    if(!badge) return;
+    if(mode === 'validated'){ badge.textContent = '✅ Validée'; badge.className = 'badge ok'; }
+    else { badge.textContent = 'Brouillon'; badge.className = 'badge'; }
+  }
+  function setStatus(card, html){ const st = card.querySelector('.bet-status'); if(st) st.innerHTML = html; }
+  function labelButton(btn, label, cls){
+    if(!btn) return;
+    btn.disabled = false;
+    btn.innerHTML = label;
+    btn.classList.remove('editBtn','validatedBtn','secondary');
+    if(cls) btn.classList.add(cls);
+    btn.removeAttribute('onclick');
+    btn.onclick = null;
+    btn.dataset.v82BetButton = '1';
+  }
+  function applyCardState(card){
+    if(!card || !card.id || !card.id.startsWith('betCard_')) return;
+    const matchId = matchIdFromCard(card);
+    const bet = findBet(matchId);
+    const btn = getButton(card);
+    const available = (typeof window.pronoDayIsAvailable === 'function') ? window.pronoDayIsAvailable(currentDay()) : true;
+    if(!available){ setFields(card,false); labelButton(btn,'Mise non disponible','secondary'); if(btn) btn.disabled=true; return; }
+    if(bet && String(bet.status).toUpperCase() === 'VALIDATED'){
+      setFields(card,false); setBadge(card,'validated');
+      setStatus(card, 'Validée le ' + (bet.validatedAt ? new Date(bet.validatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR')));
+      labelButton(btn,'✏️ Modifier cette mise','editBtn');
+    } else if(bet){
+      setFields(card,true); setBadge(card,'draft');
+      setStatus(card,'<span class="warn">Modification ouverte. Change la mise puis sauvegarde.</span>');
+      labelButton(btn,'💾 Sauvegarder la mise','validatedBtn');
+    } else {
+      setFields(card,true); setBadge(card,'draft');
+      setStatus(card,'Aucune mise sauvegardée. Les champs sont ouverts.');
+      labelButton(btn,'Réaliser une mise',null);
+    }
+  }
+  function applyAll(){ document.querySelectorAll('.bet-card[id^="betCard_"]').forEach(applyCardState); }
+
+  async function openEdit(card, btn){
+    const matchId = matchIdFromCard(card);
+    return withBusy(btn, 'Ouverture édition BDD…', async () => {
+      const existing = findBet(matchId) || {};
+      const data = {...formData(card), ...existing, status:'DRAFT'};
+      data.scoreA = Number(existing.scoreA ?? formData(card).scoreA);
+      data.scoreB = Number(existing.scoreB ?? formData(card).scoreB);
+      data.score = `${data.scoreA} - ${data.scoreB}`;
+      data.stake = Number(existing.stake ?? formData(card).stake);
+      upsertBet(matchId, data, 'DRAFT');
+      saveLocal();
+      await writeBDD('mise ouverte en modification');
+      applyCardState(card);
+      return true;
+    });
+  }
+  async function saveBet(card, btn){
+    const matchId = matchIdFromCard(card);
+    return withBusy(btn, 'Sauvegarde mise BDD…', async () => {
+      const data = formData(card);
+      upsertBet(matchId, data, 'VALIDATED');
+      saveLocal();
+      await writeBDD('mise sauvegardée');
+      applyCardState(card);
+      return true;
+    });
+  }
+
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(!btn) return;
+    const card = btn.closest('.bet-card[id^="betCard_"]');
+    if(!card) return;
+    const txt = (btn.textContent || '').toLowerCase();
+    if(!/mise|valider|modifier|sauvegarder|réaliser|realiser/.test(txt)) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    if(/modifier/.test(txt)) openEdit(card, btn);
+    else saveBet(card, btn);
+  }, true);
+
+  document.addEventListener('input', function(e){
+    const el=e.target; if(!el || !el.closest) return;
+    if(!el.matches('.scoreA,.scoreB,.stake')) return;
+    const card=el.closest('.bet-card[id^="betCard_"]'); if(!card) return;
+    const btn=getButton(card);
+    labelButton(btn,'💾 Sauvegarder la mise','validatedBtn');
+    setBadge(card,'draft');
+    setStatus(card,'<span class="warn">Modification non sauvegardée. Clique sur Sauvegarder la mise.</span>');
+  }, true);
+  document.addEventListener('change', function(e){
+    const el=e.target; if(!el || !el.closest) return;
+    if(!el.matches('.scoreA,.scoreB,.stake')) return;
+    const card=el.closest('.bet-card[id^="betCard_"]'); if(card) applyCardState(card), labelButton(getButton(card),'💾 Sauvegarder la mise','validatedBtn');
+  }, true);
+
+  const oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function' && !oldRenderBets.__v82){
+    window.renderBets = function(){ const r = oldRenderBets.apply(this, arguments); setTimeout(applyAll, 0); setTimeout(applyAll, 200); return r; };
+    window.renderBets.__v82 = true;
+  }
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__v82){
+    window.renderAll = function(){ const r = oldRenderAll.apply(this, arguments); setTimeout(applyAll, 0); setTimeout(applyAll, 250); return r; };
+    window.renderAll.__v82 = true;
+  }
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(applyAll, 300); setInterval(applyAll, 1500); });
+})();
+</script>
+
 </body></html>
