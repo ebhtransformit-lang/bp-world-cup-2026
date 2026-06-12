@@ -2139,6 +2139,10 @@ body.bp-user #navBackup{
 .flag-wrap{cursor:pointer}
 .bet-title h3{cursor:pointer}
 
+
+
+/* V69 — Clean journées : aucun chrono visible */
+#pronoCountdownPanel,#bpV55OpenDayPanel{display:none!important;}
 </style>
 
 <!--
@@ -8598,7 +8602,7 @@ function bpModalClose(){
         const sel=document.getElementById("activePlayer");
         if(sel) sel.value=String(window.currentUserIndex);
       }
-      setTimeout(renderCountdown,80);
+      setTimeout(()=>{ const p=document.getElementById("pronoCountdownPanel"); if(p) p.remove(); },80);
       return r;
     };
     window.tab.__bpV46Wrapped=true;
@@ -8732,7 +8736,7 @@ function bpModalClose(){
       if(window.currentRole==="user" && window.currentUserIndex!==null){
         setTimeout(()=>{ const sel=document.getElementById("activePlayer"); if(sel) sel.value=String(window.currentUserIndex); },50);
       }
-      setTimeout(renderCountdown,80);
+      setTimeout(()=>{ const p=document.getElementById("pronoCountdownPanel"); if(p) p.remove(); },80);
       return r;
     };
     window.renderAll.__bpV46Wrapped=true;
@@ -8746,7 +8750,7 @@ function bpModalClose(){
         if(e.key==="Enter"){ e.preventDefault(); window.loginWithCode(); }
       });
     }
-    setInterval(()=>{ autoRollDay(); renderCountdown(); },1000);
+    setInterval(()=>{ const p=document.getElementById("pronoCountdownPanel"); if(p) p.remove(); },3000);
   });
 })();
 </script>
@@ -11134,6 +11138,188 @@ function bpModalClose(){
   }
 
   document.addEventListener("DOMContentLoaded",()=>setTimeout(bindButtons,800));
+})();
+</script>
+
+
+
+<script>
+/* V69 — BP W CUP : logique journées simplifiée
+   - Pas de compte à rebours
+   - Pas d’ouverture / fermeture automatique
+   - Une seule source de vérité : state.closedDays[day]
+   - Admin : ouvrir / fermer la journée affichée
+   - User : peut miser uniquement si cette journée est ouverte
+*/
+(function(){
+  function maxDay(){
+    try{
+      if(typeof maxCalendarDay === "function") return Number(maxCalendarDay()) || 1;
+      return Math.max(1, ...(state.matches||[]).map(m=>Number(m.day||1)));
+    }catch(e){ return 1; }
+  }
+
+  function nDay(day){ return Math.max(1, Math.min(maxDay(), Number(day||state.currentDay||1))); }
+
+  function ensureClosedDays(){
+    if(!window.state) return;
+    if(!state.closedDays || typeof state.closedDays !== "object") state.closedDays = {};
+    const max=maxDay();
+    let hasExplicitOpen=false;
+    for(let d=1; d<=max; d++){
+      if(state.closedDays[d] === false) hasExplicitOpen=true;
+    }
+    if(!hasExplicitOpen){
+      const current=nDay(state.currentDay||1);
+      for(let d=1; d<=max; d++){
+        if(state.closedDays[d] === undefined) state.closedDays[d] = d !== current;
+      }
+      state.closedDays[current]=false;
+    }
+    delete state.adminForcedOpenDays;
+  }
+
+  function saveNow(){
+    try{ if(typeof save === "function") save(); else localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
+    try{ if(typeof bpCloudSaveDebounced === "function") bpCloudSaveDebounced(); }catch(e){}
+    try{ if(typeof bpSupabaseSaveDebounced === "function") bpSupabaseSaveDebounced(); }catch(e){}
+  }
+
+  function cleanUi(){
+    document.getElementById("pronoCountdownPanel")?.remove();
+    document.getElementById("bpV55OpenDayPanel")?.remove();
+    const workflow=document.getElementById("workflowStatus");
+    if(workflow){
+      const day=nDay(state.currentDay||1);
+      const open=!window.isDayClosed(day);
+      workflow.innerHTML = `<b>Gestion simple des journées</b><br>Journée affichée : <b>J${day}</b> · Statut : <b>${open ? "ouverte aux mises" : "fermée aux mises"}</b><br><span class="muted">Utilise uniquement les boutons “Ouvrir la journée” ou “Fermer la journée”. Aucune ouverture ou fermeture automatique n’est appliquée.</span>`;
+    }
+  }
+
+  window.isDayClosed = function(day=state.currentDay){
+    ensureClosedDays();
+    return state.closedDays[nDay(day)] === true;
+  };
+
+  window.setDayClosed = function(day, closed){
+    ensureClosedDays();
+    day=nDay(day);
+    state.closedDays[day]=!!closed;
+    if(Number(state.currentDay||1) === day) state.closed=!!closed;
+  };
+
+  window.onlyOpenDay = function(){
+    ensureClosedDays();
+    const max=maxDay();
+    for(let d=1; d<=max; d++) if(state.closedDays[d] === false) return d;
+    return nDay(state.currentDay||1);
+  };
+
+  window.pronoDayIsAvailable = function(day){
+    ensureClosedDays();
+    return state.closedDays[nDay(day)] === false;
+  };
+
+  window.viewedDayIsOpen = function(day){ return window.pronoDayIsAvailable(day); };
+
+  window.currentDayStatusLabel = function(day=state.currentDay){
+    return window.isDayClosed(day) ? "🔒 Journée fermée" : "🔓 Journée ouverte";
+  };
+
+  window.renderCountdown = function(){ cleanUi(); };
+  window.autoRollDay = function(){ return false; };
+  window.bpV44AutoRollDay = function(){ return false; };
+
+  window.openBets = async function(){
+    if(window.currentRole !== "admin") return alert("Accès réservé à l’admin.");
+    ensureClosedDays();
+    const day=nDay(state.currentDay||1);
+    const ok=confirm(`Ouvrir la journée ${day} ?\n\nLes utilisateurs pourront miser sur cette journée. Aucune fermeture automatique ne sera appliquée.`);
+    if(!ok) return false;
+    for(let d=1; d<=maxDay(); d++) state.closedDays[d]=true;
+    state.closedDays[day]=false;
+    state.currentDay=day;
+    state.closed=false;
+    try{ if(typeof log === "function") log("SYSTEM", `Journée ${day} ouverte par Admin`, 0); }catch(e){}
+    saveNow();
+    if(typeof renderAll === "function") renderAll();
+    cleanUi();
+    alert(`Journée ${day} ouverte. Les utilisateurs peuvent miser.`);
+    return true;
+  };
+
+  window.closeBets = async function(){
+    if(window.currentRole !== "admin") return alert("Accès réservé à l’admin.");
+    ensureClosedDays();
+    const day=nDay(state.currentDay||1);
+    const ok=confirm(`Fermer la journée ${day} ?\n\nLes utilisateurs ne pourront plus miser sur cette journée.`);
+    if(!ok) return false;
+    state.closedDays[day]=true;
+    state.closed=true;
+    try{ if(typeof log === "function") log("SYSTEM", `Journée ${day} fermée par Admin`, 0); }catch(e){}
+    saveNow();
+    if(typeof renderAll === "function") renderAll();
+    cleanUi();
+    alert(`Journée ${day} fermée. Les mises sont bloquées.`);
+    return true;
+  };
+
+  window.setAdminViewDay = function(day){
+    ensureClosedDays();
+    day=nDay(day);
+    state.currentDay=day;
+    state.closed=window.isDayClosed(day);
+    try{ calendarDayDisplayed=day; }catch(e){}
+    try{ pronoDayDisplayed=day; }catch(e){}
+    if(typeof renderAll === "function") renderAll();
+    setTimeout(cleanUi,60);
+  };
+
+  window.previousDay = async function(){
+    if(window.currentRole !== "admin") return alert("Accès réservé à l’admin.");
+    const day=nDay(state.currentDay||1);
+    if(day<=1) return alert("Tu es déjà sur la journée 1.");
+    window.setAdminViewDay(day-1);
+    return true;
+  };
+
+  window.nextDay = async function(){
+    if(window.currentRole !== "admin") return alert("Accès réservé à l’admin.");
+    const day=nDay(state.currentDay||1);
+    if(day>=maxDay()) return alert("Dernière journée atteinte.");
+    window.setAdminViewDay(day+1);
+    return true;
+  };
+
+  window.renderWorkflow = cleanUi;
+
+  function bindButtons(){
+    cleanUi();
+    document.querySelectorAll("button").forEach(btn=>{
+      const t=(btn.textContent||"").trim();
+      if(t.includes("Journée précédente")) btn.onclick=window.previousDay;
+      if(t.includes("Journée suivante")) btn.onclick=window.nextDay;
+      if(t.includes("Ouvrir la journée")) btn.onclick=window.openBets;
+      if(t.includes("Fermer la journée")) btn.onclick=window.closeBets;
+    });
+  }
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll === "function" && !oldRenderAll.__bpV69Wrapped){
+    window.renderAll=function(){
+      ensureClosedDays();
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(bindButtons,80);
+      return r;
+    };
+    window.renderAll.__bpV69Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    ensureClosedDays();
+    setTimeout(bindButtons,300);
+    setTimeout(bindButtons,1000);
+  });
 })();
 </script>
 
