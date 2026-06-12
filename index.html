@@ -2624,13 +2624,6 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 
 
 <section id="admin" class="active">
-  <div id="adminLock" class="card" style="display: none;">
-    <h2>🔐 Accès Admin</h2>
-    <input id="adminCode" type="password" placeholder="Code admin">
-    <button class="action" onclick="checkAdmin()">Entrer</button>
-    <div class="bad" id="adminError" style="display:none">Code incorrect.</div>
-  </div>
-
   <div id="adminPanel" style="display: block;">
 
     <div class="card workflow-card">
@@ -11603,13 +11596,23 @@ window.BP_LOCAL_ONLY = true;
   function keyBet(b){ return [Number(b.day||0), String(b.matchId||''), String(b.player||''), String(b.code||'')].join('|'); }
   function mergeBets(local,cloud){
     const map=new Map();
-    (cloud||[]).forEach(b=>map.set(keyBet(b),clone(b)));
-    (local||[]).forEach(b=>{
-      const k=keyBet(b), old=map.get(k)||{};
-      const merged={...old,...clone(b)};
-      if(String(old.status||'').toUpperCase()==='VALIDATED') { merged.status='VALIDATED'; merged.validatedAt=old.validatedAt||merged.validatedAt; }
-      map.set(k,merged);
-    });
+    function stamp(b){
+      const vals=[b?.savedAt,b?.updatedAt,b?.editUnlockedAt,b?.validatedAt,b?.createdAt].filter(Boolean);
+      const t=Math.max(0,...vals.map(v=>Date.parse(v)||0));
+      return t;
+    }
+    function put(b){
+      const k=keyBet(b);
+      if(!k) return;
+      const prev=map.get(k);
+      if(!prev){ map.set(k,clone(b)); return; }
+      const tb=stamp(b), tp=stamp(prev);
+      // Important : une mise repassée en brouillon après clic Modifier doit gagner sur une ancienne mise VALIDATED du cloud.
+      if(tb>=tp) map.set(k,{...clone(prev),...clone(b)});
+      else map.set(k,{...clone(b),...clone(prev)});
+    }
+    (cloud||[]).forEach(put);
+    (local||[]).forEach(put);
     return Array.from(map.values());
   }
   function mergeMatches(local,cloud){
@@ -11660,6 +11663,10 @@ window.BP_LOCAL_ONLY = true;
     }finally{ saving=false; }
   }
   async function cloudLoad(showAlert=false){
+    if(typeof window.bpIsEditLocked==='function' && window.bpIsEditLocked()){
+      try{ pill('warn','☁️ Synchro en pause <span class="muted">saisie en cours</span>'); }catch(e){}
+      return false;
+    }
     if(loading) return false; loading=true;
     try{
       const cloud=await fetchCloud();
@@ -12000,18 +12007,87 @@ window.BP_LOCAL_ONLY = true;
     window.editBet.__bpV73Wrapped=true;
   }
 
-  // Évite que les anciens handlers onchange des scores officiels déclenchent une sauvegarde cloud à chaque sélection.
-  document.addEventListener('change', function(e){
-    if(isSensitiveInput(e.target)){
-      e.stopImmediatePropagation();
-      setLock('saisie scores/mise');
-    }
-  }, true);
+  // Important : on NE bloque plus les événements change.
+  // Les anciens handlers doivent continuer à mettre à jour les valeurs internes ; seule la synchro cloud est mise en pause.
 
   document.addEventListener('DOMContentLoaded', function(){
     installActionWraps();
     setInterval(installActionWraps, 1500);
   });
+})();
+</script>
+
+
+
+<script>
+/* V74 — Nettoyage contradictions synchro / édition / scores
+   - Supprime le 2e code admin du DOM.
+   - Bloque vraiment le polling cloud pendant la saisie, avant modification de state.
+   - Ne bloque plus les événements change des inputs/selects.
+   - Sauvegarde uniquement sur action confirmée : validation mise, enregistrement scores, calcul gains, ouverture/fermeture journée.
+*/
+(function(){
+  const ACTIONS = ['validateSingleBet','saveBets','saveOfficialScoresDay','saveScores','calculateGains','recalculateDay','openBets','closeBets','bpV55OpenSpecificDay','workflowNextStep'];
+
+  function removeAdminCode(){
+    document.getElementById('adminLock')?.remove();
+    document.getElementById('adminCode')?.remove();
+    document.getElementById('adminError')?.remove();
+    const panel=document.getElementById('adminPanel');
+    if(panel && window.currentRole==='admin') panel.style.display='block';
+  }
+
+  function sensitiveActive(){
+    const el=document.activeElement;
+    if(!el) return false;
+    const id=String(el.id||''), cls=String(el.className||'');
+    return cls.includes('scoreA') || cls.includes('scoreB') || cls.includes('stake') || /^sa_/.test(id) || /^sb_/.test(id) || !!el.closest?.('#betRows,#scoreInputs,.admin-day-score-panel');
+  }
+
+  const oldBpIsEditLocked = window.bpIsEditLocked;
+  window.bpIsEditLocked = function(){
+    try{ if(typeof oldBpIsEditLocked==='function' && oldBpIsEditLocked()) return true; }catch(e){}
+    return sensitiveActive();
+  };
+
+  // Ne jamais remplacer state pendant une saisie. Ce wrapper protège les boutons manuels ; le V71 cloudLoad a aussi été patché.
+  ['bpCloudLoad','bpV61LoadCloud','bpV60LoadCloud','bpForceLoadSupabase'].forEach(name=>{
+    const fn=window[name];
+    if(typeof fn==='function' && !fn.__bpV74Guarded){
+      window[name]=async function(){
+        if(window.bpIsEditLocked && window.bpIsEditLocked()){
+          try{ if(typeof bpSetSyncPill==='function') bpSetSyncPill('warn','☁️ Synchro en pause <span class="muted">saisie en cours</span>'); }catch(e){}
+          return false;
+        }
+        return fn.apply(this, arguments);
+      };
+      window[name].__bpV74Guarded=true;
+    }
+  });
+
+  // Après une action validée, on libère le lock et on pousse l’état cloud.
+  function wrapAction(name){
+    const fn=window[name];
+    if(typeof fn!=='function' || fn.__bpV74Wrapped) return;
+    window[name]=async function(){
+      try{ if(typeof window.bpClearEditLock==='function') window.bpClearEditLock(); }catch(e){}
+      const r=fn.apply(this, arguments);
+      const v=r && typeof r.then==='function' ? await r : r;
+      try{ if(typeof window.bpClearEditLock==='function') window.bpClearEditLock(); }catch(e){}
+      try{ if(typeof window.bpCloudSaveDebounced==='function') window.bpCloudSaveDebounced(); }catch(e){}
+      return v;
+    };
+    window[name].__bpV74Wrapped=true;
+  }
+
+  function install(){
+    removeAdminCode();
+    ACTIONS.forEach(wrapAction);
+    if(window.saveOfficialScoresDay && window.saveScores!==window.saveOfficialScoresDay) window.saveScores=window.saveOfficialScoresDay;
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>{ install(); setInterval(install,1500); });
+  setTimeout(install,0);
 })();
 </script>
 
