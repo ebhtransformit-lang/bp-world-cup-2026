@@ -12781,4 +12781,129 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+<script>
+/* V79 HARD — Sauvegarde BDD centralisée + URLs nouvel onglet AVANT les anciens handlers + spinner tous CTA
+   - Ne remplace jamais l'onglet du jeu lors des clics drapeau/stade/équipe.
+   - Toute action métier critique écrit app_state dans Supabase et affiche un spinner.
+   - Scores officiels et suppressions joueurs sont protégés par tombstones + vérification BDD. */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const LOCAL_KEY = 'bp_wc_dev';
+  let sbClient=null;
+  let activeButton=null;
+  let cloudBusy=false;
+
+  const css=document.createElement('style');
+  css.textContent=`
+    .bp-v79-loading{opacity:.72!important;pointer-events:none!important;position:relative!important}
+    .bp-v79-loading::before{content:"";display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:bpV79Spin .75s linear infinite}
+    @keyframes bpV79Spin{to{transform:rotate(360deg)}}
+  `;
+  document.head.appendChild(css);
+
+  function clone(x){try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return{};}}
+  function state(){return window.state||(window.state={});}
+  function now(){return new Date().toISOString();}
+  function ready(){return !!(window.supabase&&window.BP_SUPABASE_URL&&window.BP_SUPABASE_ANON_KEY);}
+  function sb(){if(!ready()) throw new Error('Supabase non configuré.'); if(!sbClient) sbClient=window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY); return sbClient;}
+  function pill(kind,msg){let el=document.getElementById('bpSyncPill'); if(!el){el=document.createElement('div');el.id='bpSyncPill';document.body.appendChild(el);} el.className=kind||'warn'; el.innerHTML=msg;}
+  function compact(s){
+    const c=clone(s||state());
+    c.logs=(c.logs||[]).slice(-200); c.settlementDetails=(c.settlementDetails||[]).slice(-2500); c.lastSavedAt=now(); c.schemaVersion='v79-hard';
+    delete c.htmlPreview; delete c.debug; delete c._cache;
+    return c;
+  }
+  function saveLocal(){try{localStorage.setItem(LOCAL_KEY,JSON.stringify(compact(state())));}catch(e){try{sessionStorage.setItem('bp_wc_session_state',JSON.stringify(compact(state())));}catch(_){}}}
+  function keyOf(p){return [p&&p.code,p&&p.name,p&&p.pseudo].map(v=>String(v||'').trim().toLowerCase()).filter(Boolean);}
+  function tombstones(){const s=state(); if(!Array.isArray(s.deletedPlayerKeys)) s.deletedPlayerKeys=[]; return new Set(s.deletedPlayerKeys.map(x=>String(x||'').trim().toLowerCase()).filter(Boolean));}
+  function applyTombstones(){const s=state(); const set=tombstones(); s.deletedPlayerKeys=Array.from(set); if(set.size&&Array.isArray(s.players)) s.players=s.players.filter(p=>!keyOf(p).some(k=>set.has(k)));}
+  function ensureStores(){const s=state(); if(!s.officialScores||typeof s.officialScores!=='object') s.officialScores={}; if(!s.officialScoresByDay||typeof s.officialScoresByDay!=='object') s.officialScoresByDay={}; if(!s.officialScoresByMatch||typeof s.officialScoresByMatch!=='object') s.officialScoresByMatch={}; if(!s.officialScoresSavedDays||typeof s.officialScoresSavedDays!=='object') s.officialScoresSavedDays={}; if(!Array.isArray(s.bets)) s.bets=[];}
+  async function writeCloud(reason){
+    if(cloudBusy) { saveLocal(); return true; }
+    cloudBusy=true;
+    try{
+      ensureStores(); applyTombstones(); saveLocal();
+      pill('warn','☁️ Synchronisation BDD en cours…');
+      const res=await sb().from('app_state').upsert({id:APP_ID,data:compact(state()),updated_at:now()},{onConflict:'id'});
+      if(res.error) throw res.error;
+      pill('ok','☁️ BDD sauvegardée — '+(reason||'OK')+' — '+new Date().toLocaleTimeString('fr-FR'));
+      return true;
+    }catch(e){console.error('[V79 writeCloud]',e); pill('bad','❌ BDD non sauvegardée : '+(e.message||e)); throw e;}
+    finally{cloudBusy=false;}
+  }
+  async function readCloud(){const res=await sb().from('app_state').select('data,updated_at').eq('id',APP_ID).maybeSingle(); if(res.error) throw res.error; return res.data&&res.data.data?clone(res.data.data):null;}
+  function mergeRemote(remote){
+    if(!remote) return;
+    const local=state();
+    const localDeleted=tombstones();
+    const remoteDeleted=new Set((remote.deletedPlayerKeys||[]).map(x=>String(x||'').trim().toLowerCase()).filter(Boolean));
+    const deleted=new Set([...localDeleted,...remoteDeleted]);
+    Object.assign(local, remote);
+    local.deletedPlayerKeys=Array.from(deleted);
+    // Ne jamais perdre les scores locaux déjà saisis si le remote ne les a pas.
+    ['officialScores','officialScoresByDay','officialScoresByMatch','officialScoresSavedDays'].forEach(k=>{local[k]=Object.assign({}, remote[k]||{}, local[k]||{});});
+    // Fusion des mises par clé : on garde l'objet le plus récemment sauvé/validé si possible.
+    const map=new Map();
+    function betKey(b){return [b.day,b.matchId,b.player||b.code||''].map(x=>String(x)).join('|');}
+    [...(remote.bets||[]),...(local.bets||[])].forEach(b=>{const k=betKey(b); const prev=map.get(k); const tb=Date.parse(b.savedAt||b.validatedAt||b.updatedAt||0)||0; const tp=prev?(Date.parse(prev.savedAt||prev.validatedAt||prev.updatedAt||0)||0):-1; if(!prev||tb>=tp) map.set(k,b);});
+    local.bets=Array.from(map.values());
+    applyTombstones(); applyAllStoredScores(); saveLocal();
+  }
+  async function loadCloudMerge(){try{const r=await readCloud(); if(r){mergeRemote(r); if(typeof repairState==='function')try{repairState();}catch(e){} if(typeof renderAll==='function')try{renderAll();}catch(e){} setTimeout(restoreScoreInputs,100); pill('ok','☁️ BDD chargée'); return true;}}catch(e){console.warn('[V79 load]',e); pill('bad','⚠️ Chargement BDD impossible : '+(e.message||e));} return false;}
+
+  function setBusy(btn,on,label){if(!btn) return; if(on){if(!btn.dataset.v79Old) btn.dataset.v79Old=btn.innerHTML; btn.disabled=true; btn.classList.add('bp-v79-loading'); btn.innerHTML=label||'Traitement…';}else{btn.disabled=false; btn.classList.remove('bp-v79-loading'); if(btn.dataset.v79Old){btn.innerHTML=btn.dataset.v79Old; delete btn.dataset.v79Old;}}}
+  async function busy(label,fn){const b=activeButton; setBusy(b,true,label); try{return await fn();}finally{setBusy(b,false);}}
+
+  function scoreDay(){try{if(typeof window.scoreEntryDay==='function') return Number(window.scoreEntryDay())||1;}catch(e){} const s=state(); const d=Number(s.currentDay||1); return (s.closedDays&&s.closedDays[d])?d:Math.max(1,d-1);}
+  function dayMatches(day){return (state().matches||[]).filter(m=>Number(m.day)===Number(day));}
+  function collectScoreInputs(day){const out={}; for(const m of dayMatches(day)){const a=document.getElementById('sa_'+m.id); const b=document.getElementById('sb_'+m.id); if(!a||!b||a.value===''||b.value==='') return null; out[String(m.id)]={a:Number(a.value),b:Number(b.value),day:Number(day),savedAt:now()};} return out;}
+  function storeScoreBucket(day,bucket){ensureStores(); const s=state(); const d=String(day); s.officialScores[d]=Object.assign({},s.officialScores[d]||{},bucket); s.officialScoresByDay[d]=Object.assign({},s.officialScoresByDay[d]||{},bucket); s.officialScoresSavedDays[d]=true; Object.entries(bucket).forEach(([id,sc])=>{const m=(s.matches||[]).find(x=>String(x.id)===String(id)); if(m){m.scoreA=Number(sc.a); m.scoreB=Number(sc.b); m.status='done';} s.officialScoresByMatch[id]={day:Number(day),scoreA:Number(sc.a),scoreB:Number(sc.b),savedAt:sc.savedAt||now()};});}
+  function getStoredScore(id,day){const s=state(); return s.officialScoresByMatch?.[String(id)] || s.officialScores?.[String(day)]?.[String(id)] || s.officialScoresByDay?.[String(day)]?.[String(id)] || null;}
+  function applyAllStoredScores(){ensureStores(); (state().matches||[]).forEach(m=>{const sc=getStoredScore(m.id,m.day); if(sc){const a=sc.a??sc.scoreA, b=sc.b??sc.scoreB; if(a!==undefined&&b!==undefined&&a!==null&&b!==null){m.scoreA=Number(a); m.scoreB=Number(b); m.status='done';}}});}
+  function restoreScoreInputs(){applyAllStoredScores(); const d=scoreDay(); dayMatches(d).forEach(m=>{const sc=getStoredScore(m.id,d); if(!sc) return; const a=sc.a??sc.scoreA, b=sc.b??sc.scoreB; const ia=document.getElementById('sa_'+m.id), ib=document.getElementById('sb_'+m.id); if(ia&&a!==undefined&&a!==null) ia.value=String(Number(a)); if(ib&&b!==undefined&&b!==null) ib.value=String(Number(b));});}
+  function verifyRemoteScores(remote,day,bucket){if(!remote) return false; for(const [id,sc] of Object.entries(bucket)){const m=(remote.matches||[]).find(x=>String(x.id)===String(id)); const a=Number(sc.a), b=Number(sc.b); const okM=m&&Number(m.scoreA)===a&&Number(m.scoreB)===b; const byMatch=remote.officialScoresByMatch?.[id]; const byDay=remote.officialScores?.[String(day)]?.[id]||remote.officialScoresByDay?.[String(day)]?.[id]; const okBM=byMatch&&Number(byMatch.scoreA)===a&&Number(byMatch.scoreB)===b; const okBD=byDay&&Number(byDay.a??byDay.scoreA)===a&&Number(byDay.b??byDay.scoreB)===b; if(!okM&&!okBM&&!okBD) return false;} return true;}
+
+  window.addEventListener('click',function(e){const b=e.target&&e.target.closest?e.target.closest('button'):null; if(b) activeButton=b;},true);
+
+  // Interception au niveau WINDOW capture : passe avant les anciens listeners document et évite location.href.
+  function openNew(url){if(!url) return; try{const w=window.open(url,'_blank','noopener,noreferrer'); if(w) try{w.opener=null;}catch(e){} }catch(e){console.warn('[V79 openNew]',e);} }
+  function matchById(id){return (state().matches||[]).find(m=>String(m.id)===String(id));}
+  function matchFromElement(el){const card=el.closest?.('.bet-card,.match-card,.score-row'); if(!card) return null; const id=(card.id||'').replace('betCard_','') || card.querySelector?.('[data-match]')?.dataset?.match || ((card.textContent||'').match(/M\d{3}/)||[])[0]; return id?matchById(id):null;}
+  window.addEventListener('click',function(e){
+    const t=e.target; if(!t||!t.closest) return;
+    const a=t.closest('a[href]');
+    if(a&&(/fifa\.com|wikipedia\.org|wikimedia\.org/i.test(a.href)||a.classList.contains('fifa-stadium-link'))){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openNew(a.href);return;}
+    const stadium=t.closest('.bp-stadium-click,.match-card-venue,.match-stadium');
+    if(stadium){const m=matchFromElement(stadium)||matchById(stadium.dataset?.match); if(m&&typeof window.bpStadiumUrl==='function'){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openNew(window.bpStadiumUrl(m));return;}}
+    const flag=t.closest('.flag-wrap,img.flag');
+    if(flag){const m=matchFromElement(flag); if(m&&typeof window.bpTeamUrl==='function'){const container=flag.closest('.bet-card,.match-card,.score-row')||document; const imgs=[...container.querySelectorAll('img.flag')]; const img=flag.tagName==='IMG'?flag:flag.querySelector('img.flag'); const idx=imgs.indexOf(img); const team=idx<=0?m.teamA:m.teamB; e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openNew(window.bpTeamUrl(team));return;}}
+    const title=t.closest('.bet-title h3,.match-card-title');
+    if(title){const m=matchFromElement(title); if(m&&typeof window.bpTeamUrl==='function'){const r=title.getBoundingClientRect(); const team=e.clientX<r.left+r.width/2?m.teamA:m.teamB; e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openNew(window.bpTeamUrl(team));}}
+  },true);
+  function hardenLinks(){document.querySelectorAll('a[href]').forEach(a=>{if(/fifa\.com|wikipedia\.org|wikimedia\.org/i.test(a.href)||a.classList.contains('fifa-stadium-link')){a.target='_blank';a.rel='noopener noreferrer';}});}
+
+  // Overrides métier.
+  window.saveOfficialScoresDay=async function(showAlert=true){return busy('Sauvegarde BDD…',async()=>{if(window.currentRole&&window.currentRole!=='admin'){alert('Accès réservé à l’admin.');return false;} const d=scoreDay(); const bucket=collectScoreInputs(d); if(!bucket){alert('Score manquant : tous les scores doivent être renseignés. Le score 0-0 est accepté.');return false;} storeScoreBucket(d,bucket); saveLocal(); await writeCloud('scores officiels J'+d); const remote=await readCloud(); if(!verifyRemoteScores(remote,d,bucket)) throw new Error('Vérification BDD scores échouée après écriture.'); if(typeof renderAll==='function')try{renderAll();}catch(e){} setTimeout(restoreScoreInputs,100); if(showAlert) alert('Scores officiels J'+d+' enregistrés et vérifiés en BDD.'); return true;});};
+  window.saveScores=window.saveOfficialScoresDay;
+
+  const oldCalculate=window.calculateGains;
+  window.calculateGains=async function(showAlert=true,force=false){return busy('Calcul + sauvegarde BDD…',async()=>{const ok=await window.saveOfficialScoresDay(false); if(!ok) return false; const r=oldCalculate?await oldCalculate.call(this,showAlert,force):true; applyAllStoredScores(); saveLocal(); await writeCloud('calcul gains'); return r;});};
+  window.recalculateDay=async function(){return window.calculateGains(true,true);};
+
+  window.safeDeletePlayer=async function(index){return busy('Suppression BDD…',async()=>{const s=state(); if(!Array.isArray(s.players)||!s.players[index]) return false; const p=clone(s.players[index]); const name=p.name||p.pseudo||p.code||'utilisateur'; if(!confirm('Supprimer définitivement "'+name+'" ?\n\nLa suppression sera écrite en BDD et protégée contre les réimports.')) return false; const set=tombstones(); keyOf(p).forEach(k=>set.add(k)); s.deletedPlayerKeys=Array.from(set); applyTombstones(); saveLocal(); await writeCloud('suppression utilisateur '+name); const remote=await readCloud(); const still=(remote.players||[]).some(x=>keyOf(x).some(k=>set.has(k))); if(still) throw new Error('Vérification suppression échouée : utilisateur encore présent en BDD.'); if(typeof renderAll==='function')try{renderAll();}catch(e){} alert('Utilisateur supprimé et vérifié en BDD : '+name); return true;});};
+
+  function wrapSave(name,label){const old=window[name]; if(typeof old!=='function'||old.__v79) return; const fn=async function(){return busy(label||'Sauvegarde BDD…',async()=>{const r=await old.apply(this,arguments); applyTombstones(); applyAllStoredScores(); saveLocal(); await writeCloud(name); return r;});}; fn.__v79=true; window[name]=fn;}
+  ['validateSingleBet','saveBets','editBet','sealSecrets','saveAdmin','savePlayersAdmin','addPlayer','openBets','closeBets','nextDay','previousDay','workflowNextStep','resetOfficialScoresDay','bpCloudSave','bpForceLoadSupabase'].forEach(n=>wrapSave(n,'Synchronisation BDD…'));
+
+  const oldRender=window.renderAll;
+  if(typeof oldRender==='function'&&!oldRender.__v79){window.renderAll=function(){applyTombstones(); applyAllStoredScores(); const r=oldRender.apply(this,arguments); setTimeout(()=>{restoreScoreInputs();hardenLinks();},60); return r;}; window.renderAll.__v79=true;}
+  window.bpV79SaveCloud=writeCloud;
+  window.bpV79LoadCloud=loadCloudMerge;
+  window.bpV79Audit=async function(){const r=await readCloud(); console.log('BP V79 cloud',r); alert('Audit BDD : '+(r?'données trouvées, voir console':'aucune donnée'));};
+
+  document.addEventListener('DOMContentLoaded',()=>{setTimeout(loadCloudMerge,350); setInterval(()=>{applyTombstones();restoreScoreInputs();hardenLinks();},1200);});
+})();
+</script>
+
 </body></html>
