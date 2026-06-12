@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - DEV</title>
+<title>B Partner FIFA World Cup 2026 - V75 SAFE</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -12088,6 +12088,202 @@ window.BP_LOCAL_ONLY = true;
 
   document.addEventListener('DOMContentLoaded',()=>{ install(); setInterval(install,1500); });
   setTimeout(install,0);
+})();
+</script>
+
+
+<script>
+/* V75 SAFE — Scores officiels persistants + Paris/CET + liens FIFA en nouvel onglet
+   Correctifs appliqués sans modifier le chargement initial pour éviter l'écran blanc. */
+(function(){
+  const SCORE_KEY = 'bp_wc_official_scores_v75';
+
+  function clone(x){ try{return JSON.parse(JSON.stringify(x));}catch(e){return x;} }
+  function maxDaySafe(){ try{return typeof maxCalendarDay==='function'?Number(maxCalendarDay())||1:Math.max(1,...(state.matches||[]).map(m=>Number(m.day||1)));}catch(e){return 1;} }
+  function nDay(day){ return Math.max(1, Math.min(maxDaySafe(), Number(day||state?.currentDay||1))); }
+  function isClosedSafe(day){ return !!(state && state.closedDays && state.closedDays[nDay(day)]===true); }
+  function scoreDaySafe(){ const d=nDay(state?.currentDay||1); return isClosedSafe(d) ? d : Math.max(1,d-1); }
+  function matchesOf(day){ return (state?.matches||[]).filter(m=>Number(m.day)===Number(day)); }
+  function readStore(){ try{return JSON.parse(localStorage.getItem(SCORE_KEY)||'{}')||{};}catch(e){return{};} }
+  function writeStore(obj){ try{localStorage.setItem(SCORE_KEY,JSON.stringify(obj||{}));}catch(e){} }
+  function saveStateOnly(){ try{ if(typeof save==='function') save(); else localStorage.setItem('bp_wc_dev',JSON.stringify(state)); }catch(e){ try{localStorage.setItem('bp_wc_dev',JSON.stringify(state));}catch(_e){} } }
+  function getInput(id,prefix){ return document.getElementById(prefix+id); }
+
+  function captureScoresFromDOM(day){
+    const ms=matchesOf(day), out={};
+    for(const m of ms){
+      const sa=getInput(m.id,'sa_'), sb=getInput(m.id,'sb_');
+      if(!sa || !sb) continue;
+      if(sa.value==='' || sb.value==='') continue;
+      out[m.id]={a:Number(sa.value), b:Number(sb.value), day:Number(day), savedAt:new Date().toISOString()};
+    }
+    return out;
+  }
+
+  function applyStoredScoresToState(day){
+    const store=readStore();
+    const bucket=store[String(day)]||{};
+    matchesOf(day).forEach(m=>{
+      const s=bucket[String(m.id)];
+      if(!s) return;
+      if(s.a!==null && s.a!==undefined && s.b!==null && s.b!==undefined){
+        m.scoreA=Number(s.a); m.scoreB=Number(s.b); m.status='done';
+      }
+    });
+    if(Object.keys(bucket).length){
+      if(!state.officialScoresSavedDays || typeof state.officialScoresSavedDays!=='object') state.officialScoresSavedDays={};
+      state.officialScoresSavedDays[Number(day)]=true;
+    }
+  }
+
+  function restoreSelectValues(day){
+    const store=readStore();
+    const bucket=store[String(day)]||{};
+    matchesOf(day).forEach(m=>{
+      const s=bucket[String(m.id)];
+      const sa=getInput(m.id,'sa_'), sb=getInput(m.id,'sb_');
+      if(s && sa && sb){ sa.value=String(Number(s.a)); sb.value=String(Number(s.b)); }
+      else if(sa && sb && m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined){ sa.value=String(Number(m.scoreA)); sb.value=String(Number(m.scoreB)); }
+    });
+  }
+
+  function allScoresPresent(day){
+    const ms=matchesOf(day);
+    return ms.length>0 && ms.every(m=>m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined && String(m.scoreA)!=='' && String(m.scoreB)!=='');
+  }
+
+  window.scoreEntryDay = scoreDaySafe;
+  window.bpV75ApplyStoredScores = function(){
+    try{ for(let d=1; d<=maxDaySafe(); d++) applyStoredScoresToState(d); }catch(e){ console.warn('[V75 scores restore]',e); }
+  };
+
+  window.saveOfficialScoresDay = async function(showAlert=true){
+    try{
+      if(window.currentRole && window.currentRole!=='admin') return alert('Accès réservé à l’admin.');
+      const day=scoreDaySafe();
+      const picked=captureScoresFromDOM(day);
+      const ms=matchesOf(day);
+      if(!ms.length) return alert('Aucun match trouvé pour cette journée.');
+      for(const m of ms){
+        if(!picked[m.id]) return alert('Score manquant pour '+m.id+'.');
+      }
+      const store=readStore();
+      store[String(day)]={...(store[String(day)]||{}),...picked};
+      writeStore(store);
+      ms.forEach(m=>{ const s=picked[m.id]; m.scoreA=Number(s.a); m.scoreB=Number(s.b); m.status='done'; });
+      if(!state.officialScoresSavedDays || typeof state.officialScoresSavedDays!=='object') state.officialScoresSavedDays={};
+      state.officialScoresSavedDays[day]=true;
+      saveStateOnly();
+      try{ if(typeof bpCloudSave==='function') await bpCloudSave(false); }catch(e){}
+      setTimeout(()=>restoreSelectValues(day),60);
+      if(showAlert) alert('Scores officiels de la journée '+day+' enregistrés.');
+      return true;
+    }catch(e){ console.error('[V75 save scores]',e); alert('Erreur enregistrement scores : '+(e.message||e)); return false; }
+  };
+  window.saveScores = window.saveOfficialScoresDay;
+
+  const previousCalculate = window.calculateGains;
+  window.calculateGains = async function(showAlert=true, force=false){
+    const day=scoreDaySafe();
+    applyStoredScoresToState(day);
+    restoreSelectValues(day);
+    if(!allScoresPresent(day)){
+      const ok = await window.saveOfficialScoresDay(false);
+      if(!ok) return false;
+    } else saveStateOnly();
+    if(typeof previousCalculate==='function') return previousCalculate.call(this,showAlert,force);
+    alert('Fonction de calcul introuvable.'); return false;
+  };
+
+  const previousRecalc = window.recalculateDay;
+  window.recalculateDay = async function(){
+    const day=scoreDaySafe(); applyStoredScoresToState(day); restoreSelectValues(day); saveStateOnly();
+    if(typeof previousRecalc==='function') return previousRecalc.apply(this,arguments);
+    return window.calculateGains(true,true);
+  };
+
+  const previousReset = window.resetOfficialScoresDay;
+  window.resetOfficialScoresDay = async function(){
+    const day=scoreDaySafe();
+    const ok=confirm('Remettre à zéro les scores officiels de la journée '+day+' ?');
+    if(!ok) return false;
+    const store=readStore(); delete store[String(day)]; writeStore(store);
+    matchesOf(day).forEach(m=>{m.scoreA=null;m.scoreB=null;m.status='open';});
+    if(state.officialScoresSavedDays) delete state.officialScoresSavedDays[day];
+    if(state.gainsCalculatedDays) delete state.gainsCalculatedDays[day];
+    try{ if(typeof rollbackDaySettlement==='function') rollbackDaySettlement(day); }catch(e){}
+    saveStateOnly();
+    if(typeof renderAll==='function') renderAll();
+    return true;
+  };
+
+  function patchAfterRender(){
+    try{
+      const day=scoreDaySafe();
+      applyStoredScoresToState(day);
+      restoreSelectValues(day);
+      patchParisLabels();
+      patchNewTabLinks();
+    }catch(e){ console.warn('[V75 after render]',e); }
+  }
+
+  function parisInfo(m){
+    try{ if(typeof bpParisFromMatch==='function') return bpParisFromMatch(m); }catch(e){}
+    return {date:m.date||'',time:(m.time||'')};
+  }
+  function patchParisLabels(){
+    try{
+      document.querySelectorAll('.match-card').forEach(card=>{
+        const title=card.querySelector('.match-card-title')?.textContent||'';
+        const m=(state.matches||[]).find(x=>title.includes(x.teamA) && title.includes(x.teamB));
+        if(!m) return;
+        const p=parisInfo(m);
+        const meta=card.querySelector('.match-card-meta');
+        if(meta) meta.innerHTML='<span>📅 '+bpEsc(p.date||m.date||'')+'</span><span>🕒 '+bpEsc(p.time||m.time||'')+' — heure de Paris</span><span>Match '+bpEsc(m.matchNo||m.id)+'</span>';
+        const venue=card.querySelector('.match-card-venue');
+        if(venue) venue.innerHTML='🏟️ <span class="bp-stadium-click" data-match="'+bpEsc(m.id)+'" title="Ouvrir la page FIFA du stade">'+bpEsc([m.venue,m.city].filter(Boolean).join(' · '))+'</span>';
+      });
+    }catch(e){}
+  }
+
+  function openBlank(url){ if(!url) return; try{ window.open(url,'_blank','noopener,noreferrer'); }catch(e){} }
+  function matchFromAny(el){
+    const card=el.closest?.('.bet-card,.match-card,.score-row');
+    if(!card) return null;
+    const id=String(card.id||'').replace('betCard_','');
+    let m=(state.matches||[]).find(x=>String(x.id)===id);
+    if(m) return m;
+    const txt=card.textContent||'';
+    return (state.matches||[]).find(x=>txt.includes(x.id) || (txt.includes(x.teamA) && txt.includes(x.teamB)))||null;
+  }
+  function patchNewTabLinks(){
+    document.querySelectorAll('a[href*="fifa.com"]').forEach(a=>{a.target='_blank';a.rel='noopener noreferrer';});
+    document.querySelectorAll('.match-card-title span:not(.muted), .match-card-venue, .score-row img.flag, .match-card img.flag, .bet-title h3').forEach(el=>{el.style.cursor='pointer';});
+  }
+
+  document.addEventListener('click',function(e){
+    const target=e.target;
+    const anchor=target.closest?.('a[href*="fifa.com"]');
+    if(anchor){ anchor.target='_blank'; anchor.rel='noopener noreferrer'; return; }
+    const stadium=target.closest?.('.bp-stadium-click,.match-card-venue');
+    if(stadium){ const m=matchFromAny(stadium); if(m && typeof bpStadiumUrl==='function'){ e.preventDefault(); e.stopPropagation(); openBlank(bpStadiumUrl(m)); } return; }
+    const flag=target.closest?.('img.flag,.flag-wrap');
+    if(flag){ const m=matchFromAny(flag); if(m && typeof bpTeamUrl==='function'){ const imgs=[...flag.closest('.bet-card,.match-card,.score-row')?.querySelectorAll('img.flag')||[]]; const idx=imgs.indexOf(flag.tagName==='IMG'?flag:flag.querySelector('img.flag')); e.preventDefault(); e.stopPropagation(); openBlank(bpTeamUrl(idx<=0?m.teamA:m.teamB)); } return; }
+    const title=target.closest?.('.match-card-title span:not(.muted),.bet-title h3');
+    if(title){ const m=matchFromAny(title); if(m && typeof bpTeamUrl==='function'){ const r=title.getBoundingClientRect(); const team=e.clientX < r.left+r.width/2 ? m.teamA : m.teamB; e.preventDefault(); e.stopPropagation(); openBlank(bpTeamUrl(team)); } }
+  },true);
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function' && !oldRenderAll.__bpV75Wrapped){
+    window.renderAll=function(){ const r=oldRenderAll.apply(this,arguments); setTimeout(patchAfterRender,80); setTimeout(patchAfterRender,400); return r; };
+    window.renderAll.__bpV75Wrapped=true;
+  }
+  const oldRenderAdmin=window.renderAdmin;
+  if(typeof oldRenderAdmin==='function' && !oldRenderAdmin.__bpV75Wrapped){
+    window.renderAdmin=function(){ const r=oldRenderAdmin.apply(this,arguments); setTimeout(patchAfterRender,60); return r; };
+    window.renderAdmin.__bpV75Wrapped=true;
+  }
+  document.addEventListener('DOMContentLoaded',function(){ window.bpV75ApplyStoredScores(); setTimeout(patchAfterRender,400); setTimeout(patchAfterRender,1200); });
 })();
 </script>
 
