@@ -14462,6 +14462,157 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V93 — Anti-zombie players 2401-2415
+   Cause corrigée : les anciens joueurs restaient dans le localStorage puis les fonctions de merge local/cloud les réécrivaient dans Supabase.
+   Fix : tombstones automatiques + purge AVANT chaque sauvegarde/merge + nettoyage Supabase direct. */
+(function(){
+  if(window.__BP_V93_ANTI_ZOMBIE_PLAYERS__) return;
+  window.__BP_V93_ANTI_ZOMBIE_PLAYERS__ = true;
+
+  var ZOMBIE_CODES = ['2401','2402','2403','2404','2405','2406','2407','2408','2409','2410','2411','2412','2413','2414','2415'];
+  var LS_DELETED_KEYS = ['bp_v86_deleted_player_keys','bp_v85_deleted_player_keys','bp_deleted_player_keys_ui','bp_v92_deleted_player_keys','bp_v93_deleted_player_keys'];
+  var LS_STATE_KEYS = ['bp_wc_dev','bpwc_state_v1'];
+
+  function norm(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function keysOfPlayer(p){ return [p && p.code, p && p.name, p && p.pseudo].map(norm).filter(Boolean); }
+  function zombieSet(){ return new Set(ZOMBIE_CODES.map(norm)); }
+  function readDeletedSet(){
+    var s = zombieSet();
+    try{ arr(window.state && window.state.deletedPlayerKeys).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
+    LS_DELETED_KEYS.forEach(function(k){
+      try{ arr(JSON.parse(localStorage.getItem(k)||'[]')).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
+    });
+    return s;
+  }
+  function persistDeletedSet(s){
+    ZOMBIE_CODES.map(norm).forEach(function(c){ s.add(c); });
+    var list = Array.from(s).filter(Boolean);
+    LS_DELETED_KEYS.forEach(function(k){ try{ localStorage.setItem(k, JSON.stringify(list)); }catch(e){} });
+    if(window.state){ window.state.deletedPlayerKeys = Array.from(new Set(arr(window.state.deletedPlayerKeys).concat(list).map(norm).filter(Boolean))); }
+    return s;
+  }
+  function isDeletedPlayer(p, s){ return keysOfPlayer(p).some(function(k){ return s.has(k); }); }
+  function purgeStateObject(st){
+    if(!st || typeof st !== 'object') return false;
+    var s = persistDeletedSet(readDeletedSet());
+    var changed = false;
+    var beforeP = arr(st.players).length;
+    var beforeB = arr(st.bets).length;
+    st.players = arr(st.players).filter(function(p){ return !isDeletedPlayer(p, s); });
+    var deletedNames = new Set();
+    /* Codes 2401-2415 sont des utilisateurs seed supprimés : on purge les bets liés par code uniquement si présent. */
+    arr(st.players).forEach(function(p){ if(isDeletedPlayer(p, s)){ keysOfPlayer(p).forEach(function(k){ deletedNames.add(k); }); } });
+    st.bets = arr(st.bets).filter(function(b){ return !s.has(norm(b.playerCode || b.playerId || b.code)); });
+    if(beforeP !== st.players.length || beforeB !== st.bets.length) changed = true;
+    st.lastPurgedZombiePlayersAt = new Date().toISOString();
+    return changed;
+  }
+  function purgeAllLocalStates(){
+    persistDeletedSet(readDeletedSet());
+    if(window.state) purgeStateObject(window.state);
+    LS_STATE_KEYS.forEach(function(k){
+      try{
+        var raw = localStorage.getItem(k);
+        if(!raw) return;
+        var st = JSON.parse(raw);
+        purgeStateObject(st);
+        localStorage.setItem(k, JSON.stringify(st));
+      }catch(e){}
+    });
+    try{ sessionStorage.removeItem('bp_wc_session_state'); }catch(e){}
+  }
+  function supabaseClient(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) return null;
+    try{ return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); }catch(e){ return null; }
+  }
+  async function purgeSupabase(reason){
+    purgeAllLocalStates();
+    var sb = supabaseClient();
+    if(!sb || !window.state) return false;
+    var appId = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+    try{
+      var res = await sb.from('app_state').select('data').eq('id', appId).maybeSingle();
+      if(res.error) throw res.error;
+      var cloud = res.data && res.data.data ? res.data.data : {};
+      purgeStateObject(cloud);
+      /* Cloud est source de vérité pour players : on ne réinjecte jamais les zombies depuis localStorage. */
+      if(window.state){
+        cloud.deletedPlayerKeys = Array.from(new Set(arr(cloud.deletedPlayerKeys).concat(arr(window.state.deletedPlayerKeys)).concat(ZOMBIE_CODES).map(norm).filter(Boolean)));
+        if(Array.isArray(window.state.matches) && window.state.matches.length) cloud.matches = window.state.matches;
+        if(Array.isArray(window.state.bets)) cloud.bets = window.state.bets;
+        cloud.players = arr(window.state.players).filter(function(p){ return !isDeletedPlayer(p, readDeletedSet()); });
+        purgeStateObject(cloud);
+      }
+      var up = await sb.from('app_state').upsert({id:appId,data:cloud,updated_at:new Date().toISOString()},{onConflict:'id'});
+      if(up.error) throw up.error;
+      window.state = cloud;
+      LS_STATE_KEYS.forEach(function(k){ try{ localStorage.setItem(k, JSON.stringify(window.state)); }catch(e){} });
+      status('V93 OK — zombies 2401-2415 bloqués — joueurs: '+arr(window.state.players).length+' — '+(reason||'purge'));
+      try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(e){}
+      return true;
+    }catch(e){
+      status('V93 purge locale OK, Supabase KO: '+(e.message||e));
+      return false;
+    }
+  }
+  function status(msg){
+    var el = document.getElementById('bpV93Status');
+    if(!el && document.body){
+      el = document.createElement('div');
+      el.id = 'bpV93Status';
+      el.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:999999;max-width:460px;padding:10px 14px;border-radius:14px;background:#101010;color:#fff;border:1px solid rgba(74,222,128,.65);box-shadow:0 10px 28px rgba(0,0,0,.35);font:12px Arial;font-weight:800';
+      document.body.appendChild(el);
+    }
+    if(el) el.textContent = msg;
+  }
+
+  purgeAllLocalStates();
+
+  var oldSave = window.save;
+  window.save = function(){
+    purgeAllLocalStates();
+    return typeof oldSave === 'function' ? oldSave.apply(this, arguments) : undefined;
+  };
+
+  var oldDebounced = window.bpCloudSaveDebounced;
+  window.bpCloudSaveDebounced = function(){
+    purgeAllLocalStates();
+    if(typeof oldDebounced === 'function') oldDebounced.apply(this, arguments);
+    setTimeout(function(){ purgeSupabase('auto anti-zombie'); }, 900);
+  };
+
+  var oldCloudSave = window.bpCloudSave;
+  window.bpCloudSave = async function(showAlert){
+    purgeAllLocalStates();
+    var r = typeof oldCloudSave === 'function' ? await oldCloudSave.apply(this, arguments) : true;
+    await purgeSupabase('save anti-zombie');
+    if(showAlert) alert('Sauvegarde OK avec purge anti-zombie 2401-2415.');
+    return r;
+  };
+
+  var oldCloudLoad = window.bpCloudLoad;
+  window.bpCloudLoad = async function(){
+    var r = typeof oldCloudLoad === 'function' ? await oldCloudLoad.apply(this, arguments) : true;
+    purgeAllLocalStates();
+    await purgeSupabase('load anti-zombie');
+    return r;
+  };
+  window.bpForceLoadSupabase = window.bpCloudLoad;
+  window.bpV93PurgeZombiePlayers = function(){ return purgeSupabase('manuel'); };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    purgeAllLocalStates();
+    setTimeout(function(){ purgeSupabase('boot immédiat'); }, 100);
+    setTimeout(function(){ purgeSupabase('boot contrôle'); }, 1200);
+    setInterval(purgeAllLocalStates, 1500);
+  });
+})();
+</script>
+
 </body></html>
 <script>
 /* V87 — HARD FIX calcul des gains
