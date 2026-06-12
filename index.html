@@ -12906,4 +12906,168 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V80 HARD FIX — correction ciblée sans afficher le HTML dans le chat
+   1) Suppression joueurs par identité réelle de la carte, plus jamais par index instable.
+   2) MAJ mise utilisateur : mode édition puis sauvegarde BDD vérifiée.
+   3) Spinner visuel immédiat sur tous les CTA.
+   4) URLs externes : interception très haute priorité + nouvel onglet. */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const LOCAL_KEY = 'bp_wc_dev';
+  let client=null;
+  function st(){ return window.state || (window.state={}); }
+  function iso(){ return new Date().toISOString(); }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return{};} }
+  function supa(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){ throw new Error('Supabase non configuré'); }
+    if(!client) client=window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return client;
+  }
+  function compact(){ const s=clone(st()); s.lastSavedAt=iso(); s.schemaVersion='v80-hard-fix'; if(Array.isArray(s.logs)) s.logs=s.logs.slice(-200); return s; }
+  function saveLocal(){ try{localStorage.setItem(LOCAL_KEY, JSON.stringify(compact()));}catch(e){} }
+  function pill(kind,msg){ let el=document.getElementById('bpSyncPill'); if(!el){el=document.createElement('div');el.id='bpSyncPill';document.body.appendChild(el);} el.className=kind||'warn'; el.innerHTML=msg; }
+  async function writeCloud(reason){
+    saveLocal(); pill('warn','☁️ Synchronisation BDD…');
+    const r=await supa().from('app_state').upsert({id:APP_ID,data:compact(),updated_at:iso()},{onConflict:'id'});
+    if(r.error){ pill('bad','❌ BDD non sauvegardée : '+r.error.message); throw r.error; }
+    pill('ok','☁️ BDD sauvegardée — '+(reason||'OK')+' — '+new Date().toLocaleTimeString('fr-FR'));
+    return true;
+  }
+  async function readCloud(){ const r=await supa().from('app_state').select('data,updated_at').eq('id',APP_ID).maybeSingle(); if(r.error) throw r.error; return r.data&&r.data.data?clone(r.data.data):null; }
+  function keyVals(p){ return [p&&p.code,p&&p.name,p&&p.pseudo].map(v=>String(v||'').trim()).filter(Boolean); }
+  function norm(v){ return String(v||'').trim().toLowerCase(); }
+  function keySet(p){ return new Set(keyVals(p).map(norm).filter(Boolean)); }
+  function deletedSet(){ const s=st(); if(!Array.isArray(s.deletedPlayerKeys)) s.deletedPlayerKeys=[]; return new Set(s.deletedPlayerKeys.map(norm).filter(Boolean)); }
+  function applyDeleted(){ const s=st(); const d=deletedSet(); s.deletedPlayerKeys=[...d]; if(Array.isArray(s.players)) s.players=s.players.filter(p=>![...keySet(p)].some(k=>d.has(k))); }
+  function setBtnBusy(btn,on,label){
+    if(!btn) return;
+    if(on){ if(!btn.dataset.v80Old) btn.dataset.v80Old=btn.innerHTML; btn.disabled=true; btn.classList.add('bp-v80-loading'); btn.innerHTML='<span class="bp-v80-spin"></span>'+(label||'Traitement…'); }
+    else{ btn.disabled=false; btn.classList.remove('bp-v80-loading'); if(btn.dataset.v80Old){btn.innerHTML=btn.dataset.v80Old; delete btn.dataset.v80Old;} }
+  }
+  async function withBusy(btn,label,fn){ setBtnBusy(btn,true,label); try{return await fn();} finally{setBtnBusy(btn,false);} }
+
+  const css=document.createElement('style');
+  css.textContent='.bp-v80-spin{display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:bpV80Spin .75s linear infinite}.bp-v80-loading{opacity:.75!important;pointer-events:none!important}@keyframes bpV80Spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(css);
+
+  // Spinner minimal sur chaque CTA même si l'ancien code ne renvoie pas de Promise.
+  window.addEventListener('click', function(e){
+    const b=e.target&&e.target.closest?e.target.closest('button.action,button'):null;
+    if(!b || b.disabled || b.closest('.bp-modal,.login-card')) return;
+    if(!b.dataset.v80Old){ setBtnBusy(b,true,'Traitement…'); setTimeout(()=>setBtnBusy(b,false),1200); }
+  }, true);
+
+  // Liens externes : ne jamais remplacer l'onglet du jeu.
+  function openNew(url){ if(!url) return; try{ const w=window.open(url,'_blank','noopener,noreferrer'); if(w) w.opener=null; }catch(e){ console.warn('[V80 open]',e); } }
+  function hardenLinks(){ document.querySelectorAll('a[href]').forEach(a=>{ a.target='_blank'; a.rel='noopener noreferrer'; }); }
+  function matchById(id){ return (st().matches||[]).find(m=>String(m.id)===String(id)); }
+  function findMatch(el){
+    const c=el.closest?.('.bet-card,.match-card,.score-row,[data-match]');
+    const id=c?.dataset?.match || String(c?.id||'').replace('betCard_','') || (c?.textContent||'').match(/M\d{3}/)?.[0];
+    return id?matchById(id):null;
+  }
+  window.addEventListener('click', function(e){
+    const t=e.target; if(!t||!t.closest) return;
+    const a=t.closest('a[href]');
+    if(a){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(a.href); return; }
+    const stadium=t.closest('.bp-stadium-click,.match-card-venue,.match-stadium,.fifa-stadium-link');
+    if(stadium){ const m=findMatch(stadium); if(m && typeof window.bpStadiumUrl==='function'){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(window.bpStadiumUrl(m)); return; }}
+    const flag=t.closest('img.flag,.flag-wrap');
+    if(flag){ const m=findMatch(flag); if(m && typeof window.bpTeamUrl==='function'){ const box=flag.closest('.bet-card,.match-card,.score-row')||document; const imgs=[...box.querySelectorAll('img.flag')]; const img=flag.tagName==='IMG'?flag:flag.querySelector('img.flag'); const team=imgs.indexOf(img)<=0?m.teamA:m.teamB; e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(window.bpTeamUrl(team)); return; }}
+    const title=t.closest('.bet-title h3,.match-card-title');
+    if(title){ const m=findMatch(title); if(m && typeof window.bpTeamUrl==='function'){ const r=title.getBoundingClientRect(); const team=e.clientX<r.left+r.width/2?m.teamA:m.teamB; e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(window.bpTeamUrl(team)); return; }}
+  }, true);
+
+  // Suppression : extraction depuis la carte visible, pas depuis l'index onclick qui est instable.
+  function extractPlayerFromCard(card){
+    const p={};
+    card.querySelectorAll('label').forEach(l=>{
+      const txt=(l.childNodes[0]?.textContent||l.textContent||'').toLowerCase();
+      const inp=l.querySelector('input,select'); if(!inp) return;
+      if(txt.includes('joueur')) p.name=inp.value;
+      else if(txt.includes('pseudo')) p.pseudo=inp.value;
+      else if(txt.includes('code')) p.code=inp.value;
+    });
+    const inputs=[...card.querySelectorAll('input')];
+    p.name=p.name||inputs[0]?.value; p.pseudo=p.pseudo||inputs[1]?.value; p.code=p.code||inputs[2]?.value;
+    return p;
+  }
+  function findRealPlayer(candidate){
+    const ckeys=keySet(candidate);
+    return (st().players||[]).find(p=>[...keySet(p)].some(k=>ckeys.has(k))) || candidate;
+  }
+  async function deletePlayerByIdentity(candidate,btn){
+    return withBusy(btn,'Suppression BDD…',async()=>{
+      const real=findRealPlayer(candidate); const display=real.name||real.pseudo||real.code||candidate.name||'utilisateur';
+      if(!confirm('Supprimer définitivement "'+display+'" ?\n\nLa suppression sera écrite en BDD et protégée contre les réimports.')) return false;
+      const d=deletedSet(); keyVals(real).concat(keyVals(candidate)).forEach(v=>d.add(norm(v)));
+      st().deletedPlayerKeys=[...d]; applyDeleted(); saveLocal(); await writeCloud('suppression utilisateur '+display);
+      const remote=await readCloud();
+      const still=(remote?.players||[]).some(p=>[...keySet(p)].some(k=>d.has(k)));
+      if(still) throw new Error('Suppression non confirmée en BDD : utilisateur encore présent.');
+      if(typeof window.renderAll==='function') try{window.renderAll();}catch(e){}
+      alert('Utilisateur supprimé et vérifié en BDD : '+display);
+      return true;
+    });
+  }
+  window.safeDeletePlayerByIdentity=deletePlayerByIdentity;
+  window.safeDeletePlayer=function(index){ const p=(st().players||[])[Number(index)]; return deletePlayerByIdentity(p||{}, document.activeElement?.closest?.('button')); };
+  window.addEventListener('click', function(e){
+    const b=e.target&&e.target.closest?e.target.closest('button'):null; if(!b) return;
+    const txt=(b.textContent||'').trim().toLowerCase();
+    const card=b.closest('.admin-player-card');
+    if(card && (txt.includes('suppr')||txt.includes('supprimer'))){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); deletePlayerByIdentity(extractPlayerFromCard(card), b); }
+  }, true);
+
+  // MAJ de mise : 1er clic = édition, 2e clic = sauvegarde BDD.
+  function activePlayerName(){ const sel=document.getElementById('activePlayer'); const idx=Number(sel?.value||0); return (st().players||[])[idx]?.name || window.currentUser?.name || window.currentUserName || ''; }
+  function betForCard(card){
+    const matchId=String(card?.id||'').replace('betCard_','') || card?.querySelector('[data-match]')?.dataset?.match;
+    const player=activePlayerName();
+    return {matchId, player, bet:(st().bets||[]).find(b=>String(b.matchId)===String(matchId) && String(b.player)===String(player))};
+  }
+  window.addEventListener('click', function(e){
+    const b=e.target&&e.target.closest?e.target.closest('button'):null; if(!b) return;
+    const txt=(b.textContent||'').toLowerCase();
+    if(!txt.includes('modifier la mise') && !txt.includes('enregistrer la mise') && !txt.includes('valider la maj')) return;
+    const card=b.closest('.bet-card'); if(!card) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    const stake=card.querySelector('.stake');
+    if(!b.dataset.v80Editing && txt.includes('modifier')){
+      if(stake) stake.disabled=false;
+      card.querySelectorAll('.scoreA,.scoreB').forEach(x=>x.disabled=false);
+      b.dataset.v80Editing='1'; b.innerHTML='💾 Enregistrer la mise'; b.classList.remove('editBtn'); b.classList.add('validatedBtn'); return;
+    }
+    withBusy(b,'Sauvegarde BDD…',async()=>{
+      const info=betForCard(card); if(!info.bet) throw new Error('Mise introuvable pour '+info.player+' / '+info.matchId);
+      const a=card.querySelector('.scoreA'), c=card.querySelector('.scoreB');
+      if(stake) info.bet.stake=Number(stake.value||info.bet.stake||1);
+      if(a) info.bet.scoreA=Number(a.value||0); if(c) info.bet.scoreB=Number(c.value||0);
+      info.bet.score=String(info.bet.scoreA)+' - '+String(info.bet.scoreB);
+      info.bet.prediction=info.bet.scoreA>info.bet.scoreB?'A':(info.bet.scoreA<info.bet.scoreB?'B':'N');
+      info.bet.predictedOutcome=info.bet.prediction;
+      info.bet.status='VALIDATED'; info.bet.savedAt=iso(); info.bet.updatedAt=iso(); info.bet.validatedAt=info.bet.validatedAt||iso();
+      saveLocal(); await writeCloud('mise MAJ '+info.player+' '+info.matchId);
+      const remote=await readCloud();
+      const rb=(remote?.bets||[]).find(x=>String(x.matchId)===String(info.matchId)&&String(x.player)===String(info.player));
+      if(!rb || Number(rb.stake)!==Number(info.bet.stake)) throw new Error('Vérification BDD mise échouée.');
+      if(stake) stake.disabled=true; card.querySelectorAll('.scoreA,.scoreB').forEach(x=>x.disabled=true);
+      delete b.dataset.v80Editing; b.innerHTML='✏️ Modifier la mise'; b.classList.add('editBtn'); b.classList.remove('validatedBtn');
+      alert('Mise sauvegardée et vérifiée en BDD.');
+    });
+  }, true);
+
+  // Après chaque rendu, durcir liens + retirer les utilisateurs tombstonés + préserver boutons.
+  const oldRender=window.renderAll;
+  if(typeof oldRender==='function' && !oldRender.__v80){
+    window.renderAll=function(){ applyDeleted(); const r=oldRender.apply(this,arguments); setTimeout(()=>{applyDeleted();hardenLinks();},50); return r; };
+    window.renderAll.__v80=true;
+  }
+  document.addEventListener('DOMContentLoaded',()=>{ hardenLinks(); setInterval(()=>{applyDeleted();hardenLinks();},1000); });
+})();
+</script>
+
 </body></html>
