@@ -11876,4 +11876,143 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V73 — Anti-synchro intempestive pendant saisie pronos/scores
+   Problème corrigé : le polling Supabase rechargeait l'ancien état pendant qu'un user ou l'admin modifiait un formulaire.
+   Règle : tant qu'un champ score/mise ou score officiel est en édition, aucun renderAll automatique ne peut réécrire l'écran.
+*/
+(function(){
+  const EDIT_LOCK_MS = 45000;
+  let editLockUntil = 0;
+  let lockReason = '';
+  let lastUserInputAt = 0;
+
+  function now(){ return Date.now(); }
+  function isSensitiveInput(el){
+    if(!el) return false;
+    const id = String(el.id||'');
+    const cls = String(el.className||'');
+    return (
+      cls.includes('scoreA') || cls.includes('scoreB') || cls.includes('stake') ||
+      /^sa_/.test(id) || /^sb_/.test(id) ||
+      id.includes('_scoreA') || id.includes('_scoreB') || id.includes('_stake') ||
+      el.closest?.('#betRows') || el.closest?.('#scoreInputs') || el.closest?.('.admin-day-score-panel')
+    );
+  }
+  function setLock(reason){
+    editLockUntil = now() + EDIT_LOCK_MS;
+    lastUserInputAt = now();
+    lockReason = reason || 'édition';
+    try{ window.bpEditingInProgress = true; window.bpEditingReason = lockReason; }catch(e){}
+  }
+  function clearLock(){
+    editLockUntil = 0;
+    lockReason = '';
+    try{ window.bpEditingInProgress = false; window.bpEditingReason = ''; }catch(e){}
+  }
+  function locked(){
+    const active = document.activeElement;
+    if(isSensitiveInput(active)) return true;
+    return now() < editLockUntil;
+  }
+  window.bpClearEditLock = clearLock;
+  window.bpSetEditLock = setLock;
+  window.bpIsEditLocked = locked;
+
+  ['focusin','input','change','keydown'].forEach(evt=>{
+    document.addEventListener(evt, function(e){
+      if(isSensitiveInput(e.target)) setLock(evt==='focusin'?'édition formulaire':'saisie formulaire');
+    }, true);
+  });
+
+  // Protection principale : si une synchro appelle renderAll pendant une saisie, on ignore ce rendu.
+  const previousRenderAll = window.renderAll;
+  if(typeof previousRenderAll === 'function' && !previousRenderAll.__bpV73SyncGuard){
+    window.renderAll = function(){
+      if(locked()){
+        console.warn('[BP V73] renderAll bloqué pendant saisie :', lockReason);
+        try{
+          if(typeof bpSetSyncPill === 'function') bpSetSyncPill('warn','☁️ Synchro en pause <span class="muted">saisie en cours</span>');
+          else {
+            const pill=document.getElementById('bpSyncPill');
+            if(pill){ pill.className='warn'; pill.innerHTML='☁️ Synchro en pause <span class="muted">saisie en cours</span>'; }
+          }
+        }catch(e){}
+        return false;
+      }
+      return previousRenderAll.apply(this, arguments);
+    };
+    window.renderAll.__bpV73SyncGuard = true;
+  }
+
+  // Les chargements cloud manuels/automatiques visibles respectent le verrou.
+  ['bpCloudLoad','bpV61LoadCloud','bpV60LoadCloud','bpForceLoadSupabase'].forEach(name=>{
+    const fn=window[name];
+    if(typeof fn==='function' && !fn.__bpV73Guarded){
+      window[name]=async function(){
+        if(locked()){
+          console.warn('[BP V73] '+name+' bloqué pendant saisie :', lockReason);
+          return false;
+        }
+        return fn.apply(this, arguments);
+      };
+      window[name].__bpV73Guarded=true;
+    }
+  });
+
+  function wrapAction(name){
+    const fn=window[name];
+    if(typeof fn!=='function' || fn.__bpV73ActionWrapped) return;
+    window[name]=async function(){
+      // L'utilisateur vient de confirmer une action : on libère le verrou AVANT le rendu/sauvegarde.
+      clearLock();
+      const r = fn.apply(this, arguments);
+      const v = r && typeof r.then==='function' ? await r : r;
+      clearLock();
+      return v;
+    };
+    window[name].__bpV73ActionWrapped=true;
+  }
+
+  function installActionWraps(){
+    ['validateSingleBet','saveBets','saveOfficialScoresDay','saveScores','calculateGains','recalculateDay','openBets','closeBets'].forEach(wrapAction);
+  }
+
+  // Renforce l'édition d'une mise : après clic Modifier, on conserve les champs déverrouillés même si une synchro arrive.
+  const oldEditBet = window.editBet;
+  if(typeof oldEditBet==='function' && !oldEditBet.__bpV73Wrapped){
+    window.editBet = async function(matchId){
+      setLock('édition mise');
+      const r = oldEditBet.apply(this, arguments);
+      const v = r && typeof r.then==='function' ? await r : r;
+      setLock('édition mise');
+      const card=document.getElementById('betCard_'+matchId);
+      if(card){
+        card.classList.remove('lockedCard');
+        card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(el=>{ el.disabled=false; });
+        const btn=[...card.querySelectorAll('button')].find(b=>/valider|modifier/i.test(b.textContent||''));
+        if(btn){ btn.disabled=false; btn.textContent='Valider la mise'; btn.onclick=function(){ return window.validateSingleBet(matchId); }; }
+      }
+      return v;
+    };
+    window.editBet.__bpV73Wrapped=true;
+  }
+
+  // Évite que les anciens handlers onchange des scores officiels déclenchent une sauvegarde cloud à chaque sélection.
+  document.addEventListener('change', function(e){
+    if(isSensitiveInput(e.target)){
+      e.stopImmediatePropagation();
+      setLock('saisie scores/mise');
+    }
+  }, true);
+
+  document.addEventListener('DOMContentLoaded', function(){
+    installActionWraps();
+    setInterval(installActionWraps, 1500);
+  });
+})();
+</script>
+
 </body></html>
