@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V75 SAFE</title>
+<title>B Partner FIFA World Cup 2026 - V78 STABLE</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -12555,6 +12555,229 @@ window.BP_LOCAL_ONLY = true;
     setTimeout(async()=>{ await cloudLoadMerge(); afterRender(); },500);
     setInterval(afterRender,1500);
   });
+})();
+</script>
+
+
+
+<script>
+/* V78 STABLE — BDD scores vérifiée + liens externes nouvel onglet + spinners BDD
+   Objectif : aucun retour à zéro après reload, aucun lien FIFA dans l'onglet du jeu. */
+(function(){
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  let sbClient = null;
+  let lastBtn = null;
+
+  const css = document.createElement('style');
+  css.textContent = `
+    .bp-btn-loading{position:relative;pointer-events:none;opacity:.72!important}
+    .bp-btn-loading::before{content:"";display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:bpSpin .8s linear infinite}
+    @keyframes bpSpin{to{transform:rotate(360deg)}}
+  `;
+  document.head.appendChild(css);
+
+  function hasSupabase(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
+  function sb(){
+    if(!hasSupabase()) throw new Error('Supabase non configuré.');
+    if(!sbClient) sbClient = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return sbClient;
+  }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return {};}}
+  function compact(st){
+    const s = clone(st || window.state || {});
+    s.logs = (s.logs || []).slice(-150);
+    s.settlementDetails = (s.settlementDetails || []).slice(-1500);
+    delete s._cache; delete s.debug; delete s.htmlPreview;
+    if(Array.isArray(s.players)){
+      s.players = s.players.map(p=>{
+        const q={...p};
+        ['avatar','photo'].forEach(k=>{ if(typeof q[k]==='string' && q[k].length>50000) q[k]=''; });
+        return q;
+      });
+    }
+    s.lastSavedAt = new Date().toISOString();
+    s.schemaVersion = s.schemaVersion || 'v78-stable';
+    return s;
+  }
+  function localSave(){
+    try{ localStorage.setItem('bp_wc_dev', JSON.stringify(compact(window.state))); }catch(e){ try{ sessionStorage.setItem('bp_wc_session_state', JSON.stringify(compact(window.state))); }catch(_e){} }
+  }
+  function setPill(kind,msg){
+    let el=document.getElementById('bpSyncPill');
+    if(!el){ el=document.createElement('div'); el.id='bpSyncPill'; document.body.appendChild(el); }
+    el.className=kind||'warn'; el.innerHTML=msg;
+  }
+  function setBusy(btn,on,label){
+    if(!btn) return;
+    if(on){
+      btn.dataset.bpOldHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add('bp-btn-loading');
+      btn.innerHTML = label || 'Synchronisation BDD...';
+    }else{
+      btn.disabled = false;
+      btn.classList.remove('bp-btn-loading');
+      if(btn.dataset.bpOldHtml){ btn.innerHTML = btn.dataset.bpOldHtml; delete btn.dataset.bpOldHtml; }
+    }
+  }
+  async function withBusy(label, fn){
+    const btn=lastBtn;
+    setBusy(btn,true,label);
+    try{ return await fn(); }
+    finally{ setBusy(btn,false); }
+  }
+  async function writeCloud(reason){
+    if(!hasSupabase()) throw new Error('Supabase non configuré : impossible de garantir la sauvegarde BDD.');
+    setPill('warn','☁️ Synchronisation BDD en cours…');
+    const payload = compact(window.state || {});
+    const res = await sb().from('app_state').upsert({id:APP_ID,data:payload,updated_at:new Date().toISOString()},{onConflict:'id'});
+    if(res.error) throw res.error;
+    setPill('ok','☁️ BDD sauvegardée — '+(reason||'OK')+' — '+new Date().toLocaleTimeString('fr-FR'));
+    return true;
+  }
+  async function readCloud(){
+    const res=await sb().from('app_state').select('data,updated_at').eq('id',APP_ID).maybeSingle();
+    if(res.error) throw res.error;
+    return res.data && res.data.data ? clone(res.data.data) : null;
+  }
+  function getDay(){
+    try{ if(typeof window.scoreEntryDay==='function') return Number(window.scoreEntryDay())||1; }catch(e){}
+    try{ if(typeof window.bpV68ScoreDay==='function') return Number(window.bpV68ScoreDay())||1; }catch(e){}
+    return Math.max(1, Number(window.state?.currentDay||1));
+  }
+  function dayMatches(day){ return (window.state?.matches||[]).filter(m=>Number(m.day)===Number(day)); }
+  function inputVal(id,prefix){ const el=document.getElementById(prefix+id); return el ? el.value : ''; }
+  function ensureScoreStores(){
+    const s=window.state || (window.state={});
+    if(!s.officialScores || typeof s.officialScores!=='object') s.officialScores={};
+    if(!s.officialScoresByMatch || typeof s.officialScoresByMatch!=='object') s.officialScoresByMatch={};
+    if(!s.officialScoresSavedDays || typeof s.officialScoresSavedDays!=='object') s.officialScoresSavedDays={};
+  }
+  function collectScores(day){
+    const ms=dayMatches(day); const out={};
+    for(const m of ms){
+      const a=inputVal(m.id,'sa_'); const b=inputVal(m.id,'sb_');
+      if(a==='' || b==='' || a===undefined || b===undefined) return null;
+      out[String(m.id)]={a:Number(a),b:Number(b)};
+    }
+    return out;
+  }
+  function applyScores(day,bucket){
+    ensureScoreStores();
+    const s=window.state;
+    s.officialScores[String(day)] = bucket;
+    s.officialScoresSavedDays[String(day)] = true;
+    dayMatches(day).forEach(m=>{
+      const sc=bucket[String(m.id)]; if(!sc) return;
+      m.scoreA=Number(sc.a); m.scoreB=Number(sc.b); m.status='done';
+      s.officialScoresByMatch[String(m.id)]={day:Number(day),scoreA:Number(sc.a),scoreB:Number(sc.b),savedAt:new Date().toISOString()};
+    });
+  }
+  function verifyScoresIn(cloud,day,bucket){
+    const cm=(cloud && cloud.matches) || [];
+    for(const [id,sc] of Object.entries(bucket)){
+      const m=cm.find(x=>String(x.id)===String(id));
+      const byMatch=cloud?.officialScoresByMatch?.[String(id)];
+      const byDay=cloud?.officialScores?.[String(day)]?.[String(id)];
+      const okMatch = m && Number(m.scoreA)===Number(sc.a) && Number(m.scoreB)===Number(sc.b);
+      const okByMatch = byMatch && Number(byMatch.scoreA)===Number(sc.a) && Number(byMatch.scoreB)===Number(sc.b);
+      const okByDay = byDay && Number(byDay.a)===Number(sc.a) && Number(byDay.b)===Number(sc.b);
+      if(!okMatch && !okByMatch && !okByDay) return false;
+    }
+    return true;
+  }
+
+  document.addEventListener('click',function(e){
+    const b=e.target.closest && e.target.closest('button');
+    if(b) lastBtn=b;
+  },true);
+
+  const oldSaveScores = window.saveOfficialScoresDay;
+  window.saveOfficialScoresDay = async function(showAlert=true){
+    return withBusy('Synchronisation BDD...', async()=>{
+      if(window.currentRole && window.currentRole!=='admin'){ alert('Accès réservé à l’admin.'); return false; }
+      const day=getDay(); const bucket=collectScores(day);
+      if(!bucket){ alert('Score manquant : tous les scores doivent être renseignés. Le score 0-0 est accepté.'); return false; }
+      applyScores(day,bucket);
+      localSave();
+      await writeCloud('scores officiels J'+day);
+      const cloud=await readCloud();
+      if(!verifyScoresIn(cloud,day,bucket)) throw new Error('Vérification BDD échouée : les scores écrits ne sont pas relus depuis Supabase.');
+      try{ if(typeof renderAll==='function') renderAll(); }catch(e){}
+      if(showAlert) alert('Scores officiels J'+day+' sauvegardés et vérifiés en BDD.');
+      return true;
+    });
+  };
+  window.saveScores = window.saveOfficialScoresDay;
+
+  const oldCalc = window.calculateGains;
+  if(typeof oldCalc==='function'){
+    window.calculateGains = async function(showAlert=true, force=false){
+      return withBusy('Calcul + synchro BDD...', async()=>{
+        const ok=await window.saveOfficialScoresDay(false);
+        if(!ok) return false;
+        const r=await oldCalc.call(this,showAlert,force);
+        localSave(); await writeCloud('gains recalculés');
+        return r;
+      });
+    };
+  }
+
+  // Ouvre les pages externes dans un nouvel onglet sans jamais remplacer l'onglet du jeu.
+  function safeOpen(url){
+    if(!url) return;
+    try{ window.open(url,'_blank','noopener,noreferrer'); }
+    catch(e){ console.warn('[V78] ouverture nouvel onglet bloquée',e); }
+  }
+  function matchFromCard(el){
+    const card=el.closest && el.closest('.bet-card');
+    if(!card) return null;
+    const id=String(card.id||'').replace('betCard_','');
+    return (window.state?.matches||[]).find(m=>String(m.id)===id) || null;
+  }
+  document.addEventListener('click',function(e){
+    const t=e.target;
+    const a=t.closest && t.closest('a[href]');
+    if(a && (/fifa\.com|wikipedia\.org|wikimedia\.org/i.test(a.href) || a.classList.contains('fifa-stadium-link'))){
+      e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); safeOpen(a.href); return;
+    }
+    const stadium=t.closest && t.closest('.bp-stadium-click');
+    if(stadium){
+      e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      const id=stadium.dataset.match; const m=(window.state?.matches||[]).find(x=>String(x.id)===String(id));
+      const url=(typeof window.bpStadiumUrl==='function' && m) ? window.bpStadiumUrl(m) : null;
+      safeOpen(url); return;
+    }
+    const wrap=t.closest && t.closest('.flag-wrap');
+    if(wrap){
+      const m=matchFromCard(wrap);
+      if(m && typeof window.bpTeamUrl==='function'){
+        e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+        const wraps=[...wrap.closest('.bet-card').querySelectorAll('.flag-wrap')];
+        const idx=wraps.indexOf(wrap);
+        safeOpen(window.bpTeamUrl(idx===0 ? m.teamA : m.teamB)); return;
+      }
+    }
+    const title=t.closest && t.closest('.bet-title h3');
+    if(title){
+      const m=matchFromCard(title);
+      if(m && typeof window.bpTeamUrl==='function'){
+        e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+        const r=title.getBoundingClientRect(); const team=(e.clientX < r.left+r.width/2) ? m.teamA : m.teamB;
+        safeOpen(window.bpTeamUrl(team)); return;
+      }
+    }
+  },true);
+
+  // Sécurise tous les liens déjà rendus.
+  function hardenLinks(){
+    document.querySelectorAll('a[href]').forEach(a=>{
+      if(/fifa\.com|wikipedia\.org|wikimedia\.org/i.test(a.href) || a.classList.contains('fifa-stadium-link')){
+        a.target='_blank'; a.rel='noopener noreferrer';
+      }
+    });
+  }
+  document.addEventListener('DOMContentLoaded',()=>{ hardenLinks(); setInterval(hardenLinks,1500); });
 })();
 </script>
 
