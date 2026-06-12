@@ -2135,27 +2135,9 @@ body.bp-user #navBackup{
 .flag-wrap img.flag{display:inline-block!important;opacity:1!important;visibility:visible!important}
 
 
-/* V66 — liens FIFA cliquables */
-.bp-fifa-link{
-  color:inherit!important;
-  text-decoration:none!important;
-  cursor:pointer!important;
-  display:inline-flex;
-  align-items:center;
-  gap:5px;
-}
-.bp-fifa-link:hover{text-decoration:underline!important}
-.flag-wrap .bp-fifa-link{
-  width:100%;
-  height:100%;
-  justify-content:center;
-}
-.flag-wrap .bp-fifa-link img.flag{
-  display:inline-block!important;
-  opacity:1!important;
-  visibility:visible!important;
-  pointer-events:none!important;
-}
+.bp-stadium-click{cursor:pointer;text-decoration:underline;text-decoration-style:dotted}
+.flag-wrap{cursor:pointer}
+.bet-title h3{cursor:pointer}
 
 </style>
 
@@ -5446,11 +5428,10 @@ function bpParisFromMatch(m){const utc=bpLocalToUTC(bpParseDate(m.date),m.time,B
 function matchInfoHTML(m){
   const venue=[m.venue,m.city].filter(Boolean).join(" · ");
   const paris=bpParisFromMatch(m);
-  const stadiumLink=venue?`<a href="${bpStadiumUrl(m)}" target="_blank" rel="noopener noreferrer" class="fifa-stadium-link" title="FIFA — ${bpEsc(venue)}">${bpEsc(venue)}</a>`:"";
   const parts=[
     paris.date?`📅 ${bpEsc(paris.date)}`:"",
     paris.time?`🕒 ${bpEsc(paris.time)} — heure de Paris`:"",
-    stadiumLink?`🏟️ ${stadiumLink}`:"",
+    venue?`🏟️ <span class="bp-stadium-click" data-match="${bpEsc(m.id)}" title="Ouvrir la page FIFA du stade">${bpEsc(venue)}</span>`:"",
     m.group?`🏷️ ${bpEsc(m.group)}`:""
   ].filter(Boolean).join('<span class="match-info-sep">•</span>');
   return `<div class="match-info-panel">
@@ -10779,163 +10760,380 @@ function bpModalClose(){
 </script>
 
 
+
 <script>
-/* V65 — Flags restored + post-render FIFA links */
+/* V67 — Clics FIFA globaux sans modifier les drapeaux */
 (function(){
-  function openTeam(team){
-    const url=bpTeamUrl(team);
-    window.open(url,"_blank","noopener,noreferrer");
+  function matchFromCard(el){
+    const card=el.closest?.(".bet-card");
+    if(!card) return null;
+    const id=String(card.id||"").replace("betCard_","");
+    return (state.matches||[]).find(m=>String(m.id)===id)||null;
   }
 
-  function enhanceTeamClicks(){
-    if(!window.state || !Array.isArray(state.matches)) return;
+  function openUrl(url){
+    if(!url) return;
+    const w=window.open(url,"_blank","noopener,noreferrer");
+    if(!w) {
+      // fallback si popup bloquée
+      location.href=url;
+    }
+  }
 
+  function openTeam(team){ openUrl(bpTeamUrl(team)); }
+  function openStadium(match){ if(match) openUrl(bpStadiumUrl(match)); }
+
+  document.addEventListener("click",function(e){
+    const target=e.target;
+
+    // Stade : span explicite dans matchInfoHTML
+    const stadium=target.closest?.(".bp-stadium-click");
+    if(stadium){
+      const id=stadium.dataset.match;
+      const m=(state.matches||[]).find(x=>String(x.id)===String(id));
+      e.preventDefault(); e.stopPropagation();
+      openStadium(m);
+      return;
+    }
+
+    // Drapeaux dans la zone score pronostiqué
+    const wrap=target.closest?.(".flag-wrap");
+    if(wrap){
+      const m=matchFromCard(wrap);
+      if(m){
+        const wraps=[...wrap.closest(".bet-card").querySelectorAll(".flag-wrap")];
+        const idx=wraps.indexOf(wrap);
+        e.preventDefault(); e.stopPropagation();
+        openTeam(idx===0?m.teamA:m.teamB);
+        return;
+      }
+    }
+
+    // Drapeaux / titre dans l'entête du match
+    const title=target.closest?.(".bet-title h3");
+    if(title){
+      const m=matchFromCard(title);
+      if(m){
+        e.preventDefault(); e.stopPropagation();
+        // clic dans moitié gauche du titre = équipe A, moitié droite = équipe B
+        const r=title.getBoundingClientRect();
+        const team=e.clientX < r.left + r.width/2 ? m.teamA : m.teamB;
+        openTeam(team);
+        return;
+      }
+    }
+  }, true);
+
+  // Ajoute des tooltips après rendu pour que l’utilisateur voie que c’est cliquable.
+  function enhance(){
     document.querySelectorAll(".bet-card").forEach(card=>{
-      const id=String(card.id||"").replace("betCard_","");
-      const m=(state.matches||[]).find(x=>String(x.id)===id);
+      const m=matchFromCard(card);
       if(!m) return;
-
-      // Titre : rend le h3 cliquable sans toucher aux drapeaux internes.
-      const h3=card.querySelector(".bet-title h3");
-      if(h3 && !h3.dataset.bpFifaClick){
-        h3.dataset.bpFifaClick="1";
-        h3.style.cursor="pointer";
-        h3.title="Cliquer pour ouvrir les pages FIFA des équipes";
-        h3.addEventListener("click",e=>{
-          if(e.target && e.target.tagName==="A") return;
-          // Ouvre équipe A par défaut; Ctrl/cmd ou clic droit évité.
-          openTeam(m.teamA);
-        });
-      }
-
-      // Drapeau gauche/droit dans le formulaire score.
+      const title=card.querySelector(".bet-title h3");
+      if(title) title.title=`Cliquer côté gauche : ${m.teamA} / côté droit : ${m.teamB}`;
       const wraps=card.querySelectorAll(".flag-wrap");
-      if(wraps[0] && !wraps[0].dataset.bpFifaClick){
-        wraps[0].dataset.bpFifaClick="1";
-        wraps[0].style.cursor="pointer";
-        wraps[0].title="FIFA — "+m.teamA;
-        wraps[0].addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openTeam(m.teamA);});
-      }
-      if(wraps[1] && !wraps[1].dataset.bpFifaClick){
-        wraps[1].dataset.bpFifaClick="1";
-        wraps[1].style.cursor="pointer";
-        wraps[1].title="FIFA — "+m.teamB;
-        wraps[1].addEventListener("click",e=>{e.preventDefault();e.stopPropagation();openTeam(m.teamB);});
-      }
+      if(wraps[0]) wraps[0].title=`FIFA — ${m.teamA}`;
+      if(wraps[1]) wraps[1].title=`FIFA — ${m.teamB}`;
     });
   }
-
   const oldRenderAll=window.renderAll;
-  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV65Wrapped){
+  if(typeof oldRenderAll==="function"&&!oldRenderAll.__bpV67Wrapped){
     window.renderAll=function(){
       const r=oldRenderAll.apply(this,arguments);
-      setTimeout(enhanceTeamClicks,150);
-      setTimeout(enhanceTeamClicks,600);
+      setTimeout(enhance,100);
       return r;
     };
-    window.renderAll.__bpV65Wrapped=true;
+    window.renderAll.__bpV67Wrapped=true;
   }
-
-  document.addEventListener("DOMContentLoaded",()=>setTimeout(enhanceTeamClicks,800));
+  document.addEventListener("DOMContentLoaded",()=>setTimeout(enhance,800));
 })();
 </script>
 
 
 <script>
-/* V66 — Liens FIFA sans casser drapeaux */
+/* V68 — Workflow journées + calcul gains fiable */
 (function(){
-  function esc(s){
-    return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+  function maxDay(){
+    if(typeof maxCalendarDay==="function") return maxCalendarDay();
+    return Math.max(...(state.matches||[]).map(m=>Number(m.day||1)));
   }
 
-  function getTeamUrl(team){
-    if(typeof bpTeamUrl==="function") return bpTeamUrl(team);
-    const slug=String(team||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[’']/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-    return "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/teams/"+slug;
+  function saveCloud(){
+    try{ if(typeof save==="function") save(); }catch(e){}
+    try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
   }
 
-  function wrapHtml(html, team){
-    return `<a class="bp-fifa-link" href="${getTeamUrl(team)}" target="_blank" rel="noopener noreferrer" title="FIFA — ${esc(team)}">${html}</a>`;
+  function setAdminViewDay(day){
+    day=Math.max(1,Math.min(maxDay(),Number(day||1)));
+    state.currentDay=day;
+    if(typeof calendarDayDisplayed!=="undefined") calendarDayDisplayed=day;
+    if(typeof pronoDayDisplayed!=="undefined") pronoDayDisplayed=day;
+    state.closed=typeof isDayClosed==="function" ? isDayClosed(day) : !!(state.closedDays&&state.closedDays[day]);
+    saveCloud();
+    if(typeof renderAll==="function") renderAll();
+    setTimeout(()=>{
+      document.querySelectorAll("section").forEach(s=>s.classList.remove("active"));
+      document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+      document.getElementById("admin")?.classList.add("active");
+      document.getElementById("navAdmin")?.classList.add("active");
+    },60);
   }
 
-  function restoreFunctionLinks(){
-    // Remplace f() et flagOnly() en gardant exactement les mêmes images qu'avant, mais dans un <a>.
-    window.f=function(team){
-      let c=window.flagCodes?.[team];
-      const content=c
-        ? `<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${esc(team)}`
-        : `<span class="muted">${esc(team)}</span>`;
-      return wrapHtml(content,team);
-    };
+  window.previousDay = async function(){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    if(Number(state.currentDay||1)<=1) return alert("Tu es déjà sur la journée 1.");
+    setAdminViewDay(Number(state.currentDay)-1);
+    return true;
+  };
 
-    window.flagOnly=function(team){
-      let c=window.flagCodes?.[team];
-      const content=c
-        ? `<img class="flag" src="https://flagcdn.com/${c}.svg" alt="${esc(team)}">`
-        : `<span>${esc(String(team||"").slice(0,2))}</span>`;
-      return wrapHtml(content,team);
-    };
+  window.nextDay = async function(){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    if(Number(state.currentDay||1)>=maxDay()) return alert("Dernière journée atteinte.");
+    setAdminViewDay(Number(state.currentDay)+1);
+    return true;
+  };
+
+  window.openBets = async function(){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    const day=Number(state.currentDay||1);
+    const ok=confirm(`Ouvrir la journée ${day} ?\n\nCette action ouvre J${day} aux mises et ferme toutes les autres journées.`);
+    if(!ok) return false;
+    if(!state.closedDays) state.closedDays={};
+    if(!state.adminForcedOpenDays) state.adminForcedOpenDays={};
+    for(let d=1;d<=maxDay();d++){
+      state.closedDays[d]=Number(d)!==day;
+      state.adminForcedOpenDays[d]=false;
+    }
+    state.closedDays[day]=false;
+    state.adminForcedOpenDays[day]=true;
+    state.currentDay=day;
+    state.closed=false;
+    try{ if(typeof log==="function") log("SYSTEM",`Journée ${day} ouverte par Admin`,0); }catch(e){}
+    saveCloud();
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} ouverte.`);
+    return true;
+  };
+
+  window.closeBets = async function(){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    const day=Number(state.currentDay||1);
+    if(!state.closedDays) state.closedDays={};
+    if(!state.adminForcedOpenDays) state.adminForcedOpenDays={};
+    if(state.closedDays[day]===true && !state.adminForcedOpenDays[day]){
+      alert(`La journée ${day} est déjà fermée.`);
+      return false;
+    }
+    const ok=confirm(`Fermer la journée ${day} ?\n\nLes mises de J${day} seront clôturées. Le calcul des gains reste manuel.`);
+    if(!ok) return false;
+    state.closedDays[day]=true;
+    state.adminForcedOpenDays[day]=false;
+    state.closed=true;
+    try{ if(typeof log==="function") log("SYSTEM",`Journée ${day} fermée - mises clôturées`,0); }catch(e){}
+    saveCloud();
+    if(typeof renderAll==="function") renderAll();
+    alert(`Journée ${day} fermée.`);
+    return true;
+  };
+
+  // Score entry should follow the admin-viewed day:
+  // if J2 is open => scores J1; if viewing a closed J1 directly => scores J1.
+  window.bpV68ScoreDay = function(){
+    const d=Number(state.currentDay||1);
+    if(typeof isDayClosed==="function" && isDayClosed(d)) return d;
+    return Math.max(1,d-1);
+  };
+
+  const oldScoreEntryDay=window.scoreEntryDay;
+  if(typeof oldScoreEntryDay==="function"){
+    window.scoreEntryDay=function(){ return window.bpV68ScoreDay(); };
   }
 
-  function addFallbackLinksToExistingDom(){
-    if(!window.state || !Array.isArray(state.matches)) return;
-
-    document.querySelectorAll(".bet-card").forEach(card=>{
-      const id=String(card.id||"").replace("betCard_","");
-      const m=(state.matches||[]).find(x=>String(x.id)===id);
-      if(!m) return;
-
-      const wraps=card.querySelectorAll(".flag-wrap");
-      [[wraps[0],m.teamA],[wraps[1],m.teamB]].forEach(([wrap,team])=>{
-        if(!wrap || wrap.querySelector("a.bp-fifa-link")) return;
-        const inner=wrap.innerHTML;
-        wrap.innerHTML=wrapHtml(inner,team);
-      });
-
-      // Rendre les drapeaux du titre cliquables si pas déjà dans un lien.
-      const h3=card.querySelector(".bet-title h3");
-      if(h3 && !h3.querySelector("a.bp-fifa-link") && !h3.dataset.bpV66Title){
-        h3.dataset.bpV66Title="1";
-        h3.style.cursor="pointer";
-        h3.title=`FIFA — ${m.teamA}`;
-        h3.addEventListener("click",e=>{
-          if(e.target.closest("a")) return;
-          window.open(getTeamUrl(m.teamA),"_blank","noopener,noreferrer");
-        });
-      }
+  function ensureScoreInputsForDay(day){
+    const matches=(state.matches||[]).filter(m=>Number(m.day)===Number(day));
+    if(!matches.length) return false;
+    return matches.every(m=>{
+      const sa=document.getElementById("sa_"+m.id)?.value;
+      const sb=document.getElementById("sb_"+m.id)?.value;
+      return sa!==undefined && sb!==undefined && sa!=="" && sb!=="";
     });
   }
 
-  restoreFunctionLinks();
+  function rollback(day){
+    if(typeof rollbackDaySettlement==="function"){
+      try{ rollbackDaySettlement(day); }catch(e){ console.warn("rollback native KO",e); }
+    }else{
+      const details=(state.settlementDetails||[]).filter(d=>Number(d.day)===Number(day)&&d.player&&d.player!=="RÉSERVE");
+      details.forEach(d=>{
+        const p=(state.players||[]).find(x=>x.name===d.player);
+        if(!p) return;
+        const amount=Number(d.netGain||0);
+        p.balance-=amount;
+        p.evolution-=amount;
+        if(String(d.status||"").includes("GAGNÉ")) p.good=Math.max(0,Number(p.good||0)-1);
+        if(String(d.status||"").includes("SCORE EXACT")) p.exact=Math.max(0,Number(p.exact||0)-1);
+      });
+      state.settlementDetails=(state.settlementDetails||[]).filter(d=>Number(d.day)!==Number(day));
+    }
+  }
+
+  function outcome(scoreA,scoreB){ return Number(scoreA)>Number(scoreB)?"A":Number(scoreA)<Number(scoreB)?"B":"N"; }
+  function outcomeLabelSafe(out,m){ return out==="A"?m.teamA:out==="B"?m.teamB:"Nul"; }
+  function scoreTextSafe(a,b){ return `${Number(a)} - ${Number(b)}`; }
+
+  window.calculateGains = async function(showAlert=true){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    const targetDay=window.bpV68ScoreDay();
+
+    if(!state.closedDays) state.closedDays={};
+    if(!state.closedDays[targetDay]){
+      alert(`La journée ${targetDay} doit être fermée avant de calculer les gains.`);
+      return false;
+    }
+
+    if(!ensureScoreInputsForDay(targetDay)){
+      alert(`Merci de saisir tous les scores officiels de la journée ${targetDay} avant de calculer les gains.`);
+      return false;
+    }
+
+    if(showAlert){
+      const ok=confirm(`Calculer les gains de la journée ${targetDay} ?\n\nLes anciens calculs de J${targetDay}, s'il y en a, seront annulés puis recalculés.`);
+      if(!ok) return false;
+    }
+
+    rollback(targetDay);
+
+    const matches=(state.matches||[]).filter(m=>Number(m.day)===Number(targetDay));
+    let processed=0,totalGood=0,totalExact=0;
+
+    state.settlementDetails=(state.settlementDetails||[]).filter(d=>Number(d.day)!==Number(targetDay));
+
+    matches.forEach(m=>{
+      const sa=document.getElementById("sa_"+m.id)?.value;
+      const sb=document.getElementById("sb_"+m.id)?.value;
+      if(sa===""||sb===""||sa===undefined||sb===undefined) return;
+
+      m.scoreA=Number(sa);
+      m.scoreB=Number(sb);
+      m.status="done";
+      processed++;
+
+      const actual=outcome(m.scoreA,m.scoreB);
+      const actualLabel=outcomeLabelSafe(actual,m);
+
+      const matchBets=(state.bets||[]).filter(b=>
+        String(b.matchId)===String(m.id) &&
+        Number(b.day)===Number(targetDay) &&
+        String(b.status||"").toUpperCase()==="VALIDATED"
+      );
+
+      matchBets.forEach(b=>{
+        b.scoreA=Number(b.scoreA ?? String(b.score||"0-0").split(/[-–]/)[0] ?? 0);
+        b.scoreB=Number(b.scoreB ?? String(b.score||"0-0").split(/[-–]/)[1] ?? 0);
+        b.predictedOutcome=outcome(b.scoreA,b.scoreB);
+        b.prediction=b.predictedOutcome;
+      });
+
+      const losers=matchBets.filter(b=>b.predictedOutcome!==actual);
+      const winners=matchBets.filter(b=>b.predictedOutcome===actual);
+      const lostPot=losers.reduce((s,b)=>s+Number(b.stake||0),0);
+      let payoutTotal=0;
+
+      losers.forEach(b=>{
+        const pl=(state.players||[]).find(p=>p.name===b.player);
+        const stake=Number(b.stake||0);
+        if(pl){
+          pl.balance=Number(pl.balance||0)-stake;
+          pl.evolution=Number(pl.evolution||0)-stake;
+          try{ if(typeof log==="function") log(pl.name,`Perte ${m.id}`,-stake); }catch(e){}
+        }
+        state.settlementDetails.push({
+          day:targetDay,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,
+          player:b.player,stake,prediction:outcomeLabelSafe(b.predictedOutcome,m),predictedScore:scoreTextSafe(b.scoreA,b.scoreB),
+          officialScore:scoreTextSafe(m.scoreA,m.scoreB),result:actualLabel,status:"PERDU",
+          baseGain:0,exactBonus:0,netGain:-stake
+        });
+      });
+
+      winners.forEach(b=>{
+        const pl=(state.players||[]).find(p=>p.name===b.player);
+        if(!pl) return;
+        const stake=Number(b.stake||0);
+        const exact=Number(b.scoreA)===Number(m.scoreA)&&Number(b.scoreB)===Number(m.scoreB);
+        const multiplier=exact?3:2;
+        const eventMult=typeof eventMultiplierForBet==="function" ? Number(eventMultiplierForBet(targetDay,m.id,exact)||1) : 1;
+        const net=stake*multiplier*eventMult;
+        const baseGain=stake*2*eventMult;
+        const exactBonus=exact?stake*eventMult:0;
+        payoutTotal+=net;
+
+        pl.balance=Number(pl.balance||0)+net;
+        pl.evolution=Number(pl.evolution||0)+net;
+        pl.good=Number(pl.good||0)+1;
+        totalGood++;
+        if(exact){ pl.exact=Number(pl.exact||0)+1; totalExact++; }
+        try{ if(typeof log==="function") log(pl.name,`Gain ${m.id}${exact?" + score exact":""}`,net); }catch(e){}
+
+        state.settlementDetails.push({
+          day:targetDay,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,
+          player:b.player,stake,prediction:outcomeLabelSafe(b.predictedOutcome,m),predictedScore:scoreTextSafe(b.scoreA,b.scoreB),
+          officialScore:scoreTextSafe(m.scoreA,m.scoreB),result:actualLabel,
+          status:(exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)")+(eventMult>1?" · BONUS x"+eventMult:""),
+          baseGain,exactBonus,netGain:net
+        });
+      });
+
+      const reserveNeed=Math.max(0,payoutTotal-lostPot);
+      const reserveSurplus=Math.max(0,lostPot-payoutTotal);
+      state.settlementDetails.push({
+        day:targetDay,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,
+        player:"RÉSERVE",stake:0,prediction:"",predictedScore:"",
+        officialScore:scoreTextSafe(m.scoreA,m.scoreB),result:actualLabel,
+        status:reserveNeed>0?"RÉSERVE UTILISÉE":"RÉSERVE CRÉDITÉE",
+        baseGain:payoutTotal,exactBonus:0,netGain:reserveSurplus-reserveNeed
+      });
+    });
+
+    if(typeof markWorkflowGainsDone==="function") markWorkflowGainsDone(targetDay);
+    if(!state.workflow) state.workflow={};
+    if(!Array.isArray(state.workflow.gainsDoneDays)) state.workflow.gainsDoneDays=[];
+    if(!state.workflow.gainsDoneDays.includes(targetDay)) state.workflow.gainsDoneDays.push(targetDay);
+
+    if(!state.summaries) state.summaries={day:{},comp:{}};
+    state.summaries.day={good:totalGood,exact:totalExact,gain:0,rank:0};
+
+    const info=document.getElementById("calcInfo");
+    if(info) info.innerHTML=`Journée ${targetDay} · ${processed} match(s) traité(s). Gains calculés.`;
+
+    saveCloud();
+    if(typeof renderAll==="function") renderAll();
+    alert(`${processed} match(s) traité(s). Gains J${targetDay} calculés.`);
+    return true;
+  };
+
+  // Rebind buttons after render
+  function bindButtons(){
+    document.querySelectorAll("button").forEach(btn=>{
+      const t=(btn.textContent||"").trim();
+      if(t.includes("Journée précédente")) btn.onclick=window.previousDay;
+      if(t.includes("Journée suivante")) btn.onclick=window.nextDay;
+      if(t.includes("Ouvrir la journée")) btn.onclick=window.openBets;
+      if(t.includes("Fermer la journée")) btn.onclick=window.closeBets;
+      if(t.includes("Calculer les gains")) btn.onclick=()=>window.calculateGains(true);
+    });
+  }
 
   const oldRenderAll=window.renderAll;
-  if(typeof oldRenderAll==="function" && !oldRenderAll.__bpV66Wrapped){
+  if(typeof oldRenderAll==="function"&&!oldRenderAll.__bpV68Wrapped){
     window.renderAll=function(){
-      restoreFunctionLinks();
       const r=oldRenderAll.apply(this,arguments);
-      setTimeout(addFallbackLinksToExistingDom,80);
-      setTimeout(addFallbackLinksToExistingDom,400);
+      setTimeout(bindButtons,100);
       return r;
     };
-    window.renderAll.__bpV66Wrapped=true;
+    window.renderAll.__bpV68Wrapped=true;
   }
 
-  const oldRenderBets=window.renderBets;
-  if(typeof oldRenderBets==="function" && !oldRenderBets.__bpV66Wrapped){
-    window.renderBets=function(){
-      restoreFunctionLinks();
-      const r=oldRenderBets.apply(this,arguments);
-      setTimeout(addFallbackLinksToExistingDom,80);
-      return r;
-    };
-    window.renderBets.__bpV66Wrapped=true;
-  }
-
-  document.addEventListener("DOMContentLoaded",()=>{
-    restoreFunctionLinks();
-    setTimeout(addFallbackLinksToExistingDom,500);
-    setTimeout(addFallbackLinksToExistingDom,1200);
-  });
+  document.addEventListener("DOMContentLoaded",()=>setTimeout(bindButtons,800));
 })();
 </script>
 
