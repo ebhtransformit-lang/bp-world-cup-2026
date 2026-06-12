@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V90 EARLY BDD MASTER FIX</title>
+<title>B Partner FIFA World Cup 2026 - V92 PURGE DELETED PLAYERS BDD</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -2222,6 +2222,36 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 })();
 </script>
 
+
+
+<style>
+#bpSyncPill,
+#bpV88DataSource,
+#bpV90DataSource {
+  display:none!important;
+}
+#bpV91SyncStatus{
+  position:fixed;
+  right:16px;
+  bottom:16px;
+  z-index:999999;
+  max-width:380px;
+  padding:10px 14px;
+  border-radius:14px;
+  background:rgba(18,18,18,.96);
+  color:#fff;
+  border:1px solid rgba(74,222,128,.55);
+  box-shadow:0 10px 28px rgba(0,0,0,.35);
+  font:12px Arial, sans-serif;
+  font-weight:800;
+}
+#bpV91SyncStatus .muted{
+  display:block;
+  margin-top:3px;
+  color:#b7b7b7;
+  font-weight:700;
+}
+</style>
 
 </head>
 <body>
@@ -14919,6 +14949,178 @@ window.BP_LOCAL_ONLY = true;
   else setTimeout(apply, 0);
   setTimeout(apply, 300);
   setTimeout(apply, 1000);
+})();
+</script>
+
+<script>
+(function(){
+  if(window.__BP_V91_SYNC_MESSAGES_FIX__) return;
+  window.__BP_V91_SYNC_MESSAGES_FIX__ = true;
+
+  function removeDuplicates(){
+    ["bpSyncPill","bpV88DataSource","bpV90DataSource"].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = "none";
+    });
+  }
+
+  function setStatus(main, sub){
+    removeDuplicates();
+    var el = document.getElementById("bpV91SyncStatus");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "bpV91SyncStatus";
+      document.body.appendChild(el);
+    }
+    el.innerHTML = String(main || "BDD Supabase") + (sub ? '<span class="muted">'+String(sub)+'</span>' : "");
+  }
+
+  window.bpV91SyncStatus = setStatus;
+
+  var oldIndicator = window.indicator;
+  window.indicator = function(type, msg){
+    setStatus("BDD Supabase", String(msg || "").replace(/<br>/g," — "));
+    if(typeof oldIndicator === "function"){
+      try { return oldIndicator.apply(this, arguments); } catch(e){}
+    }
+  };
+
+  var oldConsoleWarn = console.warn;
+  console.warn = function(){
+    removeDuplicates();
+    return oldConsoleWarn.apply(console, arguments);
+  };
+
+  document.addEventListener("DOMContentLoaded", function(){
+    removeDuplicates();
+    setStatus("BDD Supabase", "Synchronisation active");
+    setInterval(removeDuplicates, 500);
+  });
+})();
+</script>
+
+<script>
+(function(){
+  if(window.__BP_V92_PURGE_DELETED_PLAYERS_BDD__) return;
+  window.__BP_V92_PURGE_DELETED_PLAYERS_BDD__ = true;
+
+  function norm(v){ return String(v || "").trim().toLowerCase(); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function playerKeys(p){ return [p && p.code, p && p.name, p && p.pseudo].map(norm).filter(Boolean); }
+  function deletedSet(){
+    var s = new Set();
+    try{ arr(window.state && window.state.deletedPlayerKeys).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
+    ["bp_v86_deleted_player_keys","bp_v85_deleted_player_keys","bp_deleted_player_keys_ui","bp_v92_deleted_player_keys"].forEach(function(k){
+      try{ arr(JSON.parse(localStorage.getItem(k)||"[]")).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
+    });
+    return s;
+  }
+  function saveDeletedSet(s){
+    var a = Array.from(s).filter(Boolean);
+    try{ localStorage.setItem("bp_v92_deleted_player_keys", JSON.stringify(a)); }catch(e){}
+    if(window.state){
+      window.state.deletedPlayerKeys = Array.from(new Set(arr(window.state.deletedPlayerKeys).concat(a).map(norm).filter(Boolean)));
+    }
+  }
+  function hideOldBadges(){
+    ["bpSyncPill","bpV88DataSource","bpV90DataSource"].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el){ el.style.display = "none"; el.remove(); }
+    });
+  }
+  function status(msg){
+    hideOldBadges();
+    var el = document.getElementById("bpV92Status");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "bpV92Status";
+      el.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:999999;max-width:420px;padding:10px 14px;border-radius:14px;background:#101010;color:#fff;border:1px solid rgba(74,222,128,.6);box-shadow:0 10px 28px rgba(0,0,0,.35);font:12px Arial;font-weight:800";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg || "BDD Supabase OK";
+  }
+  async function pushState(reason){
+    if(!window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY || !window.state) return false;
+    var appId = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
+    var endpoint = window.BP_SUPABASE_URL.replace(/\/$/,"") + "/rest/v1/app_state";
+    var res = await fetch(endpoint, {
+      method:"POST",
+      headers:{
+        "apikey": window.BP_SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + window.BP_SUPABASE_ANON_KEY,
+        "Content-Type":"application/json",
+        "Prefer":"resolution=merge-duplicates"
+      },
+      body: JSON.stringify({
+        id: appId,
+        data: window.state,
+        updated_at: new Date().toISOString()
+      })
+    });
+    if(!res.ok) throw new Error("Sauvegarde BDD KO " + res.status);
+    status("BDD nettoyée — " + (reason || "OK") + " — joueurs: " + arr(window.state.players).length);
+    return true;
+  }
+  async function purge(reason){
+    if(!window.state) return;
+    var s = deletedSet();
+    saveDeletedSet(s);
+    var beforeP = arr(window.state.players).length;
+    var beforeB = arr(window.state.bets).length;
+    window.state.players = arr(window.state.players).filter(function(p){ return !playerKeys(p).some(function(k){ return s.has(k); }); });
+    window.state.bets = arr(window.state.bets).filter(function(b){ return !s.has(norm(b.player)); });
+    try{
+      localStorage.setItem("bp_wc_dev", JSON.stringify(window.state));
+      localStorage.setItem("bpwc_state_v1", JSON.stringify(window.state));
+    }catch(e){}
+    if(beforeP !== window.state.players.length || beforeB !== window.state.bets.length){
+      try{ await pushState(reason || "purge joueurs supprimés"); }catch(e){ status("Purge locale OK, BDD KO: " + (e.message || e)); }
+      try{ if(typeof window.renderAll === "function") window.renderAll(); }catch(e){}
+    }else{
+      status("BDD Supabase — joueurs: " + arr(window.state.players).length);
+    }
+  }
+  function captureDelete(btn){
+    try{
+      var card = btn.closest(".admin-player-card") || btn.closest(".admin-row") || btn.closest("tr") || btn.parentElement;
+      var values = [];
+      if(card){
+        card.querySelectorAll("input,.user-code").forEach(function(el){ values.push(el.value || el.textContent); });
+      }
+      var s = deletedSet();
+      values.map(norm).filter(Boolean).forEach(function(v){ s.add(v); });
+      saveDeletedSet(s);
+      setTimeout(function(){ purge("suppression joueur"); }, 250);
+      setTimeout(function(){ purge("suppression joueur"); }, 1200);
+    }catch(e){}
+  }
+  document.addEventListener("click", function(e){
+    var b = e.target && e.target.closest && e.target.closest("button");
+    if(!b) return;
+    var t = norm(b.textContent);
+    if(t.indexOf("suppr") !== -1 || t.indexOf("delete") !== -1) captureDelete(b);
+  }, true);
+
+  window.bpV92PurgeDeletedPlayers = purge;
+
+  function addButton(){
+    if(document.getElementById("bpV92PurgeBtn")) return;
+    var admin = document.getElementById("admin") || document.querySelector("section#admin");
+    if(!admin) return;
+    var btn = document.createElement("button");
+    btn.id = "bpV92PurgeBtn";
+    btn.className = "action danger";
+    btn.textContent = "Nettoyer BDD joueurs supprimés";
+    btn.onclick = function(){ purge("nettoyage manuel"); };
+    admin.insertBefore(btn, admin.firstChild);
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    addButton();
+    hideOldBadges();
+    setTimeout(function(){ purge("contrôle boot"); }, 800);
+    setInterval(function(){ hideOldBadges(); addButton(); }, 1000);
+  });
 })();
 </script>
 
