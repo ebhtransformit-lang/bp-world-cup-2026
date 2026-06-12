@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V88 BDD MASTER / NO HTML RESET</title>
+<title>B Partner FIFA World Cup 2026 - V89 CLASSEMENT SCORE VISIBLE</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -2143,6 +2143,31 @@ body.bp-user #navBackup{
 
 /* V69 — Clean journées : aucun chrono visible */
 #pronoCountdownPanel,#bpV55OpenDayPanel{display:none!important;}
+
+/* V89 — Classement : affichage du score officiel après le pays */
+.worldcup-team-row,
+.worldcup-team-row.head{
+  grid-template-columns:34px minmax(110px, 1.6fr) 58px repeat(7, 34px)!important;
+}
+.worldcup-team-row.head{
+  grid-template-columns:minmax(150px, calc(34px + 1.6fr + 6px)) 58px repeat(7, 34px)!important;
+}
+.bp-standing-score{
+  text-align:center!important;
+  font-weight:900!important;
+  color:#7a1020!important;
+  font-variant-numeric:tabular-nums!important;
+}
+.worldcup-team-row.head .bp-standing-score{
+  color:#111!important;
+}
+@media(max-width:760px){
+  .worldcup-team-row,
+  .worldcup-team-row.head{
+    grid-template-columns:30px minmax(96px, 1.4fr) 52px repeat(7, 30px)!important;
+  }
+}
+
 </style>
 
 <!--
@@ -14791,6 +14816,88 @@ window.BP_LOCAL_ONLY = true;
       setInterval(installGuards, 1500);
     }, 0);
   }
+})();
+</script>
+
+
+<script>
+/* V89 — Classement : afficher le score officiel après le pays
+   Patch non destructif : après chaque rendu, on lit state.matches et on ajoute une colonne "Score"
+   à chaque ligne de classement. Cela permet de valider GitHub sans toucher à la BDD. */
+(function(){
+  'use strict';
+  if(window.__BP_V89_STANDING_SCORE_VISIBLE__) return;
+  window.__BP_V89_STANDING_SCORE_VISIBLE__ = true;
+
+  function normalize(s){
+    return String(s || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\s+/g,' ');
+  }
+
+  function scoreMap(){
+    const map = new Map();
+    const matches = Array.isArray(window.state && window.state.matches) ? window.state.matches : [];
+    matches.forEach(m => {
+      const a = m.teamA || m.home || m.a || m.t1 || m.team1 || m.homeTeam || m.countryA;
+      const b = m.teamB || m.away || m.b || m.t2 || m.team2 || m.awayTeam || m.countryB;
+      const sa = m.scoreA ?? m.homeScore ?? m.s1 ?? m.goalsA ?? m.officialA;
+      const sb = m.scoreB ?? m.awayScore ?? m.s2 ?? m.goalsB ?? m.officialB;
+      if(a && b && sa !== undefined && sa !== null && sb !== undefined && sb !== null && String(sa) !== '' && String(sb) !== ''){
+        const ka = normalize(a), kb = normalize(b);
+        if(!map.has(ka)) map.set(ka, []);
+        if(!map.has(kb)) map.set(kb, []);
+        map.get(ka).push(`${sa}-${sb}`);
+        map.get(kb).push(`${sb}-${sa}`);
+      }
+    });
+    return map;
+  }
+
+  function injectScores(){
+    const map = scoreMap();
+    document.querySelectorAll('.worldcup-group-card').forEach(card => {
+      const rows = Array.from(card.querySelectorAll('.worldcup-team-row'));
+      rows.forEach(row => {
+        if(row.dataset.bpV89ScoreDone === '1') return;
+        const children = Array.from(row.children);
+        if(!children.length) return;
+
+        const scoreCell = document.createElement('span');
+        scoreCell.className = 'bp-standing-score';
+
+        if(row.classList.contains('head')){
+          scoreCell.textContent = 'Score';
+          row.insertBefore(scoreCell, children[1] || null);
+          row.dataset.bpV89ScoreDone = '1';
+          return;
+        }
+
+        const nameEl = row.querySelector('.worldcup-team-name') || children[1] || children[0];
+        const country = normalize(nameEl ? nameEl.textContent : '');
+        const scores = map.get(country) || [];
+        scoreCell.textContent = scores.length ? scores.join(' / ') : '-';
+        row.insertBefore(scoreCell, children[2] || null);
+        row.dataset.bpV89ScoreDone = '1';
+      });
+    });
+  }
+
+  function schedule(){ setTimeout(injectScores, 50); setTimeout(injectScores, 300); setTimeout(injectScores, 900); }
+
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV89Wrapped){
+    const wrapped = function(){
+      const r = oldRenderAll.apply(this, arguments);
+      schedule();
+      return r;
+    };
+    wrapped.__bpV89Wrapped = true;
+    window.renderAll = wrapped;
+  }
+
+  document.addEventListener('DOMContentLoaded', schedule);
+  setInterval(injectScores, 2000);
 })();
 </script>
 
