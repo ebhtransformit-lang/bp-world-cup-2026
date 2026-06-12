@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V86 UI DELETE HARD FIX</title>
+<title>B Partner FIFA World Cup 2026 - V88 BDD MASTER / NO HTML RESET</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -14567,3 +14567,230 @@ window.BP_LOCAL_ONLY = true;
   };
 })();
 </script>
+
+
+<script>
+/* V88 — BDD MASTER / NO HTML RESET
+   Règle métier :
+   - Supabase est la source de vérité.
+   - Le HTML/localStorage ne doit plus réinjecter des joueurs, scores, FID ou pronos par défaut.
+   - Les données embarquées/locales ne servent qu'en secours si la BDD est vide ou inaccessible.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V88_BDD_MASTER_NO_HTML_RESET__) return;
+  window.__BP_V88_BDD_MASTER_NO_HTML_RESET__ = true;
+
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const TABLE = 'app_state';
+  const LOCAL_KEYS = ['bpwc_state_v1','bp_wc_dev'];
+  let client = null;
+  let bootDone = false;
+  let cloudMaster = null;
+
+  function S(){ return window.state || (window.state = {}); }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x));}catch(e){return x;} }
+  function iso(){ return new Date().toISOString(); }
+  function norm(v){ return String(v || '').trim().toLowerCase(); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function obj(v){ return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+  function hasBusinessData(d){
+    return !!(d && (
+      arr(d.players).length ||
+      arr(d.bets).length ||
+      arr(d.matches).length ||
+      Object.keys(obj(d.closedDays)).length ||
+      Object.keys(obj(d.gainsCalculatedDays)).length ||
+      Object.keys(obj(d.officialScoresSavedDays)).length
+    ));
+  }
+  function keysOfPlayer(p){
+    const out = [];
+    [p && p.code, p && p.name, p && p.pseudo].forEach(v => {
+      v = norm(v);
+      if(v && !out.includes(v)) out.push(v);
+    });
+    return out;
+  }
+  function ensureState(d){
+    d = d && typeof d === 'object' ? d : {};
+    if(!Array.isArray(d.players)) d.players = [];
+    if(!Array.isArray(d.bets)) d.bets = [];
+    if(!Array.isArray(d.matches)) d.matches = [];
+    if(!Array.isArray(d.deletedPlayerKeys)) d.deletedPlayerKeys = [];
+    if(!Array.isArray(d.settlementDetails)) d.settlementDetails = [];
+    if(!d.closedDays || typeof d.closedDays !== 'object') d.closedDays = {};
+    if(!d.gainsCalculatedDays || typeof d.gainsCalculatedDays !== 'object') d.gainsCalculatedDays = {};
+    if(!d.officialScoresSavedDays || typeof d.officialScoresSavedDays !== 'object') d.officialScoresSavedDays = {};
+    if(!d.officialScoresByDay || typeof d.officialScoresByDay !== 'object') d.officialScoresByDay = {};
+    if(!d.officialScoresByMatch || typeof d.officialScoresByMatch !== 'object') d.officialScoresByMatch = {};
+    return d;
+  }
+  function localDeletedKeys(){
+    const set = new Set();
+    try{
+      ['bp_v86_deleted_player_keys','bp_v85_deleted_player_keys','bp_deleted_player_keys_ui'].forEach(k=>{
+        JSON.parse(localStorage.getItem(k) || '[]').forEach(x => { x = norm(x); if(x) set.add(x); });
+      });
+    }catch(e){}
+    arr(S().deletedPlayerKeys).forEach(x => { x = norm(x); if(x) set.add(x); });
+    return [...set];
+  }
+  function applyDeleted(d){
+    d = ensureState(d);
+    const deleted = new Set([...arr(d.deletedPlayerKeys), ...localDeletedKeys()].map(norm).filter(Boolean));
+    d.deletedPlayerKeys = [...deleted];
+    d.players = arr(d.players).filter(p => !keysOfPlayer(p).some(k => deleted.has(k)));
+    d.bets = arr(d.bets).filter(b => !deleted.has(norm(b.player)));
+    return d;
+  }
+  function supa(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
+      throw new Error('Supabase non configuré');
+    }
+    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return client;
+  }
+  function indicator(type, msg){
+    let el = document.getElementById('bpV88DataSource');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'bpV88DataSource';
+      el.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:999999;max-width:430px;padding:10px 13px;border-radius:14px;background:#101010;color:#fff;border:1px solid rgba(255,255,255,.16);box-shadow:0 12px 30px rgba(0,0,0,.45);font:12px Arial';
+      document.body.appendChild(el);
+    }
+    el.style.borderColor = type === 'ok' ? 'rgba(74,222,128,.65)' : type === 'bad' ? 'rgba(251,113,133,.75)' : 'rgba(250,204,21,.75)';
+    el.innerHTML = '<b>Source données V88</b><br>' + String(msg || '');
+  }
+  function saveLocal(d){
+    d = applyDeleted(clone(d || S()));
+    d.schemaVersion = 'v88-bdd-master-no-html-reset';
+    d.lastLocalSavedAt = iso();
+    LOCAL_KEYS.forEach(k => { try{ localStorage.setItem(k, JSON.stringify(d)); }catch(e){} });
+  }
+  async function readCloud(){
+    const r = await supa().from(TABLE).select('data,updated_at').eq('id', APP_ID).maybeSingle();
+    if(r.error) throw r.error;
+    const data = r.data && r.data.data ? clone(r.data.data) : null;
+    if(!hasBusinessData(data)) return null;
+    data.__cloudUpdatedAt = r.data && r.data.updated_at;
+    return applyDeleted(ensureState(data));
+  }
+  async function writeCloud(d, reason){
+    d = applyDeleted(clone(d || S()));
+    d.schemaVersion = 'v88-bdd-master-no-html-reset';
+    d.lastSavedAt = iso();
+    const r = await supa().from(TABLE).upsert({id: APP_ID, data: d, updated_at: iso()}, {onConflict:'id'});
+    if(r.error) throw r.error;
+    cloudMaster = clone(d);
+    saveLocal(d);
+    indicator('ok', '✅ SUPABASE maître — sauvegarde ' + (reason || 'OK') + '<br>Joueurs: ' + arr(d.players).length + ' · Matchs: ' + arr(d.matches).length + ' · Pronos: ' + arr(d.bets).length);
+    return d;
+  }
+  function replaceStateWith(d){
+    d = applyDeleted(ensureState(clone(d)));
+    Object.keys(S()).forEach(k => delete S()[k]);
+    Object.assign(S(), d);
+    window.state = S();
+    saveLocal(S());
+    try{ if(typeof window.bpV86ApplyDeletedPlayers === 'function') window.bpV86ApplyDeletedPlayers({forceSave:true}); }catch(e){}
+    try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(e){}
+    setTimeout(()=>{ try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(e){} }, 250);
+  }
+  async function boot(){
+    indicator('warn', 'Chargement Supabase prioritaire…');
+    try{
+      const cloud = await readCloud();
+      if(cloud){
+        cloudMaster = clone(cloud);
+        replaceStateWith(cloud);
+        bootDone = true;
+        indicator('ok', '✅ SUPABASE<br>Joueurs: ' + arr(S().players).length + ' · Matchs: ' + arr(S().matches).length + ' · Pronos: ' + arr(S().bets).length + '<br>Dernière BDD: ' + (cloud.__cloudUpdatedAt || 'n/a'));
+        return true;
+      }
+      bootDone = true;
+      indicator('warn', '⚠️ BDD vide : utilisation de l’état local uniquement. Le HTML ne réinitialise pas automatiquement.');
+      saveLocal(S());
+      return false;
+    }catch(e){
+      bootDone = true;
+      indicator('bad', '❌ BDD inaccessible : ' + (e.message || e) + '<br>Mode local de secours, sans reset HTML.');
+      saveLocal(S());
+      return false;
+    }
+  }
+
+  function wrapFunction(name, wrapper){
+    const old = window[name];
+    if(typeof old !== 'function' || old.__bpV88Wrapped) return;
+    const fn = wrapper(old);
+    fn.__bpV88Wrapped = true;
+    window[name] = fn;
+  }
+
+  function installGuards(){
+    // Toute sauvegarde passe par l'état courant filtré. Après boot Supabase,
+    // on sauvegarde l'état maître, jamais les données embarquées du HTML.
+    wrapFunction('save', old => function(){
+      applyDeleted(S());
+      saveLocal(S());
+      try{
+        const r = old.apply(this, arguments);
+        return r;
+      }catch(e){ console.warn('[V88 save ancien]', e); }
+    });
+
+    ['bpV84WriteBDD','bpV85WriteBDD','bpCloudSave','bpForceSaveSupabase'].forEach(name => {
+      wrapFunction(name, old => async function(){
+        applyDeleted(S());
+        if(cloudMaster && !hasBusinessData(S())){
+          replaceStateWith(cloudMaster);
+        }
+        try{
+          return await writeCloud(S(), name);
+        }catch(e){
+          console.warn('[V88 write guard]', name, e);
+          return await old.apply(this, arguments);
+        }
+      });
+    });
+
+    ['bpCloudLoad','bpForceLoadSupabase','bpV84Start'].forEach(name => {
+      wrapFunction(name, old => async function(){
+        try{
+          const cloud = await readCloud();
+          if(cloud){
+            cloudMaster = clone(cloud);
+            replaceStateWith(cloud);
+            indicator('ok', '✅ SUPABASE rechargé<br>Joueurs: ' + arr(S().players).length + ' · Matchs: ' + arr(S().matches).length + ' · Pronos: ' + arr(S().bets).length);
+            return true;
+          }
+        }catch(e){ console.warn('[V88 load guard]', name, e); }
+        return old.apply(this, arguments);
+      });
+    });
+  }
+
+  window.bpV88Boot = boot;
+  window.bpV88ReadCloud = readCloud;
+  window.bpV88WriteCloud = writeCloud;
+  window.bpV88DataSource = function(){ return {bootDone, source: cloudMaster ? 'SUPABASE' : 'LOCAL_FALLBACK', players: arr(S().players).length, matches: arr(S().matches).length, bets: arr(S().bets).length}; };
+
+  installGuards();
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', async function(){
+      installGuards();
+      await boot();
+      setInterval(installGuards, 1500);
+    });
+  }else{
+    setTimeout(async function(){
+      installGuards();
+      await boot();
+      setInterval(installGuards, 1500);
+    }, 0);
+  }
+})();
+</script>
+
