@@ -2743,6 +2743,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
   </div>
 </div></div>
           <div class="admin-day-score-actions">
+            <button class="action secondary" onclick="saveOfficialScoresDay()">Enregistrer les scores officiels</button>
             <button class="action" onclick="calculateGains()">Calculer les gains de la journée</button>
             <button class="action secondary" onclick="recalculateDay()">Recalculer cette journée</button>
             <button class="action danger" onclick="resetOfficialScoresDay()">Remettre les scores à zéro</button>
@@ -10631,7 +10632,18 @@ function bpModalClose(){
 
 <script>
 /* V61 — Synchro Supabase automatique */
+window.BP_LOCAL_ONLY = true;
 (function(){
+  if(window.BP_LOCAL_ONLY){
+    window.bpCloudSaveDebounced=function(){};
+    window.bpCloudSave=async function(){return true;};
+    window.bpCloudLoad=async function(){return false;};
+    window.bpForceLoadSupabase=async function(){alert("Mode local actif : Supabase désactivé pour éviter l’erreur de fetch.");return false;};
+    window.bpV61LoadCloud=window.bpCloudLoad;
+    window.bpV61SaveCloud=async function(){return true;};
+    window.bpV61Audit=async function(){alert("Mode local actif : audit Supabase désactivé.");};
+    return;
+  }
   const APP_ID=window.BP_SUPABASE_APP_ID||"bp-world-cup-2026";
   let busy=false,timer=null,queued=null;
   const clone=x=>JSON.parse(JSON.stringify(x||{}));
@@ -11319,6 +11331,181 @@ function bpModalClose(){
     ensureClosedDays();
     setTimeout(bindButtons,300);
     setTimeout(bindButtons,1000);
+  });
+})();
+</script>
+
+
+<script>
+/* V70 — Correctif gains / scores / mode local
+   - Aucun aperçu HTML dans le chat côté assistant : fichier livré en lien uniquement.
+   - Supabase automatique désactivé en mode local pour supprimer l’erreur Failed to fetch.
+   - Scores officiels enregistrés explicitement par Admin avant calcul.
+   - Calcul des gains uniquement si : journée fermée + scores enregistrés + mises validées uniquement.
+   - Flag par journée : state.gainsCalculatedDays[day] pour éviter de sauter / recalculer par erreur.
+*/
+(function(){
+  window.BP_LOCAL_ONLY = true;
+  window.bpCloudSaveDebounced = function(){};
+  window.bpCloudSave = async function(){ return true; };
+
+  function maxDay(){
+    try{ return typeof maxCalendarDay === "function" ? Number(maxCalendarDay()) || 1 : Math.max(1,...(state.matches||[]).map(m=>Number(m.day||1))); }
+    catch(e){ return 1; }
+  }
+  function nDay(day){ return Math.max(1, Math.min(maxDay(), Number(day||state.currentDay||1))); }
+  function saveLocal(){ try{ localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){} }
+  function isClosed(day){ return !!(state.closedDays && state.closedDays[nDay(day)] === true); }
+  function scoreDay(){
+    const d=nDay(state.currentDay||1);
+    return isClosed(d) ? d : Math.max(1,d-1);
+  }
+  window.scoreEntryDay = scoreDay;
+  window.bpV68ScoreDay = scoreDay;
+
+  function ensureFlags(){
+    if(!state.gainsCalculatedDays || typeof state.gainsCalculatedDays!=="object") state.gainsCalculatedDays={};
+    if(!state.officialScoresSavedDays || typeof state.officialScoresSavedDays!=="object") state.officialScoresSavedDays={};
+  }
+  function matchesOf(day){ return (state.matches||[]).filter(m=>Number(m.day)===Number(day)); }
+  function scoreInput(id, side){ return document.getElementById((side==="A"?"sa_":"sb_")+id); }
+  function scoresSaved(day){
+    day=scoreDayFromArg(day);
+    const ms=matchesOf(day);
+    return ms.length>0 && ms.every(m=>m.status==="done" && m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined);
+  }
+  function scoreDayFromArg(day){ return nDay(day||scoreDay()); }
+
+  window.saveOfficialScoresDay = async function(showAlert=true){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    ensureFlags();
+    const day=scoreDay();
+    if(!isClosed(day)){ alert(`La journée ${day} doit être fermée avant d’enregistrer ses scores officiels.`); return false; }
+    const ms=matchesOf(day);
+    if(!ms.length){ alert(`Aucun match trouvé pour la journée ${day}.`); return false; }
+    for(const m of ms){
+      const sa=scoreInput(m.id,"A")?.value;
+      const sb=scoreInput(m.id,"B")?.value;
+      if(sa===undefined || sb===undefined || sa==="" || sb===""){
+        alert(`Score manquant pour ${m.id}.`); return false;
+      }
+    }
+    ms.forEach(m=>{
+      m.scoreA=Number(scoreInput(m.id,"A").value);
+      m.scoreB=Number(scoreInput(m.id,"B").value);
+      m.status="done";
+    });
+    state.officialScoresSavedDays[day]=true;
+    try{ if(typeof log==="function") log("SYSTEM",`Scores officiels enregistrés J${day}`,0); }catch(e){}
+    saveLocal();
+    if(typeof renderAll==="function") renderAll();
+    if(showAlert) alert(`Scores officiels de la journée ${day} enregistrés.`);
+    return true;
+  };
+
+  function rollback(day){
+    if(typeof rollbackDaySettlement==="function"){ try{ rollbackDaySettlement(day); return; }catch(e){} }
+    const details=(state.settlementDetails||[]).filter(d=>Number(d.day)===Number(day)&&d.player&&d.player!=="RÉSERVE");
+    details.forEach(d=>{
+      const p=(state.players||[]).find(x=>x.name===d.player); if(!p) return;
+      const amount=Number(d.netGain||0);
+      p.balance=Number(p.balance||0)-amount; p.evolution=Number(p.evolution||0)-amount;
+      if(String(d.status||"").includes("GAGNÉ")) p.good=Math.max(0,Number(p.good||0)-1);
+      if(String(d.status||"").includes("SCORE EXACT")) p.exact=Math.max(0,Number(p.exact||0)-1);
+    });
+    state.settlementDetails=(state.settlementDetails||[]).filter(d=>Number(d.day)!==Number(day));
+  }
+  function outcome(a,b){ a=Number(a); b=Number(b); return a>b?"A":a<b?"B":"N"; }
+  function outLabel(o,m){ return o==="A"?m.teamA:o==="B"?m.teamB:"Nul"; }
+  function sText(a,b){ return `${Number(a)} - ${Number(b)}`; }
+
+  window.calculateGains = async function(showAlert=true, force=false){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    ensureFlags();
+    const day=scoreDay();
+    if(!isClosed(day)){ alert(`La journée ${day} doit être fermée avant de calculer les gains.`); return false; }
+    if(!scoresSaved(day)){ alert(`Enregistre d’abord les scores officiels de la journée ${day}.`); return false; }
+    if(state.gainsCalculatedDays[day] && !force){
+      alert(`Les gains de la journée ${day} ont déjà été calculés. Utilise “Recalculer cette journée” si tu veux les refaire.`);
+      return false;
+    }
+    const validBets=(state.bets||[]).filter(b=>Number(b.day)===Number(day)&&String(b.status||"").toUpperCase()==="VALIDATED");
+    if(validBets.length===0){ alert(`Aucune mise validée pour la journée ${day}. Aucun gain à calculer.`); return false; }
+    if(showAlert){
+      const ok=confirm(`Calculer les gains de la journée ${day} ?\n\nSeules les mises VALIDÉES seront prises en compte.`);
+      if(!ok) return false;
+    }
+    rollback(day);
+    state.settlementDetails=(state.settlementDetails||[]).filter(d=>Number(d.day)!==Number(day));
+    const ms=matchesOf(day);
+    let processed=0,totalGood=0,totalExact=0;
+    ms.forEach(m=>{
+      processed++;
+      const actual=outcome(m.scoreA,m.scoreB), actualLabel=outLabel(actual,m);
+      const bets=validBets.filter(b=>String(b.matchId)===String(m.id));
+      const losers=[], winners=[];
+      bets.forEach(b=>{
+        const parts=String(b.score||"0-0").split(/[-–]/);
+        const ba=Number(b.scoreA ?? parts[0] ?? 0), bb=Number(b.scoreB ?? parts[1] ?? 0);
+        b.scoreA=ba; b.scoreB=bb; b.predictedOutcome=outcome(ba,bb); b.prediction=b.predictedOutcome;
+        (b.predictedOutcome===actual?winners:losers).push(b);
+      });
+      const lostPot=losers.reduce((s,b)=>s+Number(b.stake||0),0);
+      let payoutTotal=0;
+      losers.forEach(b=>{
+        const p=(state.players||[]).find(x=>x.name===b.player); const stake=Number(b.stake||0);
+        if(p){ p.balance=Number(p.balance||0)-stake; p.evolution=Number(p.evolution||0)-stake; }
+        state.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:b.player,stake,prediction:outLabel(b.predictedOutcome,m),predictedScore:sText(b.scoreA,b.scoreB),officialScore:sText(m.scoreA,m.scoreB),result:actualLabel,status:"PERDU",baseGain:0,exactBonus:0,netGain:-stake,validatedAt:b.validatedAt||""});
+      });
+      winners.forEach(b=>{
+        const p=(state.players||[]).find(x=>x.name===b.player); if(!p) return;
+        const stake=Number(b.stake||0), exact=Number(b.scoreA)===Number(m.scoreA)&&Number(b.scoreB)===Number(m.scoreB);
+        const eventMult=typeof eventMultiplierForBet==="function" ? Number(eventMultiplierForBet(day,m.id,exact)||1) : 1;
+        const net=stake*(exact?3:2)*eventMult, baseGain=stake*2*eventMult, exactBonus=exact?stake*eventMult:0;
+        payoutTotal+=net; p.balance=Number(p.balance||0)+net; p.evolution=Number(p.evolution||0)+net; p.good=Number(p.good||0)+1; totalGood++;
+        if(exact){ p.exact=Number(p.exact||0)+1; totalExact++; }
+        state.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:b.player,stake,prediction:outLabel(b.predictedOutcome,m),predictedScore:sText(b.scoreA,b.scoreB),officialScore:sText(m.scoreA,m.scoreB),result:actualLabel,status:(exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)")+(eventMult>1?" · BONUS x"+eventMult:""),baseGain,exactBonus,netGain:net,validatedAt:b.validatedAt||""});
+      });
+      const reserveNeed=Math.max(0,payoutTotal-lostPot), reserveSurplus=Math.max(0,lostPot-payoutTotal);
+      state.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:"RÉSERVE",stake:0,prediction:"",predictedScore:"",officialScore:sText(m.scoreA,m.scoreB),result:actualLabel,status:reserveNeed>0?"RÉSERVE UTILISÉE":"RÉSERVE CRÉDITÉE",baseGain:payoutTotal,exactBonus:0,netGain:reserveSurplus-reserveNeed});
+    });
+    state.gainsCalculatedDays[day]=true;
+    if(typeof markWorkflowGainsDone==="function") markWorkflowGainsDone(day);
+    if(!state.summaries) state.summaries={day:{},comp:{}};
+    state.summaries.day={good:totalGood,exact:totalExact,gain:0,rank:0};
+    const info=document.getElementById("calcInfo"); if(info) info.innerHTML=`Journée ${day} · ${processed} match(s) traité(s). Gains calculés.`;
+    saveLocal(); if(typeof renderAll==="function") renderAll();
+    alert(`${processed} match(s) traité(s). Gains J${day} calculés sur ${validBets.length} mise(s) validée(s).`);
+    return true;
+  };
+
+  window.recalculateDay = async function(){
+    if(window.currentRole!=="admin") return alert("Accès réservé à l’admin.");
+    ensureFlags(); const day=scoreDay();
+    const ok=confirm(`Recalculer la journée ${day} ?\n\nLes mouvements existants de cette journée seront annulés puis recalculés.`);
+    if(!ok) return false;
+    state.gainsCalculatedDays[day]=false;
+    return window.calculateGains(false,true);
+  };
+
+  const oldRenderAdmin=window.renderAdmin;
+  if(typeof oldRenderAdmin==="function" && !oldRenderAdmin.__bpV70Wrapped){
+    window.renderAdmin=function(){
+      const r=oldRenderAdmin.apply(this,arguments);
+      ensureFlags();
+      const day=scoreDay();
+      const title=document.getElementById("scoreEntryTitle");
+      if(title) title.innerHTML=`Scores officiels de la <b>journée ${day}</b>${isClosed(day)?' <span class="muted">(journée fermée)</span>':' <span class="bad">(à fermer avant traitement)</span>'}`;
+      const info=document.getElementById("calcInfo");
+      if(info && state.gainsCalculatedDays?.[day]) info.innerHTML=`Journée ${day} · gains déjà calculés.`;
+      return r;
+    };
+    window.renderAdmin.__bpV70Wrapped=true;
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>{
+    const pill=document.getElementById("bpSyncPill"); if(pill) pill.remove();
+    setTimeout(()=>{ if(typeof renderAll==="function") renderAll(); },250);
   });
 })();
 </script>
