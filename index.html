@@ -13070,4 +13070,546 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+<script>
+/* V81 CLEAN BDD — couche unique finale
+   Objectif : arrêter les patchs concurrents et rendre les actions critiques vérifiables en Supabase.
+   - Scores officiels : écriture BDD + relecture/vérification.
+   - MAJ mise Admin : écriture BDD + relecture/vérification.
+   - Suppression utilisateurs : identité stable (code/nom/pseudo), tombstone, suppression BDD vérifiée.
+   - Spinners sur tous les CTA.
+   - Liens FIFA/drapeaux/stades : nouvel onglet uniquement, jamais l'onglet du jeu.
+*/
+(function(){
+  'use strict';
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const LOCAL_KEY = 'bp_wc_dev';
+  let sbClient = null;
+  let saveChain = Promise.resolve();
+  let lastClickedButton = null;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .bp-v81-loading{opacity:.72!important;pointer-events:none!important}
+    .bp-v81-spin{display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:bpV81Spin .75s linear infinite}
+    @keyframes bpV81Spin{to{transform:rotate(360deg)}}
+  `;
+  document.head.appendChild(style);
+
+  function S(){ return window.state || (window.state = {}); }
+  function iso(){ return new Date().toISOString(); }
+  function clone(x){ try { return JSON.parse(JSON.stringify(x || {})); } catch(e){ return {}; } }
+  function norm(v){ return String(v || '').trim().toLowerCase(); }
+  function configured(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
+  function sb(){ if(!configured()) throw new Error('Supabase non configuré.'); if(!sbClient) sbClient = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
+
+  function pill(kind, msg){
+    let el = document.getElementById('bpSyncPill');
+    if(!el){ el = document.createElement('div'); el.id = 'bpSyncPill'; document.body.appendChild(el); }
+    el.className = kind || 'warn';
+    el.innerHTML = msg;
+  }
+
+  function compact(st){
+    const c = clone(st || S());
+    c.schemaVersion = 'v81-clean-bdd';
+    c.lastSavedAt = iso();
+    if(Array.isArray(c.logs)) c.logs = c.logs.slice(-300);
+    if(Array.isArray(c.settlementDetails)) c.settlementDetails = c.settlementDetails.slice(-4000);
+    delete c._cache; delete c.debug; delete c.htmlPreview;
+    return c;
+  }
+
+  function saveLocal(){
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(compact(S()))); } catch(e) {}
+  }
+
+  function ensureStores(){
+    const s = S();
+    if(!Array.isArray(s.players)) s.players = [];
+    if(!Array.isArray(s.bets)) s.bets = [];
+    if(!Array.isArray(s.matches)) s.matches = [];
+    if(!Array.isArray(s.deletedPlayerKeys)) s.deletedPlayerKeys = [];
+    if(!s.officialScores || typeof s.officialScores !== 'object') s.officialScores = {};
+    if(!s.officialScoresByDay || typeof s.officialScoresByDay !== 'object') s.officialScoresByDay = {};
+    if(!s.officialScoresByMatch || typeof s.officialScoresByMatch !== 'object') s.officialScoresByMatch = {};
+    if(!s.officialScoresSavedDays || typeof s.officialScoresSavedDays !== 'object') s.officialScoresSavedDays = {};
+  }
+
+  function playerKeys(p){
+    return [p && p.code, p && p.name, p && p.pseudo].map(norm).filter(Boolean);
+  }
+
+  function deletedSet(){
+    ensureStores();
+    return new Set(S().deletedPlayerKeys.map(norm).filter(Boolean));
+  }
+
+  function addDeletedKeys(p){
+    const d = deletedSet();
+    playerKeys(p).forEach(k => d.add(k));
+    S().deletedPlayerKeys = Array.from(d);
+    return d;
+  }
+
+  function applyDeletedPlayers(){
+    ensureStores();
+    const d = deletedSet();
+    S().players = (S().players || []).filter(p => !playerKeys(p).some(k => d.has(k)));
+    S().deletedPlayerKeys = Array.from(d);
+  }
+
+  async function readCloud(){
+    const {data, error} = await sb().from('app_state').select('data,updated_at').eq('id', APP_ID).maybeSingle();
+    if(error) throw error;
+    return data && data.data ? clone(data.data) : null;
+  }
+
+  function mergeDeletedFrom(remote){
+    const d = deletedSet();
+    (remote && remote.deletedPlayerKeys || []).forEach(k => { k = norm(k); if(k) d.add(k); });
+    S().deletedPlayerKeys = Array.from(d);
+    applyDeletedPlayers();
+  }
+
+  async function writeCloud(reason){
+    // File d'attente stricte : aucune écriture critique n'est ignorée si une autre synchro est en cours.
+    const job = async () => {
+      ensureStores();
+      applyDeletedPlayers();
+      saveLocal();
+      pill('warn', '☁️ Synchronisation BDD en cours…');
+      const payload = { id: APP_ID, data: compact(S()), updated_at: iso() };
+      const {error} = await sb().from('app_state').upsert(payload, {onConflict:'id'});
+      if(error) throw error;
+      pill('ok', '☁️ BDD sauvegardée — ' + (reason || 'OK') + ' — ' + new Date().toLocaleTimeString('fr-FR'));
+      return true;
+    };
+    saveChain = saveChain.then(job, job);
+    return saveChain;
+  }
+
+  function setBusy(btn, on, label){
+    if(!btn) return;
+    if(on){
+      if(!btn.dataset.v81Old) btn.dataset.v81Old = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add('bp-v81-loading');
+      btn.innerHTML = '<span class="bp-v81-spin"></span>' + (label || 'Traitement…');
+    }else{
+      btn.disabled = false;
+      btn.classList.remove('bp-v81-loading');
+      if(btn.dataset.v81Old){ btn.innerHTML = btn.dataset.v81Old; delete btn.dataset.v81Old; }
+    }
+  }
+
+  async function withBusy(btn, label, fn){
+    setBusy(btn, true, label);
+    try { return await fn(); }
+    catch(e){ console.error('[V81]', e); alert('Erreur : ' + (e.message || e)); throw e; }
+    finally { setBusy(btn, false); }
+  }
+
+  window.addEventListener('click', function(e){
+    const b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(b) lastClickedButton = b;
+  }, true);
+
+  // Spinner visible sur tous les CTA, même pour les anciennes fonctions qui ne retournent pas de Promise.
+  window.addEventListener('click', function(e){
+    const b = e.target && e.target.closest ? e.target.closest('button.action, button') : null;
+    if(!b || b.disabled || b.closest('.bp-modal,.login-card')) return;
+    if(!b.dataset.v81Old){
+      setBusy(b, true, 'Traitement…');
+      setTimeout(() => setBusy(b, false), 900);
+    }
+  }, true);
+
+  function outcomeFromAB(a,b){
+    if(typeof window.outcomeFromScore === 'function') return window.outcomeFromScore(Number(a), Number(b));
+    return Number(a) > Number(b) ? 'A' : Number(a) < Number(b) ? 'B' : 'N';
+  }
+  function scoreTextAB(a,b){
+    if(typeof window.scoreText === 'function') return window.scoreText(Number(a), Number(b));
+    return Number(a) + ' - ' + Number(b);
+  }
+  function scoreOptionsVal(val){
+    if(typeof window.scoreOptions === 'function') return window.scoreOptions(Number(val));
+    let html = '';
+    for(let i=0;i<=12;i++) html += `<option value="${i}" ${Number(val)===i?'selected':''}>${i}</option>`;
+    return html;
+  }
+  function stakeOptionsVal(val){
+    if(typeof window.stakeOptions === 'function') return window.stakeOptions(Number(val));
+    let html = '';
+    for(let i=1;i<=10;i++) html += `<option value="${i}" ${Number(val)===i?'selected':''}>${i}</option>`;
+    return html;
+  }
+  function esc(v){ return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function adminBetIdSafe(day,matchId,playerName){
+    if(typeof window.adminBetId === 'function') return window.adminBetId(day, matchId, playerName);
+    return 'ab_' + String(day) + '_' + String(matchId).replace(/\W/g,'_') + '_' + String(playerName).replace(/\W/g,'_');
+  }
+  function getOrCreateAdminBet(day, matchId, playerName){
+    ensureStores();
+    let b = S().bets.find(x => Number(x.day) === Number(day) && String(x.matchId) === String(matchId) && String(x.player) === String(playerName));
+    if(!b){
+      b = {day:Number(day), matchId:String(matchId), player:String(playerName), scoreA:0, scoreB:0, score:'0 - 0', prediction:'N', predictedOutcome:'N', stake:1, status:'DRAFT', savedAt:iso()};
+      S().bets.push(b);
+    }
+    return b;
+  }
+  function getBet(day, matchId, playerName){
+    ensureStores();
+    return S().bets.find(x => Number(x.day) === Number(day) && String(x.matchId) === String(matchId) && String(x.player) === String(playerName));
+  }
+
+  function getScoreEntryDay(){
+    try { if(typeof window.scoreEntryDay === 'function') return Number(window.scoreEntryDay()) || 1; } catch(e) {}
+    const s = S();
+    const d = Number(s.currentDay || 1);
+    return (s.closedDays && s.closedDays[d]) ? d : Math.max(1, d - 1);
+  }
+  function dayMatches(day){ return (S().matches || []).filter(m => Number(m.day) === Number(day)); }
+
+  function storeOfficialScoreBucket(day, bucket){
+    ensureStores();
+    const d = String(day);
+    S().officialScores[d] = Object.assign({}, S().officialScores[d] || {}, bucket);
+    S().officialScoresByDay[d] = Object.assign({}, S().officialScoresByDay[d] || {}, bucket);
+    S().officialScoresSavedDays[d] = true;
+    Object.entries(bucket).forEach(([id, sc]) => {
+      const m = (S().matches || []).find(x => String(x.id) === String(id));
+      if(m){ m.scoreA = Number(sc.a); m.scoreB = Number(sc.b); m.status = 'done'; }
+      S().officialScoresByMatch[String(id)] = {day:Number(day), scoreA:Number(sc.a), scoreB:Number(sc.b), savedAt:sc.savedAt || iso()};
+    });
+  }
+  function getStoredOfficialScore(matchId, day){
+    const s = S();
+    return s.officialScoresByMatch?.[String(matchId)] || s.officialScores?.[String(day)]?.[String(matchId)] || s.officialScoresByDay?.[String(day)]?.[String(matchId)] || null;
+  }
+  function applyStoredScoresToMatches(){
+    ensureStores();
+    (S().matches || []).forEach(m => {
+      const sc = getStoredOfficialScore(m.id, m.day);
+      if(sc){
+        const a = sc.a ?? sc.scoreA, b = sc.b ?? sc.scoreB;
+        if(a !== undefined && b !== undefined && a !== null && b !== null){ m.scoreA = Number(a); m.scoreB = Number(b); m.status = 'done'; }
+      }
+    });
+  }
+  function collectOfficialScores(day){
+    const bucket = {};
+    for(const m of dayMatches(day)){
+      const a = document.getElementById('sa_' + m.id);
+      const b = document.getElementById('sb_' + m.id);
+      if(!a || !b || a.value === '' || b.value === '') return null;
+      bucket[String(m.id)] = {a:Number(a.value), b:Number(b.value), day:Number(day), savedAt:iso()};
+    }
+    return bucket;
+  }
+  function verifyScoresIn(remote, day, bucket){
+    if(!remote) return false;
+    for(const [id, sc] of Object.entries(bucket)){
+      const a = Number(sc.a), b = Number(sc.b);
+      const m = (remote.matches || []).find(x => String(x.id) === String(id));
+      const byMatch = remote.officialScoresByMatch?.[String(id)];
+      const byDay = remote.officialScores?.[String(day)]?.[String(id)] || remote.officialScoresByDay?.[String(day)]?.[String(id)];
+      const okM = m && Number(m.scoreA) === a && Number(m.scoreB) === b;
+      const okBM = byMatch && Number(byMatch.scoreA) === a && Number(byMatch.scoreB) === b;
+      const okBD = byDay && Number(byDay.a ?? byDay.scoreA) === a && Number(byDay.b ?? byDay.scoreB) === b;
+      if(!okM && !okBM && !okBD) return false;
+    }
+    return true;
+  }
+
+  window.saveOfficialScoresDay = async function(showAlert=true){
+    return withBusy(lastClickedButton, 'Sauvegarde scores BDD…', async () => {
+      const day = getScoreEntryDay();
+      const bucket = collectOfficialScores(day);
+      if(!bucket){ alert('Score manquant : tous les scores doivent être renseignés. Le score 0-0 est accepté.'); return false; }
+      storeOfficialScoreBucket(day, bucket);
+      saveLocal();
+      await writeCloud('scores officiels J' + day);
+      const remote = await readCloud();
+      if(!verifyScoresIn(remote, day, bucket)) throw new Error('Vérification BDD impossible : les scores ne sont pas retrouvés après écriture.');
+      if(typeof window.renderAll === 'function') try { window.renderAll(); } catch(e) {}
+      setTimeout(restoreOfficialScoreInputs, 100);
+      if(showAlert) alert('Scores officiels J' + day + ' sauvegardés et vérifiés en BDD.');
+      return true;
+    });
+  };
+  window.saveScores = window.saveOfficialScoresDay;
+
+  function restoreOfficialScoreInputs(){
+    applyStoredScoresToMatches();
+    const day = getScoreEntryDay();
+    dayMatches(day).forEach(m => {
+      const sc = getStoredOfficialScore(m.id, day);
+      if(!sc) return;
+      const a = sc.a ?? sc.scoreA, b = sc.b ?? sc.scoreB;
+      const ia = document.getElementById('sa_' + m.id), ib = document.getElementById('sb_' + m.id);
+      if(ia && a !== undefined && a !== null) ia.value = String(Number(a));
+      if(ib && b !== undefined && b !== null) ib.value = String(Number(b));
+    });
+  }
+
+  window.adminSaveBet = async function(day, matchId, playerName){
+    const btn = lastClickedButton;
+    return withBusy(btn, 'Sauvegarde mise BDD…', async () => {
+      const b = getOrCreateAdminBet(day, matchId, playerName);
+      const rid = adminBetIdSafe(day, matchId, playerName);
+      const sa = document.getElementById(rid + '_sa');
+      const sbx = document.getElementById(rid + '_sb');
+      const stakeEl = document.getElementById(rid + '_stake');
+      const statusEl = document.getElementById(rid + '_status');
+      if(!sa || !sbx || !stakeEl || !statusEl) throw new Error('Champs admin introuvables pour cette mise.');
+      const oldStatus = b.status || 'DRAFT';
+      b.scoreA = Number(sa.value);
+      b.scoreB = Number(sbx.value);
+      b.score = scoreTextAB(b.scoreA, b.scoreB);
+      b.prediction = outcomeFromAB(b.scoreA, b.scoreB);
+      b.predictedOutcome = b.prediction;
+      b.stake = Number(stakeEl.value);
+      b.status = statusEl.value || 'DRAFT';
+      b.updatedAt = iso();
+      b.savedAt = iso();
+      if(b.status === 'VALIDATED' && oldStatus !== 'VALIDATED') b.validatedAt = iso();
+      if(b.status !== 'VALIDATED') b.validatedAt = null;
+      saveLocal();
+      await writeCloud('mise admin ' + playerName + ' ' + matchId);
+      const remote = await readCloud();
+      const rb = (remote?.bets || []).find(x => Number(x.day) === Number(day) && String(x.matchId) === String(matchId) && String(x.player) === String(playerName));
+      if(!rb || Number(rb.stake) !== Number(b.stake) || Number(rb.scoreA) !== Number(b.scoreA) || Number(rb.scoreB) !== Number(b.scoreB) || String(rb.status) !== String(b.status)){
+        throw new Error('Vérification BDD impossible : la mise sauvegardée ne correspond pas.');
+      }
+      if(typeof window.renderAdminBetsTable === 'function') try { window.renderAdminBetsTable(); } catch(e) {}
+      if(typeof window.renderAdmin === 'function') try { window.renderAdmin(); } catch(e) {}
+      alert('Mise admin sauvegardée et vérifiée en BDD.');
+      return true;
+    });
+  };
+
+  window.adminDeleteBet = async function(day, matchId, playerName){
+    const btn = lastClickedButton;
+    return withBusy(btn, 'Suppression mise BDD…', async () => {
+      if(!confirm('Supprimer la mise de ' + playerName + ' pour ' + matchId + ' ?')) return false;
+      S().bets = (S().bets || []).filter(b => !(Number(b.day) === Number(day) && String(b.matchId) === String(matchId) && String(b.player) === String(playerName)));
+      saveLocal();
+      await writeCloud('suppression mise ' + playerName + ' ' + matchId);
+      const remote = await readCloud();
+      const still = (remote?.bets || []).some(b => Number(b.day) === Number(day) && String(b.matchId) === String(matchId) && String(b.player) === String(playerName));
+      if(still) throw new Error('Vérification BDD impossible : la mise existe encore.');
+      if(typeof window.renderAdminBetsTable === 'function') try { window.renderAdminBetsTable(); } catch(e) {}
+      alert('Mise supprimée et vérifiée en BDD.');
+      return true;
+    });
+  };
+
+  window.adminCreateBet = async function(day, matchId, playerName){
+    return withBusy(lastClickedButton, 'Création mise BDD…', async () => {
+      getOrCreateAdminBet(day, matchId, playerName);
+      saveLocal();
+      await writeCloud('création mise ' + playerName + ' ' + matchId);
+      if(typeof window.renderAdminBetsTable === 'function') window.renderAdminBetsTable();
+      return true;
+    });
+  };
+
+  window.adminPrepareMissingBets = async function(){
+    return withBusy(lastClickedButton, 'Préparation mises BDD…', async () => {
+      const day = Number(document.getElementById('adminBetsDay')?.value || S().currentDay || 1);
+      const selected = document.getElementById('adminBetsPlayer')?.value || '__ALL__';
+      const players = selected === '__ALL__' ? (S().players || []) : (S().players || []).filter(p => p.name === selected);
+      dayMatches(day).forEach(m => players.forEach(p => getOrCreateAdminBet(day, m.id, p.name)));
+      saveLocal();
+      await writeCloud('préparation mises J' + day);
+      if(typeof window.renderAdminBetsTable === 'function') window.renderAdminBetsTable();
+      return true;
+    });
+  };
+
+  function extractPlayerFromCard(card){
+    if(!card) return null;
+    const idx = Number(card.dataset.playerIndex);
+    const inputs = card.querySelectorAll('input');
+    const code = card.querySelector('.user-code')?.textContent?.trim();
+    const domP = {name:inputs[0]?.value?.trim(), pseudo:inputs[1]?.value?.trim(), code};
+    const byIndex = Number.isFinite(idx) ? (S().players || [])[idx] : null;
+    if(byIndex && code && norm(byIndex.code) === norm(code)) return Object.assign({}, byIndex, domP);
+    const byCode = code ? (S().players || []).find(p => norm(p.code) === norm(code)) : null;
+    if(byCode) return Object.assign({}, byCode, domP);
+    const byName = domP.name ? (S().players || []).find(p => norm(p.name) === norm(domP.name)) : null;
+    return Object.assign({}, byName || {}, domP);
+  }
+
+  async function deletePlayerIdentity(p, btn){
+    return withBusy(btn, 'Suppression utilisateur BDD…', async () => {
+      if(!p || (!p.name && !p.code && !p.pseudo)) throw new Error('Utilisateur introuvable dans la carte admin.');
+      const label = p.name || p.pseudo || p.code;
+      if(!confirm('Supprimer définitivement "' + label + '" ?\n\nLa suppression sera écrite en BDD et protégée contre les réimports.')) return false;
+      const d = addDeletedKeys(p);
+      S().players = (S().players || []).filter(x => !playerKeys(x).some(k => d.has(k)));
+      saveLocal();
+      await writeCloud('suppression utilisateur ' + label);
+      const remote = await readCloud();
+      const still = (remote?.players || []).some(x => playerKeys(x).some(k => d.has(k)));
+      if(still) throw new Error('Vérification BDD impossible : utilisateur encore présent après suppression.');
+      if(typeof window.renderAll === 'function') try { window.renderAll(); } catch(e) {}
+      alert('Utilisateur supprimé et vérifié en BDD : ' + label);
+      return true;
+    });
+  }
+
+  window.safeDeletePlayer = async function(index){
+    const p = (S().players || [])[Number(index)];
+    return deletePlayerIdentity(p, lastClickedButton);
+  };
+
+  function hardenAdminPlayerButtons(){
+    document.querySelectorAll('#adminPlayers .admin-player-card').forEach((card, idx) => {
+      card.dataset.playerIndex = String(idx);
+      const p = extractPlayerFromCard(card);
+      if(p){ card.dataset.playerName = p.name || ''; card.dataset.playerCode = p.code || ''; }
+      const del = Array.from(card.querySelectorAll('button')).find(b => /suppr|supprimer/i.test(b.textContent || ''));
+      if(del){
+        del.removeAttribute('onclick');
+        del.onclick = null;
+        del.dataset.v81Delete = '1';
+      }
+    });
+  }
+
+  window.addEventListener('click', function(e){
+    const b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(!b || b.dataset.v81Delete !== '1') return;
+    const card = b.closest('.admin-player-card');
+    if(!card) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    deletePlayerIdentity(extractPlayerFromCard(card), b);
+  }, true);
+
+  // Remplacer le rendu Admin des joueurs juste après chaque rendu : supprime les onclick instables par index.
+  const oldRenderAdmin = window.renderAdmin;
+  if(typeof oldRenderAdmin === 'function' && !oldRenderAdmin.__v81){
+    window.renderAdmin = function(){
+      applyDeletedPlayers();
+      const r = oldRenderAdmin.apply(this, arguments);
+      setTimeout(() => { applyDeletedPlayers(); restoreOfficialScoreInputs(); hardenAdminPlayerButtons(); hardenExternalLinks(); }, 0);
+      return r;
+    };
+    window.renderAdmin.__v81 = true;
+  }
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__v81){
+    window.renderAll = function(){
+      applyDeletedPlayers(); applyStoredScoresToMatches();
+      const r = oldRenderAll.apply(this, arguments);
+      setTimeout(() => { applyDeletedPlayers(); restoreOfficialScoreInputs(); hardenAdminPlayerButtons(); hardenExternalLinks(); }, 0);
+      return r;
+    };
+    window.renderAll.__v81 = true;
+  }
+
+  // Les anciennes fonctions save() ne doivent plus être la seule source : elles sauvegardent local + déclenchent une écriture BDD en file d'attente.
+  const oldSave = window.save;
+  window.save = function(){
+    try { if(typeof oldSave === 'function') oldSave.apply(this, arguments); } catch(e) {}
+    saveLocal();
+    // Autosave non bloquant, mais les actions critiques au-dessus attendent writeCloud().
+    if(configured()) writeCloud('autosave').catch(e => console.warn('[V81 autosave]', e));
+  };
+
+  function hardenExternalLinks(){
+    document.querySelectorAll('a[href]').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
+  }
+  function openNew(url){
+    if(!url) return;
+    try { const w = window.open(url, '_blank', 'noopener,noreferrer'); if(w) w.opener = null; } catch(e) { console.warn('[V81 open]', e); }
+  }
+  function matchById(id){ return (S().matches || []).find(m => String(m.id) === String(id)); }
+  function matchFromElement(el){
+    const c = el.closest?.('.bet-card,.match-card,.score-row,[data-match]');
+    const id = c?.dataset?.match || String(c?.id || '').replace('betCard_', '') || ((c?.textContent || '').match(/M\d{3}/) || [])[0];
+    return id ? matchById(id) : null;
+  }
+  window.addEventListener('click', function(e){
+    const t = e.target;
+    if(!t || !t.closest) return;
+    const a = t.closest('a[href]');
+    if(a){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(a.href); return; }
+    const stadium = t.closest('.bp-stadium-click,.match-card-venue,.match-stadium,.fifa-stadium-link');
+    if(stadium){
+      const m = matchById(stadium.dataset?.match) || matchFromElement(stadium);
+      if(m && typeof window.bpStadiumUrl === 'function'){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(window.bpStadiumUrl(m)); return; }
+    }
+    const flag = t.closest('img.flag,.flag-wrap');
+    if(flag){
+      const m = matchFromElement(flag);
+      if(m && typeof window.bpTeamUrl === 'function'){
+        const box = flag.closest('.bet-card,.match-card,.score-row') || document;
+        const img = flag.tagName === 'IMG' ? flag : flag.querySelector('img.flag');
+        const imgs = Array.from(box.querySelectorAll('img.flag'));
+        const idx = imgs.indexOf(img);
+        const team = idx <= 0 ? m.teamA : m.teamB;
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(window.bpTeamUrl(team)); return;
+      }
+    }
+    const title = t.closest('.bet-title h3,.match-card-title');
+    if(title){
+      const m = matchFromElement(title);
+      if(m && typeof window.bpTeamUrl === 'function'){
+        const r = title.getBoundingClientRect();
+        const team = e.clientX < r.left + r.width / 2 ? m.teamA : m.teamB;
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); openNew(window.bpTeamUrl(team)); return;
+      }
+    }
+  }, true);
+
+  async function loadBDDAtStart(){
+    if(!configured()) return;
+    try{
+      const remote = await readCloud();
+      if(remote){
+        mergeDeletedFrom(remote);
+        // BDD prioritaire au démarrage : évite que localStorage réinjecte des users/scores obsolètes.
+        Object.assign(S(), remote);
+        mergeDeletedFrom(remote);
+        applyStoredScoresToMatches();
+        saveLocal();
+        if(typeof window.repairState === 'function') try { window.repairState(); } catch(e) {}
+        if(typeof window.renderAll === 'function') try { window.renderAll(); } catch(e) {}
+        setTimeout(() => { restoreOfficialScoreInputs(); hardenAdminPlayerButtons(); hardenExternalLinks(); }, 200);
+        pill('ok', '☁️ BDD chargée au démarrage');
+      }
+    }catch(e){
+      console.warn('[V81 loadBDDAtStart]', e);
+      pill('bad', '⚠️ BDD non chargée : ' + (e.message || e));
+    }
+  }
+
+  window.bpV81AuditBDD = async function(){
+    return withBusy(lastClickedButton, 'Audit BDD…', async () => {
+      const remote = await readCloud();
+      const r = remote || {};
+      const msg = 'Audit BDD V81\n\n' +
+        'Joueurs : ' + ((r.players || []).length) + '\n' +
+        'Mises : ' + ((r.bets || []).length) + '\n' +
+        'Suppressions protégées : ' + ((r.deletedPlayerKeys || []).length) + '\n' +
+        'Scores par match : ' + Object.keys(r.officialScoresByMatch || {}).length + '\n' +
+        'Scores par journée : ' + Object.keys(r.officialScores || {}).length + '\n' +
+        'Dernière sauvegarde : ' + (r.lastSavedAt || r.cloudUpdatedAt || '—');
+      alert(msg);
+      return true;
+    });
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    ensureStores(); applyDeletedPlayers(); applyStoredScoresToMatches(); hardenExternalLinks(); hardenAdminPlayerButtons();
+    setInterval(() => { hardenExternalLinks(); hardenAdminPlayerButtons(); restoreOfficialScoreInputs(); }, 1200);
+    setTimeout(loadBDDAtStart, 250);
+  });
+})();
+</script>
+
 </body></html>
