@@ -2,6 +2,9 @@
 <!-- saved from url=(0102)file:///C:/Users/Hassan%20EL%20BAKKALI/Downloads/BPartner_FIFA_WorldCup_2026_DEV_HallOfFame_Final.html -->
 <html lang="fr"><head>
 
+
+<div id="bpSavingOverlay" class="bp-saving-overlay"><div class="bp-saving-box"><div class="bp-spinner"></div><div>Sauvegarde BDD en cours...</div></div></div>
+
 <script>
 /* V101 HARD GUARD — aucune écriture BDD automatique, aucun état jeu en localStorage.
    LocalStorage autorisé uniquement pour le code du user connecté. */
@@ -93,6 +96,25 @@
   visibility:hidden!important;
   pointer-events:none!important;
 }
+
+/* V111 — Toast succès non bloquant + spinner sauvegarde */
+.bp-save-toast{
+  position:fixed;right:20px;bottom:20px;z-index:3000;
+  background:linear-gradient(90deg,#12351f,#101010);
+  border:1px solid rgba(74,222,128,.45);
+  color:#fff;border-radius:14px;padding:14px 16px;
+  box-shadow:0 18px 50px rgba(0,0,0,.45);font-weight:900;
+}
+.bp-saving-overlay{
+  position:fixed;inset:0;z-index:2500;background:rgba(0,0,0,.55);
+  display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);
+}
+.bp-saving-box{
+  background:#141414;border:1px solid rgba(255,255,255,.16);border-radius:18px;
+  padding:22px 26px;display:flex;align-items:center;gap:14px;font-weight:900;
+}
+.bp-spinner{width:28px;height:28px;border-radius:50%;border:4px solid rgba(255,255,255,.22);border-top-color:#fff;animation:bpSpin .8s linear infinite}
+@keyframes bpSpin{to{transform:rotate(360deg)}}
 </style>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
@@ -6029,6 +6051,34 @@ function bpDialog({title="Confirmation", subtitle="B Partner World Cup", message
 function bpAlert(message,{title="Information",icon="ℹ️"}={}){
   return bpDialog({title, message, icon, confirmText:"OK", showCancel:false});
 }
+
+function bpShowSaving(show, message){
+  try{
+    const el=document.getElementById('bpSavingOverlay');
+    if(!el) return;
+    const txt=el.querySelector('.bp-saving-box div:last-child');
+    if(txt && message) txt.textContent=message;
+    el.style.display=show?'flex':'none';
+  }catch(e){}
+}
+function bpSuccessToast(message){
+  try{
+    const old=document.getElementById('bpSaveToast');
+    if(old) old.remove();
+    const d=document.createElement('div');
+    d.id='bpSaveToast';
+    d.className='bp-save-toast';
+    d.textContent=message || 'Mise sauvegardée en BDD.';
+    document.body.appendChild(d);
+    setTimeout(()=>{ try{ d.remove(); }catch(e){} }, 2600);
+  }catch(e){ console.log(message); }
+}
+function bpForceCloseModal(){
+  try{
+    ['bpModalBackdrop','bpConfirmBackdrop'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  }catch(e){}
+}
+
 function bpConfirm(message,{title="Confirmation",icon="⚠️",confirmText="Confirmer",cancelText="Annuler"}={}){
   return bpDialog({title, message, icon, confirmText, cancelText, showCancel:true});
 }
@@ -8081,6 +8131,8 @@ function openBackupFilePicker(kind){
       if(showAlert) alert("Sauvegarde Supabase OK.");
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       cloudStatus("Erreur sauvegarde cloud : " + (e.message || e), false);
       if(showAlert) alert("Erreur sauvegarde Supabase : " + (e.message || e));
@@ -8116,6 +8168,8 @@ function openBackupFilePicker(kind){
       if(showAlert) alert("Données Supabase chargées.");
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       cloudStatus("Erreur chargement cloud : " + (e.message || e), false);
       if(showAlert) alert("Erreur chargement Supabase : " + (e.message || e));
@@ -8898,6 +8952,8 @@ function bpModalClose(){
       setTimeout(()=>location.reload(), 500);
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       alert("Erreur chargement Supabase : " + (e.message || e));
       return false;
@@ -9152,6 +9208,8 @@ function bpModalClose(){
       setTimeout(()=>location.reload(),400);
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       alert("Erreur restauration Supabase : "+(e.message||e));
       return false;
@@ -9895,11 +9953,13 @@ function bpModalClose(){
       },150);
 
       if(typeof bpAlert==="function"){
-        setTimeout(()=>bpAlert("Mise validée et sauvegardée.",{icon:"✅"}),250);
+        bpSuccessToast("✅ Mise validée et sauvegardée en BDD.");
       }
 
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       alert("Erreur validation mise : "+(e.message||e));
       return false;
@@ -10103,10 +10163,12 @@ function bpModalClose(){
       if(!ok) return false;
 
       setStatus(matchId,'<span class="warn">⏳ Sauvegarde Supabase en cours...</span>');
+      bpShowSaving(true,"Sauvegarde de la mise en BDD...");
       upsertLocalBet(matchId,data,"VALIDATED");
       localStorage.setItem("bp_wc_dev",JSON.stringify(state));
 
       await saveCloudMerged();
+      bpShowSaving(false);
 
       try{ if(typeof log==="function") log(p.name,`Mise validée ${matchId}`,0); }catch(e){}
       markValidated(matchId);
@@ -10114,9 +10176,11 @@ function bpModalClose(){
       if(typeof bpV52ApplyCurrentBetCards==="function") bpV52ApplyCurrentBetCards();
       if(typeof bpV50SyncUserBetsView==="function") bpV50SyncUserBetsView();
 
-      if(typeof bpAlert==="function") await bpAlert("Mise validée et sauvegardée dans Supabase.",{icon:"✅"});
+      bpSuccessToast("✅ Mise validée et sauvegardée en BDD.");
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       setStatus(matchId,`<span class="bad">❌ Non sauvegardé : ${e.message||e}</span>`);
       alert("La mise n'a PAS été sauvegardée dans Supabase : "+(e.message||e));
@@ -10153,6 +10217,8 @@ function bpModalClose(){
       if(typeof bpAlert==="function") await bpAlert("Brouillons sauvegardés dans Supabase.",{icon:"✅"});
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       alert("Erreur sauvegarde Supabase des brouillons : "+(e.message||e));
       return false;
@@ -10521,6 +10587,8 @@ function bpModalClose(){
       if(box) box.innerHTML='<span class="good">Supabase OK — '+(reason||"auto")+' — '+new Date().toLocaleTimeString("fr-FR")+'</span>';
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       const box=document.getElementById("bpV60Status");
       if(box) box.innerHTML='<span class="bad">Erreur Supabase : '+(e.message||e)+'</span>';
@@ -10593,9 +10661,11 @@ function bpModalClose(){
       upsertBetLocal(matchId,readBet(matchId),"VALIDATED");
       await saveCloud("mise-validée");
       if(typeof renderAll==="function") renderAll();
-      if(typeof bpAlert==="function") await bpAlert("Mise validée et sauvegardée dans Supabase.",{icon:"✅"});
+      bpSuccessToast("✅ Mise validée et sauvegardée en BDD.");
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       alert("La mise n'a PAS été sauvegardée dans Supabase : "+(e.message||e));
       return false;
@@ -11871,6 +11941,8 @@ window.BP_LOCAL_ONLY = true;
       if(typeof bpAlert==='function') bpAlert('Mise ouverte en modification. Change le score puis valide à nouveau.',{icon:'✏️'});
       return true;
     }catch(e){
+      bpShowSaving(false);
+      bpForceCloseModal();
       console.error(e);
       alert('Erreur édition mise : '+(e.message||e));
       return false;
@@ -16461,4 +16533,17 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+<script>
+// V111 — fermeture robuste des modales si un ancien handler reste bloqué
+document.addEventListener('click', function(e){
+  const btn=e.target && e.target.closest ? e.target.closest('#bpModalOkBtn,.bp-modal-ok') : null;
+  if(!btn) return;
+  setTimeout(()=>{
+    try{
+      const bd=btn.closest('.bp-modal-backdrop');
+      if(bd && bd.style.display!=='none') bd.style.display='none';
+    }catch(err){}
+  }, 50);
+}, true);
+</script>
 </body></html>
