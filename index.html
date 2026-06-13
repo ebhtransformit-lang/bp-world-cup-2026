@@ -97,7 +97,8 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V102 NO DEFAULT USER</title>
+<title>B Partner FIFA World Cup 2026 - V117 STABLE</title>
+<!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -16200,6 +16201,217 @@ window.BP_LOCAL_ONLY = true;
   document.addEventListener('DOMContentLoaded', function(){
     var input=$('loginCode');
     if(input){ input.setAttribute('maxlength','10'); input.setAttribute('inputmode','text'); input.setAttribute('placeholder','ADMIN ou code'); input.addEventListener('input',hideErr); }
+  });
+})();
+</script>
+
+
+<script>
+/* V117 STABLE PATCH — questions secrètes BDD + backup Admin + sauvegarde ciblée */
+(function(){
+  'use strict';
+  if(window.__BP_V117_STABLE_PATCH__) return;
+  window.__BP_V117_STABLE_PATCH__ = true;
+
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+
+  function esc(v){
+    return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function norm(v){ return String(v ?? '').trim(); }
+  function isFilled(v){
+    const s = norm(v);
+    return !!s && !/^null$/i.test(s) && !/^non renseign/i.test(s) && s !== '—';
+  }
+  function getPlayers(){
+    try { return Array.isArray(window.state && window.state.players) ? window.state.players : []; }
+    catch(e){ return []; }
+  }
+  function currentState(){
+    return window.state || {};
+  }
+  function getSecret(p){
+    p = p || {};
+    const legacy = p.secrets || {};
+    const winner = p.winnerPrediction ?? legacy.winner ?? legacy.winnerPrediction ?? '';
+    const bestPlayer = p.bestPlayerPrediction ?? legacy.bestPlayer ?? legacy.bestPlayerPrediction ?? '';
+    const topScorer = p.topScorerPrediction ?? legacy.topScorer ?? legacy.topScorerPrediction ?? '';
+    const status = p.specialPredictionStatus ?? legacy.status ?? (legacy.sealed ? 'Validé' : (isFilled(winner)||isFilled(bestPlayer)||isFilled(topScorer) ? 'Validé' : 'Non renseigné'));
+    const validatedAt = p.specialPredictionValidatedAt ?? legacy.validatedAt ?? legacy.specialPredictionValidatedAt ?? null;
+    const sealed = status === 'Validé' || legacy.sealed === true || isFilled(winner) || isFilled(bestPlayer) || isFilled(topScorer);
+    return {winner, bestPlayer, topScorer, status, validatedAt, sealed};
+  }
+  function normalizeSecretFields(){
+    getPlayers().forEach(p => {
+      const s = getSecret(p);
+      p.winnerPrediction = s.winner || null;
+      p.bestPlayerPrediction = s.bestPlayer || null;
+      p.topScorerPrediction = s.topScorer || null;
+      p.specialPredictionStatus = s.status || 'Non renseigné';
+      p.specialPredictionValidatedAt = s.validatedAt || null;
+      p.secrets = {
+        winner: s.winner || '',
+        bestPlayer: s.bestPlayer || '',
+        topScorer: s.topScorer || '',
+        sealed: !!s.sealed,
+        validatedAt: s.validatedAt || null
+      };
+      p.specialPredictions = {
+        winner: s.winner || null,
+        bestPlayer: s.bestPlayer || null,
+        topScorer: s.topScorer || null,
+        status: s.status || 'Non renseigné',
+        validated: !!s.sealed,
+        validatedAt: s.validatedAt || null
+      };
+    });
+  }
+  function supa(){
+    if(!window.supabase) throw new Error('Librairie Supabase indisponible.');
+    const url = window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL;
+    const key = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY;
+    if(!url || !key) throw new Error('Configuration Supabase absente.');
+    if(!window.__BP_V117_SB_CLIENT__) window.__BP_V117_SB_CLIENT__ = window.supabase.createClient(url, key);
+    return window.__BP_V117_SB_CLIENT__;
+  }
+  async function writeAppState(id, data){
+    const sb = supa();
+    const previous = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      const payload = { id, data, updated_at: new Date().toISOString() };
+      const {error} = await sb.from('app_state').upsert(payload, {onConflict:'id'});
+      if(error) throw error;
+      return true;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = previous;
+    }
+  }
+  window.bpV117SaveStateQuiet = async function(reason){
+    normalizeSecretFields();
+    await writeAppState(APP_ID, currentState());
+    try{
+      if(typeof window.localSave === 'function') window.localSave();
+      else if(typeof window.save === 'function') window.save();
+    }catch(e){}
+    console.log('[V117] BDD sauvegardée', reason || '');
+    return true;
+  };
+  window.bpV117CreateBackup = async function(label){
+    normalizeSecretFields();
+    const d = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const stamp = d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes());
+    const id = 'bp-world-cup-2026-backup-' + stamp;
+    await writeAppState(id, currentState());
+    try{ alert('Backup créé : ' + id); }catch(e){}
+    return id;
+  };
+
+  // User : sauvegarde les questions secrètes dans les nouveaux champs + legacy, puis écrit en BDD sans confirmation.
+  window.sealSecrets = async function(){
+    const p = (typeof window.player === 'function') ? window.player() : null;
+    if(!p) return alert('Aucun joueur connecté.');
+    const winner = norm(document.getElementById('secretWinner')?.value);
+    const bestPlayer = norm(document.getElementById('secretBestPlayer')?.value);
+    const topScorer = norm(document.getElementById('secretTopScorer')?.value);
+    const at = new Date().toISOString();
+
+    p.winnerPrediction = winner || null;
+    p.bestPlayerPrediction = bestPlayer || null;
+    p.topScorerPrediction = topScorer || null;
+    p.specialPredictionStatus = 'Validé';
+    p.specialPredictionValidatedAt = at;
+    p.secrets = { winner, bestPlayer, topScorer, sealed:true, validatedAt: at };
+    p.specialPredictions = { winner, bestPlayer, topScorer, status:'Validé', validated:true, validatedAt: at };
+
+    try{
+      if(typeof window.log === 'function') window.log(p.name, `Bonus secrets scellés: vainqueur=${winner||"-"}, joueur=${bestPlayer||"-"}, buteur=${topScorer||"-"}`, 0);
+    }catch(e){}
+    try{
+      await window.bpV117SaveStateQuiet('sealSecrets');
+      if(typeof window.renderAll === 'function') window.renderAll();
+      alert('Questions secrètes sauvegardées en BDD.');
+    }catch(e){
+      console.error('[V117 sealSecrets]', e);
+      alert('Erreur sauvegarde questions secrètes : ' + (e.message || e));
+    }
+  };
+
+  // Admin : affiche les nouveaux champs BDD pour les 21 joueurs.
+  window.renderAdminSecrets = function(){
+    normalizeSecretFields();
+    const body = document.getElementById('adminSecretsBody');
+    if(!body) return;
+    const players = getPlayers();
+    if(!players.length){
+      body.innerHTML = '<tr><td colspan="6" class="muted">Aucun utilisateur chargé.</td></tr>';
+      return;
+    }
+    body.innerHTML = players.map(p => {
+      const s = getSecret(p);
+      const ok = s.status === 'Validé' || s.sealed;
+      const when = s.validatedAt ? new Date(s.validatedAt).toLocaleString('fr-FR') : '';
+      return `<tr>
+        <td><b>${esc(p.name)}</b></td>
+        <td>${isFilled(s.winner) ? esc(s.winner) : '<span class="muted">—</span>'}</td>
+        <td>${isFilled(s.bestPlayer) ? esc(s.bestPlayer) : '<span class="muted">—</span>'}</td>
+        <td>${isFilled(s.topScorer) ? esc(s.topScorer) : '<span class="muted">—</span>'}</td>
+        <td>${ok ? '<span class="badge ok">Validé</span>' : '<span class="badge">Non renseigné</span>'}</td>
+        <td>${when ? esc(when) : '<span class="muted">—</span>'}</td>
+      </tr>`;
+    }).join('');
+  };
+
+  // Synchronise l'écran user "Mes questions secrètes" avec les nouveaux champs avant l'ancien rendu.
+  const oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function'){
+    window.renderBets = function(){
+      normalizeSecretFields();
+      return oldRenderBets.apply(this, arguments);
+    };
+  }
+  const oldRenderScores = window.renderScores;
+  if(typeof oldRenderScores === 'function'){
+    window.renderScores = function(){
+      normalizeSecretFields();
+      return oldRenderScores.apply(this, arguments);
+    };
+  }
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function'){
+    window.renderAll = function(){
+      normalizeSecretFields();
+      const r = oldRenderAll.apply(this, arguments);
+      try{ window.renderAdminSecrets(); }catch(e){}
+      return r;
+    };
+  }
+
+  // Ajoute une carte backup visible dans Admin.
+  function installBackupButton(){
+    const admin = document.getElementById('admin');
+    if(!admin || document.getElementById('bpV117BackupCard')) return;
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'bpV117BackupCard';
+    card.style.borderColor = 'rgba(74,222,128,.45)';
+    card.innerHTML = `
+      <h2>💾 Backup BDD</h2>
+      <div class="muted">Crée un snapshot complet de l’état affiché dans <b>app_state</b>, sans modifier la partie active.</div>
+      <button class="action secondary" onclick="bpV117CreateBackup()">Créer un backup maintenant</button>
+    `;
+    admin.insertBefore(card, admin.firstElementChild || null);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    normalizeSecretFields();
+    installBackupButton();
+    setTimeout(function(){
+      normalizeSecretFields();
+      installBackupButton();
+      try{ window.renderAdminSecrets(); }catch(e){}
+    }, 600);
   });
 })();
 </script>
