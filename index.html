@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V97 BDD MANUELLE CLEAN STRICT</title>
+<title>B Partner FIFA World Cup 2026 - V99 BDD MANUELLE SUPABASE ONLY</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -2191,10 +2191,65 @@ SANITY V18
    2) Colle ici ton Project URL et ta anon public key
 */
 window.BP_MANUAL_SUPABASE_URL = "https://kzompicmlxapjpfqrdit.supabase.co";
-window.BP_SUPABASE_URL = ""; // Legacy Supabase désactivé : seule la sauvegarde manuelle utilise BP_MANUAL_SUPABASE_URL
+window.BP_SUPABASE_URL = window.BP_MANUAL_SUPABASE_URL; // V99 : unification config Supabase
 window.BP_MANUAL_SUPABASE_ANON_KEY = "sb_publishable_u2rK6amJNW07tL-aD9x69Q_S8gbYTEi";
-window.BP_SUPABASE_ANON_KEY = ""; // Legacy Supabase désactivé
+window.BP_SUPABASE_ANON_KEY = window.BP_MANUAL_SUPABASE_ANON_KEY; // V99 : unification config Supabase
 window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
+
+/* V99 EARLY GUARD — bloque les anciennes sauvegardes navigateur avant exécution des scripts historiques. */
+(function(){
+  'use strict';
+  if(window.__BP_V99_EARLY_GUARD__) return;
+  window.__BP_V99_EARLY_GUARD__ = true;
+  window.BP_SUPABASE_URL = window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL;
+  window.BP_SUPABASE_ANON_KEY = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY;
+  window.__bpV99SupabaseClient = function(url, key){
+    if(!window.supabase) throw new Error('Librairie Supabase non chargée');
+    const finalUrl = window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL || url;
+    const finalKey = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY || key;
+    if(!finalUrl || !finalKey) throw new Error('Supabase non configuré');
+    if(!window.__BP_V99_SINGLE_SB_CLIENT__) window.__BP_V99_SINGLE_SB_CLIENT__ = window.supabase.createClient(finalUrl, finalKey);
+    return window.__BP_V99_SINGLE_SB_CLIENT__;
+  };
+  const dangerousKey = function(key){
+    key = String(key || '');
+    return key === 'bp_wc_dev' || key === 'bpwc_state_v1' || key === 'bp_wc_session_state' || key === 'bp_wc_admin_managed' || key.startsWith('bp_wc_dev_backup') || key.includes('last_restore_report') || key.includes('last_successful_cloud_restore') || key.includes('CORRUPTED_BACKUP');
+  };
+
+  window.__bpV99BlockedGetItem = function(key){
+    key = String(key || '');
+    if(dangerousKey(key)) return null;
+    try { return window.localStorage ? Storage.prototype.getItem.call(window.localStorage, key) : null; } catch(e){ return null; }
+  };
+  window.__bpV99BlockedSetItem = function(key, value){
+    key = String(key || '');
+    if(dangerousKey(key) || key.startsWith('bp_') || key.includes('worldcup')){
+      console.warn('[V99] Écriture locale bloquée:', key);
+      return undefined;
+    }
+    try { return window.localStorage ? Storage.prototype.setItem.call(window.localStorage, key, value) : undefined; } catch(e){ return undefined; }
+  };
+
+  if(!Storage.prototype.__BP_V99_PATCHED__){
+    const nativeGet = Storage.prototype.getItem;
+    const nativeSet = Storage.prototype.setItem;
+    const nativeRemove = Storage.prototype.removeItem;
+    Storage.prototype.getItem = function(key){
+      if(this === window.localStorage && dangerousKey(key)) return null;
+      return nativeGet.apply(this, arguments);
+    };
+    Storage.prototype.setItem = function(key, value){
+      if(this === window.localStorage && dangerousKey(key)){
+        console.warn('[V99] LocalStorage jeu bloqué:', key);
+        return undefined;
+      }
+      return nativeSet.apply(this, arguments);
+    };
+    Storage.prototype.removeItem = function(key){ return nativeRemove.apply(this, arguments); };
+    Storage.prototype.__BP_V99_PATCHED__ = true;
+  }
+})();
+
 </script>
 
 
@@ -4751,7 +4806,7 @@ function initState(){
 }
 function migrateCalendar(){
   if(!confirm("Réparer uniquement le calendrier ? Les utilisateurs seront conservés.")) return;
-  try{localStorage.setItem("bp_wc_dev_backup_before_calendar_repair",JSON.stringify(state));}catch(e){}
+  try{window.__bpV99BlockedSetItem("bp_wc_dev_backup_before_calendar_repair",JSON.stringify(state));}catch(e){}
   const oldById=new Map((state.matches||[]).map(m=>[m.id,m]));
   state.matches=starterMatches.map(base=>{
     const old=oldById.get(base.id)||{};
@@ -6875,8 +6930,8 @@ function regeneratePlayerCode(index){
 
 function backupUsers(reason){
   try{
-    localStorage.setItem("bp_wc_dev_backup_users_last",JSON.stringify(state));
-    localStorage.setItem("bp_wc_dev_backup_users_"+reason+"_"+new Date().toISOString(),JSON.stringify(state));
+    window.__bpV99BlockedSetItem("bp_wc_dev_backup_users_last",JSON.stringify(state));
+    window.__bpV99BlockedSetItem("bp_wc_dev_backup_users_"+reason+"_"+new Date().toISOString(),JSON.stringify(state));
   }catch(e){}
 }
 function makeUniquePlayerName(base="Nouveau joueur"){
@@ -6925,7 +6980,7 @@ async function safeDeletePlayer(index){
   await bpAlert(`Utilisateur supprimé : ${name}.`,{icon:"✅"});
 }
 async function restoreBeforeUserChangeBackup(){
-  const raw=localStorage.getItem("bp_wc_dev_backup_users_last");
+  const raw=window.__bpV99BlockedGetItem("bp_wc_dev_backup_users_last");
   if(!raw){await bpAlert("Aucune sauvegarde utilisateurs trouvée.",{icon:"ℹ️"});return;}
   if(!confirm("Restaurer la dernière sauvegarde utilisateurs ?")) return;
   state=JSON.parse(raw);save();renderAll();
@@ -7568,7 +7623,7 @@ function runSanityCheck(){
   function currentState(){
     let st=null;
     try{
-      const raw=localStorage.getItem("bp_wc_dev");
+      const raw=window.__bpV99BlockedGetItem("bp_wc_dev");
       if(raw) st=JSON.parse(raw);
     }catch(e){}
     if(!st && typeof state!=="undefined" && state){
@@ -7609,7 +7664,7 @@ function runSanityCheck(){
       const txt=(document.getElementById("bpEmbeddedState")?.textContent||"").trim();
       if(!txt || txt==="null"){ alert("Aucun état embarqué."); return; }
       const embedded=JSON.parse(txt);
-      localStorage.setItem("bp_wc_dev", JSON.stringify(embedded));
+      window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(embedded));
       location.reload();
     }catch(e){ alert("Impossible de charger l’état embarqué."); }
   };
@@ -7664,7 +7719,7 @@ function bpEnsureStateCollections(){
 function bpNum(v,fallback=0){const n=Number(v); return Number.isFinite(n)?n:fallback;}
 function bpYes(v){return ["YES","TRUE","1","OUI"].includes(String(v||"").toUpperCase());}
 function bpSaveImportedState(){
-  localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+  window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state));
   if(typeof save==="function") save();
   if(typeof renderAll==="function") renderAll();
 }
@@ -7799,7 +7854,7 @@ function openBackupFilePicker(kind){
 (function(){
   function cloneState(){
     try{
-      const raw=localStorage.getItem("bp_wc_dev");
+      const raw=window.__bpV99BlockedGetItem("bp_wc_dev");
       if(raw) return JSON.parse(raw);
     }catch(e){}
     try{ return JSON.parse(JSON.stringify(state)); }catch(e){ return state; }
@@ -7860,7 +7915,7 @@ function openBackupFilePicker(kind){
       const before = (state.players||[]).length;
       const result = oldBpImportObjects.apply(this, arguments);
       if(kind==="players"){
-        try{ localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
+        try{ window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
         setTimeout(showGithubPersistenceNotice, 300);
       }
       return result;
@@ -7873,7 +7928,7 @@ function openBackupFilePicker(kind){
     window.importObjects = function(kind,data){
       const result = oldImportObjects.apply(this, arguments);
       if(kind==="players"){
-        try{ localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
+        try{ window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
         setTimeout(showGithubPersistenceNotice, 300);
       }
       return result;
@@ -7916,7 +7971,7 @@ function openBackupFilePicker(kind){
   function client(){
     if(!configured()) return null;
     if(!bpSb){
-      bpSb = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+      bpSb = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
     }
     return bpSb;
   }
@@ -7983,7 +8038,7 @@ function openBackupFilePicker(kind){
         return false;
       }
       state = data.data;
-      localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+      window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state));
       if(typeof repairState === "function") repairState();
       if(typeof renderAll === "function") renderAll();
       cloudStatus("Chargement cloud OK — " + new Date(data.updated_at).toLocaleString("fr-FR"));
@@ -8020,7 +8075,7 @@ function openBackupFilePicker(kind){
   async function autoLoadIfNeeded(){
     if(!configured()) return;
     try{
-      const raw = localStorage.getItem("bp_wc_dev");
+      const raw = window.__bpV99BlockedGetItem("bp_wc_dev");
       const local = raw ? JSON.parse(raw) : null;
       const hasPlayers = local && Array.isArray(local.players) && local.players.length > 0;
       if(!hasPlayers){
@@ -8231,7 +8286,7 @@ function bpModalClose(){
     p.lastLoginAt=new Date().toISOString();
     try{
       if(typeof save==="function") save();
-      else localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+      else window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state));
       if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
     }catch(e){}
   }
@@ -8569,7 +8624,7 @@ function bpModalClose(){
       }else break;
     }
     if(changed){
-      try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
+      try{ if(typeof save==="function") save(); else window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
       try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
     }
   }
@@ -8710,7 +8765,7 @@ function bpModalClose(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
       throw new Error("Supabase non configuré.");
     }
-    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
   }
 
   function stateSummary(st){
@@ -8748,8 +8803,8 @@ function bpModalClose(){
       state = cloudState;
 
       try{
-        localStorage.setItem("bp_wc_dev", JSON.stringify(state));
-        localStorage.setItem("bp_wc_dev_last_successful_cloud_restore", JSON.stringify({
+        window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state));
+        window.__bpV99BlockedSetItem("bp_wc_dev_last_successful_cloud_restore", JSON.stringify({
           restoredAt:new Date().toISOString(),
           updatedAt:data.updated_at,
           summary:s
@@ -8987,7 +9042,7 @@ function bpModalClose(){
   };
 
   async function fetchCloudState(){
-    const sb=window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
+    const sb=window.__bpV99SupabaseClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
     const {data,error}=await sb.from("app_state").select("data,updated_at").eq("id",APP_ID).maybeSingle();
     if(error) throw error;
     if(!data || !data.data) throw new Error("Aucune donnée cloud trouvée.");
@@ -9011,8 +9066,8 @@ function bpModalClose(){
       cloudState.players=mergePlayers(local.players,cloudState.players);
 
       state=cloudState;
-      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
-      localStorage.setItem("bp_wc_dev_last_restore_report",JSON.stringify({
+      window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state));
+      window.__bpV99BlockedSetItem("bp_wc_dev_last_restore_report",JSON.stringify({
         at:new Date().toISOString(),
         updated_at:cloud.updated_at,
         report:window.bpValidateStateModel(state)
@@ -9535,7 +9590,7 @@ function bpModalClose(){
 
     if(changed){
       try{
-        localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+        window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state));
         if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced();
       }catch(e){}
     }
@@ -9699,7 +9754,7 @@ function bpModalClose(){
   }
 
   function saveEverywhere(){
-    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){ console.warn(e); }
+    try{ if(typeof save==="function") save(); else window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state)); }catch(e){ console.warn(e); }
     try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){ console.warn(e); }
   }
 
@@ -9818,7 +9873,7 @@ function bpModalClose(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
       throw new Error("Supabase non configuré.");
     }
-    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
   }
 
   function clone(x){ return JSON.parse(JSON.stringify(x || {})); }
@@ -9901,7 +9956,7 @@ function bpModalClose(){
     const merged=mergeState(state,cloud);
     await writeCloud(merged);
     state=merged;
-    localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+    window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state));
     return state;
   }
 
@@ -9978,7 +10033,7 @@ function bpModalClose(){
 
       setStatus(matchId,'<span class="warn">⏳ Sauvegarde Supabase en cours...</span>');
       upsertLocalBet(matchId,data,"VALIDATED");
-      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+      window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state));
 
       await saveCloudMerged();
 
@@ -10020,7 +10075,7 @@ function bpModalClose(){
         upsertLocalBet(matchId,form(matchId),"DRAFT");
       });
 
-      localStorage.setItem("bp_wc_dev",JSON.stringify(state));
+      window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state));
       await saveCloudMerged();
 
       if(typeof renderAll==="function") renderAll();
@@ -10071,7 +10126,7 @@ function bpModalClose(){
   }
 
   function saveNow(){
-    try{ if(typeof save==="function") save(); else localStorage.setItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
+    try{ if(typeof save==="function") save(); else window.__bpV99BlockedSetItem("bp_wc_dev",JSON.stringify(state)); }catch(e){}
     try{ if(typeof bpCloudSaveDebounced==="function") bpCloudSaveDebounced(); }catch(e){}
   }
 
@@ -10200,7 +10255,7 @@ function bpModalClose(){
 (function(){
   function saveLocal(){
     try{
-      localStorage.setItem("bp_wc_dev", JSON.stringify(state));
+      window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state));
     }catch(e){}
   }
 
@@ -10312,7 +10367,7 @@ function bpModalClose(){
 
   function sb(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) throw new Error("Supabase non configuré");
-    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
   }
 
   async function fetchCloud(){
@@ -10542,7 +10597,7 @@ window.BP_LOCAL_ONLY = true;
   }
   function sb(){
     if(!window.supabase||!window.BP_SUPABASE_URL||!window.BP_SUPABASE_ANON_KEY) throw new Error("Supabase non configuré");
-    return window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
+    return window.__bpV99SupabaseClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
   }
   async function fetchCloud(){
     const {data,error}=await sb().from("app_state").select("data").eq("id",APP_ID).maybeSingle();
@@ -11077,7 +11132,7 @@ window.BP_LOCAL_ONLY = true;
   }
 
   function saveNow(){
-    try{ if(typeof save === "function") save(); else localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
+    try{ if(typeof save === "function") save(); else window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state)); }catch(e){}
     try{ if(typeof bpCloudSaveDebounced === "function") bpCloudSaveDebounced(); }catch(e){}
     try{ if(typeof bpSupabaseSaveDebounced === "function") bpSupabaseSaveDebounced(); }catch(e){}
   }
@@ -11239,7 +11294,7 @@ window.BP_LOCAL_ONLY = true;
     catch(e){ return 1; }
   }
   function nDay(day){ return Math.max(1, Math.min(maxDay(), Number(day||state.currentDay||1))); }
-  function saveLocal(){ try{ localStorage.setItem("bp_wc_dev", JSON.stringify(state)); }catch(e){} }
+  function saveLocal(){ try{ window.__bpV99BlockedSetItem("bp_wc_dev", JSON.stringify(state)); }catch(e){} }
   function isClosed(day){ return !!(state.closedDays && state.closedDays[nDay(day)] === true); }
   function scoreDay(){
     const d=nDay(state.currentDay||1);
@@ -11412,7 +11467,7 @@ window.BP_LOCAL_ONLY = true;
 
   function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return {};}}
   function configured(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
-  function sb(){ if(!configured()) throw new Error("Supabase non configuré ou inaccessible"); if(!sbClient) sbClient=window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
+  function sb(){ if(!configured()) throw new Error("Supabase non configuré ou inaccessible"); if(!sbClient) sbClient=window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
   function pill(kind,msg){
     let el=document.getElementById('bpSyncPill');
     if(!el){ el=document.createElement('div'); el.id='bpSyncPill'; document.body.appendChild(el); }
@@ -11452,7 +11507,7 @@ window.BP_LOCAL_ONLY = true;
     cleanupLocalStorage();
     const compact=compactState(window.state||{});
     const txt=JSON.stringify(compact);
-    try{ localStorage.setItem('bp_wc_dev',txt); }
+    try{ window.__bpV99BlockedSetItem('bp_wc_dev',txt); }
     catch(e){
       try{ sessionStorage.setItem('bp_wc_session_state',txt); }catch(_e){}
       pill('warn','⚠️ Stockage local plein : session utilisée. La synchro cloud reste prioritaire.');
@@ -11638,7 +11693,7 @@ window.BP_LOCAL_ONLY = true;
     try{
       const slim=clone(state);
       if(Array.isArray(slim.logs)) slim.logs=slim.logs.slice(-300);
-      localStorage.setItem('bp_wc_dev',JSON.stringify(slim));
+      window.__bpV99BlockedSetItem('bp_wc_dev',JSON.stringify(slim));
     }catch(e){ console.warn('[BP V72 local save]',e); }
   }
   function compactForCloud(st){
@@ -11652,7 +11707,7 @@ window.BP_LOCAL_ONLY = true;
   }
   function sbClient(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) return null;
-    return window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
+    return window.__bpV99SupabaseClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY);
   }
   async function forceWriteCloud(reason){
     const sb=sbClient();
@@ -11997,9 +12052,9 @@ window.BP_LOCAL_ONLY = true;
   function isClosedSafe(day){ return !!(state && state.closedDays && state.closedDays[nDay(day)]===true); }
   function scoreDaySafe(){ const d=nDay(state?.currentDay||1); return isClosedSafe(d) ? d : Math.max(1,d-1); }
   function matchesOf(day){ return (state?.matches||[]).filter(m=>Number(m.day)===Number(day)); }
-  function readStore(){ try{return JSON.parse(localStorage.getItem(SCORE_KEY)||'{}')||{};}catch(e){return{};} }
-  function writeStore(obj){ try{localStorage.setItem(SCORE_KEY,JSON.stringify(obj||{}));}catch(e){} }
-  function saveStateOnly(){ try{ if(typeof save==='function') save(); else localStorage.setItem('bp_wc_dev',JSON.stringify(state)); }catch(e){ try{localStorage.setItem('bp_wc_dev',JSON.stringify(state));}catch(_e){} } }
+  function readStore(){ try{return JSON.parse(window.__bpV99BlockedGetItem(SCORE_KEY)||'{}')||{};}catch(e){return{};} }
+  function writeStore(obj){ try{window.__bpV99BlockedSetItem(SCORE_KEY,JSON.stringify(obj||{}));}catch(e){} }
+  function saveStateOnly(){ try{ if(typeof save==='function') save(); else window.__bpV99BlockedSetItem('bp_wc_dev',JSON.stringify(state)); }catch(e){ try{window.__bpV99BlockedSetItem('bp_wc_dev',JSON.stringify(state));}catch(_e){} } }
   function getInput(id,prefix){ return document.getElementById(prefix+id); }
 
   function captureScoresFromDOM(day){
@@ -12195,7 +12250,7 @@ window.BP_LOCAL_ONLY = true;
     playerKeys(p).forEach(k=>set.add(k));
     state.deletedPlayerKeys=Array.from(set);
     state.players=(state.players||[]).filter(x=>!playerKeys(x).some(k=>set.has(k)));
-    try{localStorage.setItem('bp_wc_admin_managed','1');}catch(e){}
+    try{window.__bpV99BlockedSetItem('bp_wc_admin_managed','1');}catch(e){}
   }
   const oldDelete=window.safeDeletePlayer;
   window.safeDeletePlayer=async function(index){
@@ -12206,7 +12261,7 @@ window.BP_LOCAL_ONLY = true;
     try{ if(typeof backupUsers==='function') backupUsers('delete'); }catch(e){}
     markDeletedPlayer(p);
     try{ (state.bets||[]).forEach(b=>{ if(playerKeys(p).includes(String(b.player||'').trim().toLowerCase())) b.deletedPlayer=true; }); }catch(e){}
-    if(typeof save==='function') save(); else localStorage.setItem('bp_wc_dev',JSON.stringify(state));
+    if(typeof save==='function') save(); else window.__bpV99BlockedSetItem('bp_wc_dev',JSON.stringify(state));
     try{ if(typeof bpCloudSave==='function') await bpCloudSave(false); }catch(e){ console.warn('[V76 delete cloud]',e); }
     if(typeof renderAll==='function') renderAll();
     alert(`Utilisateur supprimé : ${name}.`);
@@ -12246,7 +12301,7 @@ window.BP_LOCAL_ONLY = true;
     });
     if(!ok) return false;
     state.officialScoresSavedDays=state.officialScoresSavedDays||{}; state.officialScoresSavedDays[d]=true;
-    if(typeof save==='function') save(); else localStorage.setItem('bp_wc_dev',JSON.stringify(state));
+    if(typeof save==='function') save(); else window.__bpV99BlockedSetItem('bp_wc_dev',JSON.stringify(state));
     return true;
   };
   const oldCalc=window.calculateGains;
@@ -12283,7 +12338,7 @@ window.BP_LOCAL_ONLY = true;
   let loading = false;
 
   function ready(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
-  function sb(){ if(!ready()) return null; if(!sbClient) sbClient = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
+  function sb(){ if(!ready()) return null; if(!sbClient) sbClient = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
   function st(){ return window.state || {}; }
   function maxDay(){ try{return typeof maxCalendarDay==='function'?Number(maxCalendarDay())||1:Math.max(1,...(st().matches||[]).map(m=>Number(m.day||1)));}catch(e){return 1;} }
   function nDay(day){ return Math.max(1, Math.min(maxDay(), Number(day||st().currentDay||1))); }
@@ -12291,9 +12346,9 @@ window.BP_LOCAL_ONLY = true;
   function scoreDay(){ const d=nDay(st().currentDay||1); return closed(d) ? d : Math.max(1,d-1); }
   function matches(day){ return (st().matches||[]).filter(m=>Number(m.day)===Number(day)); }
   function input(id,p){ return document.getElementById(p+id); }
-  function readCache(){ try{return JSON.parse(localStorage.getItem(SCORE_KEY)||'{}')||{};}catch(e){return{};} }
-  function writeCache(x){ try{localStorage.setItem(SCORE_KEY,JSON.stringify(x||{}));}catch(e){} }
-  function saveLocal(){ try{localStorage.setItem('bp_wc_dev', JSON.stringify(st()));}catch(e){} }
+  function readCache(){ try{return JSON.parse(window.__bpV99BlockedGetItem(SCORE_KEY)||'{}')||{};}catch(e){return{};} }
+  function writeCache(x){ try{window.__bpV99BlockedSetItem(SCORE_KEY,JSON.stringify(x||{}));}catch(e){} }
+  function saveLocal(){ try{window.__bpV99BlockedSetItem('bp_wc_dev', JSON.stringify(st()));}catch(e){} }
   function toast(msg, cls){
     let el=document.getElementById('bpSyncPill');
     if(!el){ el=document.createElement('div'); el.id='bpSyncPill'; document.body.appendChild(el); }
@@ -12469,7 +12524,7 @@ window.BP_LOCAL_ONLY = true;
   function hasSupabase(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
   function sb(){
     if(!hasSupabase()) throw new Error('Supabase non configuré.');
-    if(!sbClient) sbClient = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    if(!sbClient) sbClient = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
     return sbClient;
   }
   function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return {};}}
@@ -12490,7 +12545,7 @@ window.BP_LOCAL_ONLY = true;
     return s;
   }
   function localSave(){
-    try{ localStorage.setItem('bp_wc_dev', JSON.stringify(compact(window.state))); }catch(e){ try{ sessionStorage.setItem('bp_wc_session_state', JSON.stringify(compact(window.state))); }catch(_e){} }
+    try{ window.__bpV99BlockedSetItem('bp_wc_dev', JSON.stringify(compact(window.state))); }catch(e){ try{ sessionStorage.setItem('bp_wc_session_state', JSON.stringify(compact(window.state))); }catch(_e){} }
   }
   function setPill(kind,msg){
     let el=document.getElementById('bpSyncPill');
@@ -12696,7 +12751,7 @@ window.BP_LOCAL_ONLY = true;
   function state(){return window.state||(window.state={});}
   function now(){return new Date().toISOString();}
   function ready(){return !!(window.supabase&&window.BP_SUPABASE_URL&&window.BP_SUPABASE_ANON_KEY);}
-  function sb(){if(!ready()) throw new Error('Supabase non configuré.'); if(!sbClient) sbClient=window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY); return sbClient;}
+  function sb(){if(!ready()) throw new Error('Supabase non configuré.'); if(!sbClient) sbClient=window.__bpV99SupabaseClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY); return sbClient;}
   function pill(kind,msg){let el=document.getElementById('bpSyncPill'); if(!el){el=document.createElement('div');el.id='bpSyncPill';document.body.appendChild(el);} el.className=kind||'warn'; el.innerHTML=msg;}
   function compact(s){
     const c=clone(s||state());
@@ -12704,7 +12759,7 @@ window.BP_LOCAL_ONLY = true;
     delete c.htmlPreview; delete c.debug; delete c._cache;
     return c;
   }
-  function saveLocal(){try{localStorage.setItem(LOCAL_KEY,JSON.stringify(compact(state())));}catch(e){try{sessionStorage.setItem('bp_wc_session_state',JSON.stringify(compact(state())));}catch(_){}}}
+  function saveLocal(){try{window.__bpV99BlockedSetItem(LOCAL_KEY,JSON.stringify(compact(state())));}catch(e){try{sessionStorage.setItem('bp_wc_session_state',JSON.stringify(compact(state())));}catch(_){}}}
   function keyOf(p){return [p&&p.code,p&&p.name,p&&p.pseudo].map(v=>String(v||'').trim().toLowerCase()).filter(Boolean);}
   function tombstones(){const s=state(); if(!Array.isArray(s.deletedPlayerKeys)) s.deletedPlayerKeys=[]; return new Set(s.deletedPlayerKeys.map(x=>String(x||'').trim().toLowerCase()).filter(Boolean));}
   function applyTombstones(){const s=state(); const set=tombstones(); s.deletedPlayerKeys=Array.from(set); if(set.size&&Array.isArray(s.players)) s.players=s.players.filter(p=>!keyOf(p).some(k=>set.has(k)));}
@@ -12813,11 +12868,11 @@ window.BP_LOCAL_ONLY = true;
   function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return{};} }
   function supa(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){ throw new Error('Supabase non configuré'); }
-    if(!client) client=window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    if(!client) client=window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
     return client;
   }
   function compact(){ const s=clone(st()); s.lastSavedAt=iso(); s.schemaVersion='v80-hard-fix'; if(Array.isArray(s.logs)) s.logs=s.logs.slice(-200); return s; }
-  function saveLocal(){ try{localStorage.setItem(LOCAL_KEY, JSON.stringify(compact()));}catch(e){} }
+  function saveLocal(){ try{window.__bpV99BlockedSetItem(LOCAL_KEY, JSON.stringify(compact()));}catch(e){} }
   function pill(kind,msg){ let el=document.getElementById('bpSyncPill'); if(!el){el=document.createElement('div');el.id='bpSyncPill';document.body.appendChild(el);} el.className=kind||'warn'; el.innerHTML=msg; }
   async function writeCloud(reason){
     saveLocal(); pill('warn','☁️ Synchronisation BDD…');
@@ -12991,7 +13046,7 @@ window.BP_LOCAL_ONLY = true;
   function clone(x){ try { return JSON.parse(JSON.stringify(x || {})); } catch(e){ return {}; } }
   function norm(v){ return String(v || '').trim().toLowerCase(); }
   function configured(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
-  function sb(){ if(!configured()) throw new Error('Supabase non configuré.'); if(!sbClient) sbClient = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
+  function sb(){ if(!configured()) throw new Error('Supabase non configuré.'); if(!sbClient) sbClient = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); return sbClient; }
 
   function pill(kind, msg){
     let el = document.getElementById('bpSyncPill');
@@ -13011,7 +13066,7 @@ window.BP_LOCAL_ONLY = true;
   }
 
   function saveLocal(){
-    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(compact(S()))); } catch(e) {}
+    try { window.__bpV99BlockedSetItem(LOCAL_KEY, JSON.stringify(compact(S()))); } catch(e) {}
   }
 
   function ensureStores(){
@@ -13543,7 +13598,7 @@ window.BP_LOCAL_ONLY = true;
   }
   function supa(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) throw new Error('Supabase non configuré');
-    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    if(!client) client = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
     return client;
   }
   function compact(st){
@@ -13572,7 +13627,7 @@ window.BP_LOCAL_ONLY = true;
     S().deletedPlayerKeys=[...d];
     if(Array.isArray(S().players)) S().players = S().players.filter(p => ![...keySet(p)].some(k=>d.has(k)));
   }
-  function saveLocal(){ try{ localStorage.setItem(LOCAL_KEY, JSON.stringify(compact(S()))); }catch(e){} }
+  function saveLocal(){ try{ window.__bpV99BlockedSetItem(LOCAL_KEY, JSON.stringify(compact(S()))); }catch(e){} }
   async function readBDD(){
     log('warn','Chargement de la ligne active <b>'+APP_ID+'</b>…');
     const r = await supa().from('app_state').select('data,updated_at').eq('id', APP_ID).single();
@@ -13890,10 +13945,10 @@ window.BP_LOCAL_ONLY = true;
   function keysOf(p){const s=new Set(); if(!p)return s; [p.code,p.name,p.pseudo].forEach(v=>{v=norm(v); if(v)s.add(v);}); return s;}
   function ensure(d){d=d||{}; if(!Array.isArray(d.players))d.players=[]; if(!Array.isArray(d.bets))d.bets=[]; if(!Array.isArray(d.deletedPlayerKeys))d.deletedPlayerKeys=[]; if(!d.officialScores||typeof d.officialScores!=='object')d.officialScores={}; if(!d.officialScoresByDay||typeof d.officialScoresByDay!=='object')d.officialScoresByDay={}; if(!d.officialScoresByMatch||typeof d.officialScoresByMatch!=='object')d.officialScoresByMatch={}; if(!d.officialScoresSavedDays||typeof d.officialScoresSavedDays!=='object')d.officialScoresSavedDays={}; return d;}
   function applyDeleted(d){ensure(d); const del=new Set(d.deletedPlayerKeys.map(norm).filter(Boolean)); d.deletedPlayerKeys=[...del]; d.players=d.players.filter(p=>![...keysOf(p)].some(k=>del.has(k))); d.bets=d.bets.filter(b=>!del.has(norm(b.player))); return d;}
-  function supa(){ if(!window.supabase||!window.BP_SUPABASE_URL||!window.BP_SUPABASE_ANON_KEY) throw new Error('Supabase non configuré'); if(!client) client=window.supabase.createClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY); return client;}
+  function supa(){ if(!window.supabase||!window.BP_SUPABASE_URL||!window.BP_SUPABASE_ANON_KEY) throw new Error('Supabase non configuré'); if(!client) client=window.__bpV99SupabaseClient(window.BP_SUPABASE_URL,window.BP_SUPABASE_ANON_KEY); return client;}
   function log(type,msg){let el=document.getElementById('bpV84Log'); if(!el){el=document.createElement('div'); el.id='bpV84Log'; el.style.cssText='position:fixed;right:14px;bottom:14px;z-index:999999;max-width:420px;padding:10px 13px;border-radius:14px;background:#111;color:#fff;border:1px solid #444;box-shadow:0 12px 30px rgba(0,0,0,.4);font:12px Arial'; document.body.appendChild(el);} el.style.borderColor=type==='ok'?'rgba(74,222,128,.6)':type==='bad'?'rgba(251,113,133,.7)':'rgba(250,204,21,.7)'; el.innerHTML='<b>BDD Supabase V84</b><br>'+String(msg||''); try{console.log('[V84]',msg);}catch(e){}}
   async function readBDD(){const r=await supa().from(TABLE).select('data,updated_at').eq('id',APP_ID).single(); if(r.error)throw r.error; return applyDeleted(ensure(clone(r.data&&r.data.data)));}
-  async function writeBDD(data,reason){data=applyDeleted(ensure(clone(data))); data.schemaVersion='v84-hard-sync'; data.lastSavedAt=now(); const r=await supa().from(TABLE).upsert({id:APP_ID,data:data,updated_at:now()},{onConflict:'id'}); if(r.error)throw r.error; Object.keys(S()).forEach(k=>delete S()[k]); Object.assign(S(),data); try{localStorage.setItem('bpwc_state_v1',JSON.stringify(data));}catch(e){} log('ok','Sauvegarde OK : '+(reason||'')+' — '+new Date().toLocaleTimeString('fr-FR')); return data;}
+  async function writeBDD(data,reason){data=applyDeleted(ensure(clone(data))); data.schemaVersion='v84-hard-sync'; data.lastSavedAt=now(); const r=await supa().from(TABLE).upsert({id:APP_ID,data:data,updated_at:now()},{onConflict:'id'}); if(r.error)throw r.error; Object.keys(S()).forEach(k=>delete S()[k]); Object.assign(S(),data); try{window.__bpV99BlockedSetItem('bpwc_state_v1',JSON.stringify(data));}catch(e){} log('ok','Sauvegarde OK : '+(reason||'')+' — '+new Date().toLocaleTimeString('fr-FR')); return data;}
   async function mutate(reason,fn){const data=await readBDD(); await fn(data); return await writeBDD(data,reason);}
   function renderSoon(){try{ if(typeof window.renderAll==='function') window.renderAll(); else { if(typeof window.renderBets==='function')window.renderBets(); if(typeof window.renderAdmin==='function')window.renderAdmin(); }}catch(e){console.warn('[V84 render]',e);} setTimeout(afterRender,120);}
   async function withBtn(btn,label,fn){ if(busyLock)return; busyLock=true; btn=btn||lastBtn; let old=''; if(btn){old=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:bpSpin .8s linear infinite;margin-right:8px;vertical-align:-2px"></span>'+label;} try{log('warn',label); return await fn();}catch(e){log('bad',e.message||e); alert('Erreur BDD : '+(e.message||e)); throw e;}finally{if(btn){btn.disabled=false; btn.innerHTML=old;} busyLock=false;}}
@@ -13921,7 +13976,7 @@ window.BP_LOCAL_ONLY = true;
   document.addEventListener('click',function(e){const b=e.target.closest&&e.target.closest('button'); if(!b)return; const txt=(b.textContent||'').trim().toLowerCase(); if(b.closest('.admin-player-card')&&txt.includes('suppr')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();lastBtn=b;deletePlayer(b.closest('.admin-player-card'),b);return;} if(txt.includes('enregistrer les scores officiels')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();lastBtn=b;withBtn(b,'Sauvegarde scores…',()=>saveScores(b));return;} const card=b.closest('.bet-card'); if(card&&(txt.includes('réaliser une mise')||txt.includes('sauvegarder la mise')||txt.includes('modifier cette mise'))){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();lastBtn=b; if(txt.includes('modifier'))withBtn(b,'Ouverture édition…',()=>editBetFromCard(card,b)); else withBtn(b,'Sauvegarde mise…',()=>saveBetFromCard(card,b)); return;} },true);
   document.addEventListener('change',function(e){const card=e.target.closest&&e.target.closest('.bet-card'); if(card&&(e.target.matches('.scoreA,.scoreB,.stake,select'))){const btn=card.querySelector('.bet-actions button,button.action'); if(btn&&!btn.textContent.toLowerCase().includes('sauvegarder'))btn.textContent='Sauvegarder la mise';}},true);
   function afterRender(){document.querySelectorAll('a[href]').forEach(a=>{a.target='_blank';a.rel='noopener noreferrer';}); const player=currentPlayerName(), day=currentDay(); document.querySelectorAll('.bet-card').forEach(card=>{const id=matchIdFromCard(card); const btn=card.querySelector('.bet-actions button,button.action'); if(!id||!btn)return; const b=(S().bets||[]).find(x=>Number(x.day)===Number(day)&&String(x.matchId)===String(id)&&String(x.player)===String(player)); const inputs=card.querySelectorAll('.scoreA,.scoreB,.stake'); if(!b){ if(!btn.dataset.touched)btn.textContent='Réaliser une mise'; inputs.forEach(i=>i.disabled=false); } else if(String(b.status)==='VALIDATED'){ btn.textContent='✏️ Modifier cette mise'; inputs.forEach(i=>i.disabled=true); } else { btn.textContent='Sauvegarder la mise'; inputs.forEach(i=>i.disabled=false); }});}
-  async function start(){try{const d=await readBDD(); Object.keys(S()).forEach(k=>delete S()[k]); Object.assign(S(),d); try{localStorage.setItem('bpwc_state_v1',JSON.stringify(d));}catch(e){} renderSoon(); log('ok','Chargé depuis la ligne active '+APP_ID);}catch(e){log('bad','Chargement BDD échoué : '+(e.message||e));}}
+  async function start(){try{const d=await readBDD(); Object.keys(S()).forEach(k=>delete S()[k]); Object.assign(S(),d); try{window.__bpV99BlockedSetItem('bpwc_state_v1',JSON.stringify(d));}catch(e){} renderSoon(); log('ok','Chargé depuis la ligne active '+APP_ID);}catch(e){log('bad','Chargement BDD échoué : '+(e.message||e));}}
   window.bpV84ReadBDD=readBDD; window.bpV84WriteBDD=writeBDD; window.bpV84Start=start;
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start); else setTimeout(start,100);
   setInterval(afterRender,1500);
@@ -13958,7 +14013,7 @@ window.BP_LOCAL_ONLY = true;
   function keysOf(p){ return uniq([p && p.code, p && p.name, p && p.pseudo]); }
   function supa(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){ throw new Error('Supabase non configuré'); }
-    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    if(!client) client = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
     return client;
   }
   function log(type,msg){
@@ -13990,7 +14045,7 @@ window.BP_LOCAL_ONLY = true;
     if(r.error) throw r.error;
     Object.keys(S()).forEach(k => delete S()[k]);
     Object.assign(S(), d);
-    try{ localStorage.setItem('bpwc_state_v1', JSON.stringify(d)); }catch(e){}
+    try{ window.__bpV99BlockedSetItem('bpwc_state_v1', JSON.stringify(d)); }catch(e){}
     return d;
   }
   function adminCardFromButton(btn){ return btn && btn.closest ? btn.closest('.admin-player-card') : null; }
@@ -14119,18 +14174,18 @@ window.BP_LOCAL_ONLY = true;
   function samePlayer(p, keys){ const set = new Set(keys||[]); return keysOf(p).some(k => set.has(k)); }
   function deletedKeys(){
     const all = [];
-    LS_KEYS.forEach(k => { try{ all.push(...JSON.parse(localStorage.getItem(k)||'[]')); }catch(e){} });
+    LS_KEYS.forEach(k => { try{ all.push(...JSON.parse(window.__bpV99BlockedGetItem(k)||'[]')); }catch(e){} });
     try{ all.push(...(S().deletedPlayerKeys||[])); }catch(e){}
     return uniq(all);
   }
   function persistDeleted(keys){
     keys = uniq(keys);
-    LS_KEYS.forEach(k => { try{ localStorage.setItem(k, JSON.stringify(keys)); }catch(e){} });
+    LS_KEYS.forEach(k => { try{ window.__bpV99BlockedSetItem(k, JSON.stringify(keys)); }catch(e){} });
     try{ S().deletedPlayerKeys = uniq([...(S().deletedPlayerKeys||[]), ...keys]); }catch(e){}
     return keys;
   }
   function persistStateLocal(){
-    STATE_KEYS.forEach(k => { try{ localStorage.setItem(k, JSON.stringify(S())); }catch(e){} });
+    STATE_KEYS.forEach(k => { try{ window.__bpV99BlockedSetItem(k, JSON.stringify(S())); }catch(e){} });
   }
   function compact(st){
     const c = clone(st);
@@ -14143,7 +14198,7 @@ window.BP_LOCAL_ONLY = true;
   }
   function supa(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) return null;
-    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    if(!client) client = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
     return client;
   }
   function toast(type,msg){
@@ -14297,14 +14352,14 @@ window.BP_LOCAL_ONLY = true;
     var s = zombieSet();
     try{ arr(window.state && window.state.deletedPlayerKeys).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
     LS_DELETED_KEYS.forEach(function(k){
-      try{ arr(JSON.parse(localStorage.getItem(k)||'[]')).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
+      try{ arr(JSON.parse(window.__bpV99BlockedGetItem(k)||'[]')).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
     });
     return s;
   }
   function persistDeletedSet(s){
     ZOMBIE_CODES.map(norm).forEach(function(c){ s.add(c); });
     var list = Array.from(s).filter(Boolean);
-    LS_DELETED_KEYS.forEach(function(k){ try{ localStorage.setItem(k, JSON.stringify(list)); }catch(e){} });
+    LS_DELETED_KEYS.forEach(function(k){ try{ window.__bpV99BlockedSetItem(k, JSON.stringify(list)); }catch(e){} });
     if(window.state){ window.state.deletedPlayerKeys = Array.from(new Set(arr(window.state.deletedPlayerKeys).concat(list).map(norm).filter(Boolean))); }
     return s;
   }
@@ -14329,18 +14384,18 @@ window.BP_LOCAL_ONLY = true;
     if(window.state) purgeStateObject(window.state);
     LS_STATE_KEYS.forEach(function(k){
       try{
-        var raw = localStorage.getItem(k);
+        var raw = window.__bpV99BlockedGetItem(k);
         if(!raw) return;
         var st = JSON.parse(raw);
         purgeStateObject(st);
-        localStorage.setItem(k, JSON.stringify(st));
+        window.__bpV99BlockedSetItem(k, JSON.stringify(st));
       }catch(e){}
     });
     try{ sessionStorage.removeItem('bp_wc_session_state'); }catch(e){}
   }
   function supabaseClient(){
     if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) return null;
-    try{ return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); }catch(e){ return null; }
+    try{ return window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY); }catch(e){ return null; }
   }
   async function purgeSupabase(reason){
     purgeAllLocalStates();
@@ -14363,7 +14418,7 @@ window.BP_LOCAL_ONLY = true;
       var up = await sb.from('app_state').upsert({id:appId,data:cloud,updated_at:new Date().toISOString()},{onConflict:'id'});
       if(up.error) throw up.error;
       window.state = cloud;
-      LS_STATE_KEYS.forEach(function(k){ try{ localStorage.setItem(k, JSON.stringify(window.state)); }catch(e){} });
+      LS_STATE_KEYS.forEach(function(k){ try{ window.__bpV99BlockedSetItem(k, JSON.stringify(window.state)); }catch(e){} });
       status('V93 OK — zombies 2401-2415 bloqués — joueurs: '+arr(window.state.players).length+' — '+(reason||'purge'));
       try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(e){}
       return true;
@@ -14467,8 +14522,8 @@ window.BP_LOCAL_ONLY = true;
     const arr = Array.from(set).filter(Boolean);
     const s = getState();
     s.deletedPlayerKeys = arr;
-    try{ localStorage.setItem('bp_v92_deleted_player_keys', JSON.stringify(arr)); }catch(e){}
-    try{ localStorage.setItem('bp_v94_deleted_player_keys', JSON.stringify(arr)); }catch(e){}
+    try{ window.__bpV99BlockedSetItem('bp_v92_deleted_player_keys', JSON.stringify(arr)); }catch(e){}
+    try{ window.__bpV99BlockedSetItem('bp_v94_deleted_player_keys', JSON.stringify(arr)); }catch(e){}
   }
   function cardInfo(card){
     const vals = [];
@@ -14538,7 +14593,7 @@ window.BP_LOCAL_ONLY = true;
   }
   function sb(){
     if(!hasConfig()) throw new Error('Supabase non configuré.');
-    if(!sbClient) sbClient = window.supabase.createClient(window.BP_MANUAL_SUPABASE_URL, window.BP_MANUAL_SUPABASE_ANON_KEY);
+    if(!sbClient) sbClient = window.__bpV99SupabaseClient(window.BP_MANUAL_SUPABASE_URL, window.BP_MANUAL_SUPABASE_ANON_KEY);
     return sbClient;
   }
   function compactState(st){
@@ -14552,7 +14607,7 @@ window.BP_LOCAL_ONLY = true;
     return s;
   }
   function localSave(){
-    try { localStorage.setItem('bp_wc_dev', JSON.stringify(current())); } catch(e) { console.warn(e); }
+    try { window.__bpV99BlockedSetItem('bp_wc_dev', JSON.stringify(current())); } catch(e) { console.warn(e); }
   }
   async function readBDD(){
     const {data,error} = await sb().from('app_state').select('data,updated_at').eq('id', APP_ID).maybeSingle();
@@ -14730,7 +14785,7 @@ window.BP_LOCAL_ONLY = true;
   function hasConfig(){ return !!(window.supabase && window.BP_MANUAL_SUPABASE_URL && window.BP_MANUAL_SUPABASE_ANON_KEY); }
   function sb(){
     if(!hasConfig()) throw new Error('Supabase non configuré : URL/clé manuelle absente.');
-    if(!sbClient) sbClient = window.supabase.createClient(window.BP_MANUAL_SUPABASE_URL, window.BP_MANUAL_SUPABASE_ANON_KEY);
+    if(!sbClient) sbClient = window.__bpV99SupabaseClient(window.BP_MANUAL_SUPABASE_URL, window.BP_MANUAL_SUPABASE_ANON_KEY);
     return sbClient;
   }
   function compact(st){
@@ -14936,4 +14991,178 @@ window.BP_LOCAL_ONLY = true;
   window.bpCleanGhostTables = cleanGhostTables;
 })();
 </script>
+
+
+<script>
+/* V99 SUPABASE ONLY — couche persistence finale.
+   - Supabase = unique source de vérité.
+   - Aucun chargement depuis LocalStorage.
+   - Aucun autosave BDD.
+   - Deux actions admin uniquement : Recharger depuis BDD / Forcer sauvegarde en BDD. */
+(function(){
+  'use strict';
+  if(window.__BP_V99_SUPABASE_ONLY__) return;
+  window.__BP_V99_SUPABASE_ONLY__ = true;
+
+  const TABLE = 'app_state';
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  let client = null;
+
+  window.BP_SUPABASE_URL = window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL;
+  window.BP_SUPABASE_ANON_KEY = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY;
+
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x || {}));}catch(e){return {}; } }
+  function now(){ return new Date().toISOString(); }
+  function S(){ try{return window.state || state;}catch(e){return window.state || {}; } }
+  function setS(next){
+    next = normalizeState(next);
+    try{
+      if(window.state && typeof window.state === 'object'){
+        Object.keys(window.state).forEach(k=>delete window.state[k]);
+        Object.assign(window.state,next);
+      }else{
+        window.state = next;
+      }
+    }catch(e){ window.state = next; }
+  }
+  function normalizePlayer(p){
+    p = clone(p);
+    const start = Number(p.startFid ?? p.fid ?? p.balance ?? 50);
+    p.name = String(p.name || p.joueur || p.player || '').trim();
+    p.pseudo = String(p.pseudo || p.name || '').trim();
+    p.code = String(p.code || p['Code d\'accès'] || p.accessCode || '').trim();
+    p.startFid = Number.isFinite(start) ? start : 50;
+    p.balance = Number.isFinite(Number(p.balance)) ? Number(p.balance) : p.startFid;
+    p.evolution = Number.isFinite(Number(p.evolution)) ? Number(p.evolution) : 0;
+    p.good = Number.isFinite(Number(p.good)) ? Number(p.good) : 0;
+    p.exact = Number.isFinite(Number(p.exact)) ? Number(p.exact) : 0;
+    if(p.avatar === undefined) p.avatar = null;
+    if(p.secrets === undefined) p.secrets = null;
+    delete p.fid;
+    return p;
+  }
+  function normalizeState(input){
+    const s = clone(input);
+    s.players = arr(s.players).map(normalizePlayer).filter(p=>p.name && /^\d{4}$/.test(String(p.code||'')));
+    s.bets = arr(s.bets);
+    s.matches = arr(s.matches);
+    s.specialEvents = s.specialEvents && typeof s.specialEvents === 'object' && !Array.isArray(s.specialEvents) ? s.specialEvents : {};
+    s.closedDays = s.closedDays && typeof s.closedDays === 'object' && !Array.isArray(s.closedDays) ? s.closedDays : {};
+    s.adminForcedOpenDays = s.adminForcedOpenDays && typeof s.adminForcedOpenDays === 'object' && !Array.isArray(s.adminForcedOpenDays) ? s.adminForcedOpenDays : {};
+    s.officialScoresByDay = s.officialScoresByDay && typeof s.officialScoresByDay === 'object' && !Array.isArray(s.officialScoresByDay) ? s.officialScoresByDay : {};
+    s.officialScoresByMatch = s.officialScoresByMatch && typeof s.officialScoresByMatch === 'object' && !Array.isArray(s.officialScoresByMatch) ? s.officialScoresByMatch : {};
+    s.officialScoresSavedDays = s.officialScoresSavedDays && typeof s.officialScoresSavedDays === 'object' && !Array.isArray(s.officialScoresSavedDays) ? s.officialScoresSavedDays : {};
+    s.summaries = s.summaries && typeof s.summaries === 'object' && !Array.isArray(s.summaries) ? s.summaries : {};
+    s.summaries.day = Object.assign({good:0,exact:0,gain:0,rank:0}, s.summaries.day || {});
+    s.summaries.comp = Object.assign({good:0,exact:0,gain:0,rank:0}, s.summaries.comp || {});
+    s.currentDay = Number(s.currentDay || 1);
+    s.budget = Number(s.budget || 1050);
+    s.reserveTarget = Number(s.reserveTarget || 500);
+    s.schemaVersion = 'v99-supabase-only';
+    s.lastSavedAt = now();
+    delete s.logs;
+    delete s.workflow;
+    delete s.settlementDetails;
+    delete s.simulation;
+    delete s.gainsCalculatedDays;
+    delete s.deletedPlayerKeys;
+    delete s.cloudUpdatedAt;
+    return s;
+  }
+  function counts(s){ s=s||{}; return {players:arr(s.players).length,bets:arr(s.bets).length,matches:arr(s.matches).length}; }
+  function configured(){ return !!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY); }
+  function sb(){
+    if(!configured()) throw new Error('Supabase non configuré');
+    if(!client) client = window.__bpV99SupabaseClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    return client;
+  }
+  function status(msg,kind){
+    let el=document.getElementById('bpManualBDDStatus');
+    if(!el){ el=document.createElement('div'); el.id='bpManualBDDStatus'; el.className='help'; document.body.appendChild(el); }
+    el.className='help '+(kind||'');
+    el.textContent=String(msg||'');
+    console.log('[V99]', msg);
+  }
+  async function readBDD(){
+    const r=await sb().from(TABLE).select('data,updated_at').eq('id',APP_ID).maybeSingle();
+    if(r.error) throw r.error;
+    if(!r.data || !r.data.data) throw new Error('Aucune donnée trouvée dans app_state');
+    return normalizeState(r.data.data);
+  }
+  async function writeBDD(data){
+    const payload=normalizeState(data);
+    const r=await sb().from(TABLE).upsert({id:APP_ID,data:payload,updated_at:now()},{onConflict:'id'});
+    if(r.error) throw r.error;
+    return payload;
+  }
+
+  // Plus aucune sauvegarde locale d'état jeu.
+  window.save = function(){ window.__BP_DIRTY__ = true; status('Modification en mémoire uniquement — BDD non modifiée.', 'warn'); return true; };
+  window.bpCloudSaveDebounced = function(){ return window.save(); };
+  window.bpCloudSave = async function(){ status('Autosave BDD bloqué. Utilise le bouton rouge.', 'warn'); return false; };
+  window.bpForceSaveSupabase = async function(){ return window.bpManualSaveBDD(); };
+  window.bpV95SaveBDD = async function(){ return window.bpManualSaveBDD(); };
+  window.bpV96SaveBDD = async function(){ return window.bpManualSaveBDD(); };
+  window.bpCloudLoad = async function(){ return window.bpManualLoadBDD(); };
+  window.bpForceLoadSupabase = async function(){ return window.bpManualLoadBDD(); };
+  window.bpV95LoadBDD = async function(){ return window.bpManualLoadBDD(); };
+  window.bpV96LoadBDD = async function(){ return window.bpManualLoadBDD(); };
+  window.forceLoadEmbeddedState = function(){ alert('Désactivé : aucun état embarqué ne doit être chargé.'); return false; };
+  window.downloadStandaloneHTMLWithUsers = function(){ alert('Désactivé : export HTML avec données interdit.'); return false; };
+  window.bpV95RecoverLocalBackup = function(){ alert('Désactivé : récupération LocalStorage interdite.'); return false; };
+
+  window.bpManualLoadBDD = async function(){
+    try{
+      if(!confirm('Recharger depuis Supabase ?\n\nLes données affichées seront remplacées par la BDD.')) return false;
+      status('Chargement BDD…','warn');
+      const remote=await readBDD();
+      const c=counts(remote);
+      if(c.players===0 && !confirm('La BDD contient 0 joueur. Charger quand même ?')) return false;
+      setS(remote);
+      if(typeof window.ensurePlayerCodes==='function') { try{ window.ensurePlayerCodes(); }catch(e){} }
+      if(typeof window.repairState==='function') { try{ window.repairState(); }catch(e){} }
+      if(typeof window.renderAll==='function') window.renderAll();
+      status('BDD rechargée — joueurs : '+c.players+' — mises : '+c.bets+' — matchs : '+c.matches, c.players?'good':'warn');
+      return true;
+    }catch(e){ console.error(e); status('Erreur chargement BDD : '+(e.message||e),'bad'); alert('Erreur chargement BDD : '+(e.message||e)); return false; }
+  };
+
+  window.bpManualSaveBDD = async function(){
+    try{
+      const local=normalizeState(S());
+      const lc=counts(local);
+      let rc={players:0,bets:0,matches:0};
+      try{ rc=counts(await readBDD()); }catch(e){}
+      if(lc.players===0 && rc.players>0){ alert('BLOCAGE : impossible d’écraser une BDD contenant des joueurs avec un écran à 0 joueur.'); return false; }
+      if(lc.matches===0 && rc.matches>0){ alert('BLOCAGE : impossible d’écraser une BDD contenant des matchs avec un écran à 0 match.'); return false; }
+      const typed=prompt('ATTENTION — écrasement BDD\n\nÉcran actuel : '+lc.players+' joueurs, '+lc.bets+' mises, '+lc.matches+' matchs.\nBDD actuelle : '+rc.players+' joueurs, '+rc.bets+' mises, '+rc.matches+' matchs.\n\nTape exactement : ECRASER BDD');
+      if(typed!=='ECRASER BDD'){ status('Sauvegarde annulée.','warn'); return false; }
+      status('Sauvegarde BDD en cours…','warn');
+      const saved=await writeBDD(local);
+      const sc=counts(saved);
+      status('BDD sauvegardée — joueurs : '+sc.players+' — mises : '+sc.bets+' — matchs : '+sc.matches,'good');
+      alert('Sauvegarde BDD terminée.');
+      return true;
+    }catch(e){ console.error(e); status('Erreur sauvegarde BDD : '+(e.message||e),'bad'); alert('Erreur sauvegarde BDD : '+(e.message||e)); return false; }
+  };
+
+  function cleanUI(){
+    const backup=document.getElementById('backup');
+    if(backup){
+      backup.innerHTML='<h2>🗄️ BDD Supabase</h2><div class="card" id="bpManualBDDPanel" style="border-color:rgba(250,204,21,.55)"><h2>Mode manuel strict</h2><div class="help"><b>Important :</b> Supabase est l’unique source de vérité. Pas d’autosave, pas de LocalStorage jeu, pas d’état embarqué.</div><div class="muted" style="margin-bottom:12px"><b>Recharger depuis BDD</b> remplace l’écran par Supabase.<br><b>Forcer sauvegarde en BDD</b> écrase Supabase après confirmation écrite.</div><button class="action secondary" onclick="bpManualLoadBDD()">Recharger depuis BDD</button><button class="action danger" onclick="bpManualSaveBDD()">Forcer sauvegarde en BDD</button><div id="bpManualBDDStatus" class="help">Statut : prêt.</div></div>';
+    }
+    const nav=document.getElementById('navBackup'); if(nav) nav.textContent='🗄️ BDD';
+    document.querySelectorAll('#bpSupabasePanel,#bpAutoSavePanel,#bpForceLoadSupabasePanel,#bpV49DataSafetyPanel,#bpV50AuditPanel,#bpV52AuditPanel,#bpV54CloudAuditPanel,#bpV95ManualPanel,#githubPersistPanel,#dailyBackupPanel,#downloadStandaloneHTMLBtn').forEach(el=>el.remove());
+    document.querySelectorAll('button').forEach(b=>{ const t=(b.textContent||'').toLowerCase(); if(t.includes('sauver joueurs en local')||t.includes('audit supabase')||t.includes('forcer chargement supabase')) b.remove(); });
+  }
+
+  const oldRender=window.renderAll;
+  if(typeof oldRender==='function'){
+    window.renderAll=function(){ const r=oldRender.apply(this,arguments); setTimeout(cleanUI,20); return r; };
+  }
+  document.addEventListener('DOMContentLoaded',function(){ cleanUI(); status('V99 prêt — cliquer sur Recharger depuis BDD.', 'good'); setInterval(cleanUI,1200); });
+})();
+</script>
+
 </body></html>
