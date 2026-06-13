@@ -6049,7 +6049,11 @@ function bpDialog({title="Confirmation", subtitle="B Partner World Cup", message
   });
 }
 function bpAlert(message,{title="Information",icon="ℹ️"}={}){
-  return bpDialog({title, message, icon, confirmText:"OK", showCancel:false});
+  try{
+    bpForceCloseModal();
+    bpSuccessToast(message||"Opération effectuée.");
+  }catch(e){}
+  return Promise.resolve(true);
 }
 
 function bpShowSaving(show, message){
