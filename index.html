@@ -16207,348 +16207,256 @@ window.BP_LOCAL_ONLY = true;
 </script>
 
 
+
 <script>
-/* V108 — SOURCE UNIQUE DES MISES
-   Objectif : ADMIN et USER lisent/écrivent exclusivement state.bets.
-   Aucun localStorage, aucune source legacy, aucun fallback DOM.
-*/
+/* V110 — SOURCE UNIQUE BDD : ADMIN + USER lisent/écrivent app_state.data.bets.
+   Objectif : supprimer les écarts entre la vue ADMIN et la vue USER. */
 (function(){
   'use strict';
-  if(window.__BP_V108_SINGLE_BETS_SOURCE__) return;
-  window.__BP_V108_SINGLE_BETS_SOURCE__ = true;
+  if(window.__BP_V110_SINGLE_BDD_SOURCE__) return;
+  window.__BP_V110_SINGLE_BDD_SOURCE__ = true;
 
-  function S(){ return window.state || state; }
-  function arr(x){ return Array.isArray(x) ? x : []; }
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  let loading = false;
+
+  function $(id){ return document.getElementById(id); }
   function norm(v){ return String(v == null ? '' : v).trim(); }
-  function n(v,d){ v=Number(v); return Number.isFinite(v)?v:(d||0); }
-  function samePlayer(a,b){ return norm(a).toLowerCase() === norm(b).toLowerCase(); }
-  function ensureBets(){ const s=S(); if(!Array.isArray(s.bets)) s.bets=[]; return s.bets; }
-  function getDay(){ try{return Number(currentPronoDay());}catch(e){return Number(S().currentDay||1);} }
-  function currentP(){
-    try{
-      if(typeof window.bpCurrentPlayer === 'function'){
-        const p=window.bpCurrentPlayer();
-        if(p) return p;
+  function clone(x){ return JSON.parse(JSON.stringify(x || {})); }
+  function isAdminCode(code){ code = norm(code); return code === '1573' || code.toUpperCase() === 'ADMIN'; }
+  function getClient(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
+      throw new Error('Configuration BDD absente.');
+    }
+    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+  }
+  function players(){ return (window.state && Array.isArray(window.state.players)) ? window.state.players : []; }
+  function findIdxByCode(code){ code=norm(code); return players().findIndex(p => norm(p && p.code) === code); }
+  function setLegacySession(role, idx, code){
+    try{ currentRole = role; }catch(e){}
+    try{ currentUserIndex = (idx === null || idx === undefined ? null : Number(idx)); }catch(e){}
+    window.currentRole = role;
+    window.currentUserIndex = (idx === null || idx === undefined ? null : Number(idx));
+    window.currentUserCode = code || null;
+    window.bpIsAuthenticated = !!role;
+    document.body.classList.toggle('bp-admin', role === 'admin');
+    document.body.classList.toggle('bp-user', role === 'user');
+    document.body.classList.toggle('bp-locked', !role);
+  }
+  function hideLogin(){ const l=$('loginScreen'); if(l) l.style.display='none'; }
+  function showErr(msg){ const e=$('loginError'); if(e){ e.textContent=msg||'Code incorrect.'; e.style.display='block'; e.style.visibility='visible'; } }
+  function hideErr(){ const e=$('loginError'); if(e){ e.textContent=''; e.style.display='none'; } }
+  function setHeaderAdmin(){
+    const n=$('headerUserName'), a=$('headerAvatar');
+    if(n) n.textContent='Admin';
+    if(a){ if(a.tagName === 'IMG') a.removeAttribute('src'); a.textContent='A'; }
+  }
+  function selectIdx(idx){ const sel=$('activePlayer'); if(sel && idx !== null && idx !== undefined) sel.value=String(idx); }
+
+  function normalizeState(st){
+    st = st && typeof st === 'object' ? st : {};
+    if(!Array.isArray(st.players)) st.players = [];
+    if(!Array.isArray(st.matches)) st.matches = [];
+    if(!Array.isArray(st.bets)) st.bets = [];
+    if(!Array.isArray(st.logs)) st.logs = [];
+    if(!Array.isArray(st.settlementDetails)) st.settlementDetails = [];
+    st.bets = st.bets.map(b => {
+      const x = clone(b);
+      x.day = Number(x.day || 0);
+      x.matchId = String(x.matchId || '').trim();
+      x.player = String(x.player || x.name || '').trim();
+      if((x.scoreA === undefined || x.scoreB === undefined) && x.score){
+        const sp = String(x.score).split(/[-–]/);
+        if(sp.length >= 2){ x.scoreA = Number(sp[0]); x.scoreB = Number(sp[1]); }
       }
-    }catch(e){}
+      x.scoreA = Number(x.scoreA ?? 0);
+      x.scoreB = Number(x.scoreB ?? 0);
+      x.score = `${x.scoreA} - ${x.scoreB}`;
+      x.stake = Number(x.stake ?? x.mise ?? 1);
+      x.status = String(x.status || 'DRAFT').toUpperCase() === 'VALIDATED' ? 'VALIDATED' : 'DRAFT';
+      if(!x.prediction){ x.prediction = x.scoreA > x.scoreB ? 'A' : x.scoreB > x.scoreA ? 'B' : 'N'; }
+      x.predictedOutcome = x.predictedOutcome || x.prediction;
+      return x;
+    }).filter(b => b.day && b.matchId && b.player);
+    return st;
+  }
+
+  async function readSource(){
+    if(loading) return window.state;
+    loading = true;
     try{
-      if(typeof window.player === 'function'){
-        const p=window.player();
-        if(p) return p;
-      }
-    }catch(e){}
+      const res = await getClient().from('app_state').select('data').eq('id', APP_ID).maybeSingle();
+      if(res.error) throw res.error;
+      const remote = normalizeState(res.data && res.data.data ? clone(res.data.data) : {});
+      if(!remote.players.length) throw new Error('Aucun joueur dans app_state.data.players.');
+      window.state = remote;
+      try{ state = remote; }catch(e){}
+      try{ if(typeof repairState === 'function') repairState(); }catch(e){}
+      return remote;
+    }finally{
+      loading = false;
+    }
+  }
+
+  async function writeSource(reason){
+    const st = normalizeState(clone(window.state || state || {}));
+    st.lastSavedAt = new Date().toISOString();
+    st.lastSaveReason = reason || 'manual';
+    const previous = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      const res = await getClient().from('app_state').upsert({id:APP_ID,data:st,updated_at:new Date().toISOString()},{onConflict:'id'});
+      if(res.error) throw res.error;
+      window.state = st;
+      try{ state = st; }catch(e){}
+      return true;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = previous === true;
+    }
+  }
+
+  function currentPlayer(){
+    if(window.currentRole === 'user'){
+      let idx = findIdxByCode(window.currentUserCode);
+      if(idx >= 0){ setLegacySession('user', idx, norm(players()[idx].code)); selectIdx(idx); return players()[idx]; }
+      return null;
+    }
+    if(window.currentRole === 'admin'){
+      const sel = $('activePlayer');
+      const idx = sel && sel.value !== '' ? Number(sel.value) : -1;
+      return idx >= 0 ? players()[idx] || null : null;
+    }
     return null;
   }
-  function split(score){
-    try{ if(typeof splitScore === 'function') return splitScore(score); }catch(e){}
-    const parts=String(score||'0 - 0').replace(/\s/g,'').split('-');
-    return [n(parts[0],0), n(parts[1],0)];
-  }
-  function scoreTxt(a,b){
-    try{ return scoreText(a,b); }catch(e){ return String(n(a,0))+' - '+String(n(b,0)); }
-  }
-  function outcome(a,b){
-    try{ return outcomeFromScore(a,b); }catch(e){ a=n(a); b=n(b); return a>b?'A':a<b?'B':'N'; }
-  }
-  function matchById(id){ return arr(S().matches).find(m=>String(m.id)===String(id)) || null; }
+  window.bpCurrentPlayer = currentPlayer;
+  window.player = currentPlayer;
 
-  window.bpFindBet = function(day, matchId, playerName){
-    return ensureBets().find(b =>
-      Number(b.day) === Number(day) &&
-      String(b.matchId) === String(matchId) &&
-      samePlayer(b.player, playerName)
-    ) || null;
-  };
-
-  window.bpNormalizeBetsSingleSource = function(){
-    const s=S();
-    s.bets = arr(s.bets).map(b=>{
-      const ss = split(b.score);
-      const scoreA = n(b.scoreA, ss[0]);
-      const scoreB = n(b.scoreB, ss[1]);
-      const pred = b.prediction || b.predictedOutcome || outcome(scoreA, scoreB);
-      return Object.assign({}, b, {
-        day: n(b.day, 1),
-        matchId: String(b.matchId || ''),
-        player: norm(b.player || b.playerName || b.name || ''),
-        scoreA,
-        scoreB,
-        score: scoreTxt(scoreA, scoreB),
-        prediction: pred,
-        predictedOutcome: pred,
-        stake: Math.min(4, Math.max(1, n(b.stake || b.mise, 1))),
-        status: String(b.status || 'DRAFT').toUpperCase(),
-        validatedAt: b.validatedAt || null
-      });
-    }).filter(b=>b.player && b.matchId);
-    // Déduplication stricte : une seule mise par joueur / journée / match.
-    const map = new Map();
-    s.bets.forEach(b=>{
-      const key = [Number(b.day), String(b.matchId), norm(b.player).toLowerCase()].join('|');
-      map.set(key, b);
-    });
-    s.bets = Array.from(map.values());
-    return s.bets;
-  };
-
-  window.bpUpsertBetSingleSource = function(day, matchId, playerName, data, status, validatedAt){
-    window.bpNormalizeBetsSingleSource();
-    const s=S();
-    const old = window.bpFindBet(day, matchId, playerName);
-    const scoreA = n(data && data.scoreA, split(data && data.score)[0]);
-    const scoreB = n(data && data.scoreB, split(data && data.score)[1]);
-    const st = String(status || (data && data.status) || (old && old.status) || 'DRAFT').toUpperCase();
-    const payload = Object.assign({}, old || {}, data || {}, {
-      day: Number(day),
-      matchId: String(matchId),
-      player: norm(playerName),
-      scoreA,
-      scoreB,
-      score: scoreTxt(scoreA, scoreB),
-      prediction: outcome(scoreA, scoreB),
-      predictedOutcome: outcome(scoreA, scoreB),
-      stake: Math.min(4, Math.max(1, n(data && (data.stake || data.mise), old ? old.stake : 1))),
-      status: st,
-      validatedAt: st === 'VALIDATED' ? (validatedAt || (old && old.validatedAt) || new Date().toISOString()) : null
-    });
-    s.bets = arr(s.bets).filter(b => !(
-      Number(b.day) === Number(day) &&
-      String(b.matchId) === String(matchId) &&
-      samePlayer(b.player, playerName)
-    ));
-    s.bets.push(payload);
-    return payload;
-  };
-
-  function formData(matchId){
-    const a = n(document.querySelector('.scoreA[data-match="'+matchId+'"]')?.value, 0);
-    const b = n(document.querySelector('.scoreB[data-match="'+matchId+'"]')?.value, 0);
-    const stake = n(document.querySelector('.stake[data-match="'+matchId+'"]')?.value, 1);
-    return {scoreA:a, scoreB:b, score:scoreTxt(a,b), prediction:outcome(a,b), predictedOutcome:outcome(a,b), stake};
-  }
-
-  // Fonctions historiques réorientées vers la source unique.
-  window.getAdminBet = function(day, matchId, playerName){ return window.bpFindBet(day, matchId, playerName); };
-  try{ getAdminBet = window.getAdminBet; }catch(e){}
-
-  window.ensureAdminBet = function(day, matchId, playerName){
-    return window.bpFindBet(day, matchId, playerName) ||
-      window.bpUpsertBetSingleSource(day, matchId, playerName, {scoreA:0,scoreB:0,stake:1}, 'DRAFT', null);
-  };
-  try{ ensureAdminBet = window.ensureAdminBet; }catch(e){}
-
-  window.upsertBet = function(matchId, data, status){
-    const p=currentP();
-    if(!p) return null;
-    return window.bpUpsertBetSingleSource(getDay(), matchId, p.name, data, status);
-  };
-  try{ upsertBet = window.upsertBet; }catch(e){}
-
-  window.renderAdminBetsTable = function(){
-    window.bpNormalizeBetsSingleSource();
-    const body=document.getElementById('adminBetsBody');
-    if(!body) return;
-    if(!document.getElementById('adminBetsDay')) return;
-    if(!adminBetsDay.innerHTML && typeof renderAdminBetsFilters==='function') renderAdminBetsFilters();
-
-    const day=Number(adminBetsDay.value || S().currentDay || 1);
-    const selected=adminBetsPlayer.value || '__ALL__';
-    const matches=arr(S().matches).filter(m=>Number(m.day)===day);
-    const players=arr(S().players).filter(p=>selected==='__ALL__' || p.name===selected);
-    const rows=[];
-
-    matches.forEach(m=>{
-      players.forEach(p=>{
-        const b=window.bpFindBet(day,m.id,p.name);
-        const pname=String(p.name||'').replace(/'/g,"\\'");
-        if(!b){
-          rows.push('<tr><td>J'+day+'</td><td>'+f(m.teamA)+' vs '+f(m.teamB)+'</td><td>'+p.name+'</td><td colspan="5" class="muted">Aucune mise</td><td><button class="action secondary admin-mini-btn" onclick="adminCreateBet('+day+',\''+m.id+'\',\''+pname+'\')">Créer</button></td></tr>');
-          return;
-        }
-        const rid=adminBetId(day,m.id,p.name);
-        const sc=split(b.score);
-        const sa=n(b.scoreA,sc[0]), sb=n(b.scoreB,sc[1]);
-        rows.push('<tr>'+
-          '<td>J'+day+'</td>'+
-          '<td>'+f(m.teamA)+' vs '+f(m.teamB)+'</td>'+
-          '<td>'+p.name+'</td>'+
-          '<td><span class="badge">'+outcomeLabel(outcome(sa,sb),m)+'</span></td>'+
-          '<td><div class="score-selects"><select id="'+rid+'_sa">'+scoreOptions(sa)+'</select><span class="score-dash">-</span><select id="'+rid+'_sb">'+scoreOptions(sb)+'</select></div></td>'+
-          '<td><select id="'+rid+'_stake">'+stakeOptions(b.stake||1)+'</select></td>'+
-          '<td><select id="'+rid+'_status"><option value="DRAFT" '+(b.status==='DRAFT'?'selected':'')+'>Brouillon</option><option value="VALIDATED" '+(b.status==='VALIDATED'?'selected':'')+'>Validé</option></select></td>'+
-          '<td>'+(b.validatedAt ? new Date(b.validatedAt).toLocaleString('fr-FR') : '<span class="muted">—</span>')+'</td>'+
-          '<td><button class="action admin-mini-btn" onclick="adminSaveBet('+day+',\''+m.id+'\',\''+pname+'\')">Sauver</button><button class="action danger admin-mini-btn" onclick="adminDeleteBet('+day+',\''+m.id+'\',\''+pname+'\')">Suppr.</button></td>'+
-        '</tr>');
-      });
-    });
-    body.innerHTML = rows.join('') || '<tr><td colspan="9" class="muted">Aucun match sur cette journée.</td></tr>';
-  };
-  try{ renderAdminBetsTable = window.renderAdminBetsTable; }catch(e){}
-
-  window.adminCreateBet = function(day,matchId,playerName){
-    window.ensureAdminBet(day,matchId,playerName);
-    if(typeof save==='function') save();
-    window.renderAdminBetsTable();
-  };
-  try{ adminCreateBet = window.adminCreateBet; }catch(e){}
-
-  window.adminSaveBet = function(day,matchId,playerName){
-    const rid=adminBetId(day,matchId,playerName);
-    const old=window.bpFindBet(day,matchId,playerName);
-    const sa=n(document.getElementById(rid+'_sa')?.value,0);
-    const sb=n(document.getElementById(rid+'_sb')?.value,0);
-    const stake=n(document.getElementById(rid+'_stake')?.value,1);
-    const status=String(document.getElementById(rid+'_status')?.value || 'DRAFT').toUpperCase();
-    window.bpUpsertBetSingleSource(day,matchId,playerName,{scoreA:sa,scoreB:sb,stake:stake},status,(old&&old.status===status)?old.validatedAt:null);
-    try{ if(typeof log==='function') log('SYSTEM','Admin correction mise '+playerName+' '+matchId,0); }catch(e){}
-    if(typeof save==='function') save();
-    window.renderAdminBetsTable();
-    try{ if(typeof renderAdmin==='function') renderAdmin(); }catch(e){}
-  };
-  try{ adminSaveBet = window.adminSaveBet; }catch(e){}
-
-  window.adminDeleteBet = async function(day,matchId,playerName){
-    const s=S();
-    s.bets=ensureBets().filter(b=>!(Number(b.day)===Number(day)&&String(b.matchId)===String(matchId)&&samePlayer(b.player,playerName)));
-    try{ if(typeof log==='function') log('SYSTEM','Admin suppression mise '+playerName+' '+matchId,0); }catch(e){}
-    if(typeof save==='function') save();
-    window.renderAdminBetsTable();
-    try{ if(typeof renderAdmin==='function') renderAdmin(); }catch(e){}
-  };
-  try{ adminDeleteBet = window.adminDeleteBet; }catch(e){}
-
-  window.renderBets = function(){
-    window.bpNormalizeBetsSingleSource();
-    const p=currentP();
-    const rows=document.getElementById('betRows');
-    if(!p){
-      if(rows) rows.innerHTML='<div class="card muted">Connecte-toi avec ton code joueur pour afficher les pronostics.</div>';
-      return;
+  // Login : on charge d'abord app_state.data, ensuite seulement on résout ADMIN / joueur.
+  window.loginWithCode = async function(){
+    hideErr();
+    const input = $('loginCode');
+    const code = norm(input && input.value);
+    if(!code){ showErr('Saisis ton code ADMIN ou ton code joueur.'); return false; }
+    try{
+      await readSource();
+    }catch(e){
+      showErr('Impossible de charger la BDD : ' + (e.message || e));
+      return false;
     }
 
-    const day=getDay();
-    if(document.getElementById('pronoDayTitle')) pronoDayTitle.textContent='Journée '+day+' / '+maxCalendarDay();
-    if(document.getElementById('pronoDayDate')) pronoDayDate.textContent=dayDate(day)||'—';
-    if(document.getElementById('pronoDayStatus')){
-      const available=pronoDayIsAvailable(day);
-      const future=Number(day)>Number(onlyOpenDay());
-      pronoDayStatus.innerHTML = available
-        ? '<span class="day-status-open">Journée ouverte aux mises</span>'
-        : future ? '<span class="day-status-closed">Journée future · mise non disponible</span>'
-        : isDayClosed(day) ? '<span class="day-status-closed">Journée fermée · mise non disponible</span>'
-        : '<span class="day-status-closed">Mise non disponible</span>';
-    }
-    if(document.getElementById('prevPronoDayBtn')) prevPronoDayBtn.disabled=day<=1;
-    if(document.getElementById('nextPronoDayBtn')) nextPronoDayBtn.disabled=day>=maxCalendarDay();
-    const active=document.getElementById('activePlayer');
-    if(active){
-      active.innerHTML=arr(S().players).map((x,i)=>'<option value="'+i+'">'+x.name+'</option>').join('');
-      const idx=arr(S().players).findIndex(x=>samePlayer(x.name,p.name));
-      if(idx>=0) active.value=String(idx);
+    if(isAdminCode(code)){
+      setLegacySession('admin', null, null);
+      hideLogin();
+      const sel=$('activePlayer'); if(sel){ sel.value=''; sel.selectedIndex=-1; }
+      if(typeof applyRoleUI === 'function') applyRoleUI();
+      const lock=$('adminLock'), panel=$('adminPanel');
+      if(lock) lock.style.display='none';
+      if(panel) panel.style.display='block';
+      if(typeof renderAll === 'function') renderAll();
+      setHeaderAdmin();
+      if(typeof tab === 'function') tab('admin', $('navAdmin'));
+      return false;
     }
 
-    const todays=arr(S().matches).filter(m=>Number(m.day)===Number(day));
-    if(!rows) return;
-    rows.innerHTML=todays.map(m=>{
-      const found=window.bpFindBet(day,m.id,p.name);
-      const b=found || {day,matchId:m.id,player:p.name,prediction:'N',score:'0 - 0',scoreA:0,scoreB:0,stake:1,status:'DRAFT',validatedAt:null};
-      const sc=split(b.score), sa=n(b.scoreA,sc[0]), sb=n(b.scoreB,sc[1]);
-      const isValidated=String(b.status||'DRAFT').toUpperCase()==='VALIDATED';
-      const available=pronoDayIsAvailable(day);
-      const locked=!available || isValidated;
-      const unavailableLabel = Number(day)>Number(onlyOpenDay()) ? 'Journée future' : isDayClosed(day) ? 'Journée fermée' : 'Mise non disponible';
-
-      return '<div class="card bet-card '+(locked?'lockedCard':'')+'" id="betCard_'+m.id+'">'+
-        '<div class="bet-title"><h3 style="margin:0">'+f(m.teamA)+' vs '+f(m.teamB)+'</h3>'+
-        (!available ? '<span class="badge closed">Mise non disponible</span>' : isValidated ? '<span class="badge ok">✅ Validée</span>' : '<span class="badge">Brouillon</span>')+
-        '</div>'+
-        matchInfoHTML(m)+
-        '<div class="bet-form score-only"><label style="width:100%"><span class="score-main-label">Score pronostiqué</span>'+
-        '<div class="bet-inline-row"><div class="flag-wrap">'+flagOnly(m.teamA)+'</div>'+
-        '<input type="number" min="0" max="99" aria-label="Score '+m.teamA+'" data-match="'+m.id+'" class="scoreA" value="'+sa+'" '+(locked?'disabled':'')+'>'+
-        '<span class="score-dash">-</span>'+
-        '<input type="number" min="0" max="99" aria-label="Score '+m.teamB+'" data-match="'+m.id+'" class="scoreB" value="'+sb+'" '+(locked?'disabled':'')+'>'+
-        '<div class="flag-wrap">'+flagOnly(m.teamB)+'</div></div>'+
-        '<div class="team-label-row"><span>'+m.teamA+'</span><span>'+m.teamB+'</span></div>'+
-        '<div class="stake-container"><div class="stake-label">Mise</div><select data-match="'+m.id+'" class="stake" '+(locked?'disabled':'')+'>'+stakeOptions(b.stake||1)+'</select></div>'+
-        '<div class="score-helper">Le résultat est déduit automatiquement du score choisi.</div></label></div>'+
-        '<div class="prediction-derived">Résultat pronostiqué : <b>'+outcomeLabel(outcome(sa,sb),m)+'</b></div>'+
-        betOutcomeHTML(b,m)+
-        '<div class="bet-actions"><div class="bet-status muted">'+
-        (!available ? unavailableLabel : isValidated && b.validatedAt ? 'Validée le '+new Date(b.validatedAt).toLocaleString('fr-FR') : 'À confirmer avant clôture.')+
-        '</div>'+
-        (!available ? '<button class="action secondary" disabled>Mise non disponible</button>' : isValidated ? '<button class="action editBtn" onclick="editBet(\''+m.id+'\')">✏️ Modifier la mise</button>' : '<button class="action" onclick="validateSingleBet(\''+m.id+'\')">Valider la mise</button>')+
-        '</div></div>';
-    }).join('');
-
-    if(p.secrets && p.secrets.sealed){
-      if(window.secretWinner) secretWinner.value=p.secrets.winner||'';
-      if(window.secretBestPlayer) secretBestPlayer.value=p.secrets.bestPlayer||'';
-      if(window.secretTopScorer) secretTopScorer.value=p.secrets.topScorer||'';
-      if(window.secretWinner) secretWinner.disabled=true;
-      if(window.secretBestPlayer) secretBestPlayer.disabled=true;
-      if(window.secretTopScorer) secretTopScorer.disabled=true;
-      const when=p.secrets.validatedAt ? new Date(p.secrets.validatedAt).toLocaleString('fr-FR') : '';
-      if(window.secretInfo) secretInfo.innerHTML='<div class="secret-saved">🔒 Choix secrets sauvegardés'+(when?' le '+when:'')+'. Ils sont visibles par l’admin.</div>';
-    }
-    try{ if(typeof renderPersonalDailyRecap==='function') renderPersonalDailyRecap(p); }catch(e){}
+    if(!/^\d{4}$/.test(code)){ showErr('Code joueur invalide : 4 chiffres attendus.'); return false; }
+    const idx = findIdxByCode(code);
+    if(idx < 0){ showErr('Code incorrect ou joueur absent de la BDD.'); return false; }
+    setLegacySession('user', idx, code);
+    hideLogin();
+    selectIdx(idx);
+    if(typeof applyRoleUI === 'function') applyRoleUI();
+    if(typeof renderAll === 'function') renderAll();
+    selectIdx(idx);
+    if(typeof tab === 'function') tab('bets', $('navBets'));
+    return false;
   };
-  try{ renderBets = window.renderBets; }catch(e){}
 
+  // Rendu USER : force la recherche dans state.bets avec la même clé que l'admin.
+  const oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function'){
+    window.renderBets = function(){
+      const r = oldRenderBets.apply(this, arguments);
+      try{
+        if(window.currentRole !== 'user') return r;
+        const p = currentPlayer();
+        if(!p) return r;
+        const day = typeof currentPronoDay === 'function' ? Number(currentPronoDay()) : Number((window.state||state).currentDay || 1);
+        document.querySelectorAll('#betRows .bet-card').forEach(card => {
+          const matchId = String(card.id || '').replace('betCard_','');
+          if(!matchId) return;
+          const b = ((window.state||state).bets || []).find(x =>
+            Number(x.day) === day &&
+            String(x.matchId) === matchId &&
+            String(x.player).trim() === String(p.name).trim()
+          );
+          if(!b) return;
+          const a = card.querySelector('.scoreA'); if(a) a.value = String(b.scoreA);
+          const c = card.querySelector('.scoreB'); if(c) c.value = String(b.scoreB);
+          const s = card.querySelector('.stake'); if(s) s.value = String(b.stake);
+          const badge = card.querySelector('.bet-title .badge');
+          if(badge){ badge.textContent = b.status === 'VALIDATED' ? '✅ Validée' : 'Brouillon'; badge.className = b.status === 'VALIDATED' ? 'badge ok' : 'badge'; }
+          const status = card.querySelector('.bet-status');
+          if(status && b.status === 'VALIDATED') status.innerHTML = b.validatedAt ? 'Validée le ' + new Date(b.validatedAt).toLocaleString('fr-FR') : '<span class="good">Validée</span>';
+          const pred = card.querySelector('.prediction-derived');
+          const m = ((window.state||state).matches||[]).find(x => String(x.id) === matchId);
+          if(pred && m){
+            const label = b.scoreA > b.scoreB ? m.teamA : b.scoreB > b.scoreA ? m.teamB : 'Nul';
+            pred.innerHTML = 'Résultat pronostiqué : <b>' + label + '</b>';
+          }
+        });
+      }catch(e){ console.error('[V110] rendu user', e); }
+      return r;
+    };
+  }
+
+  // Sauvegarde USER : écrit la mise dans state.bets puis dans app_state.data.bets.
   window.validateSingleBet = async function(matchId){
-    const day=getDay();
-    if(!pronoDayIsAvailable(day)) return bpAlert('Mise non disponible sur cette journée.',{icon:'🔒'});
-    const p=currentP(), m=matchById(matchId), data=formData(matchId);
-    if(!p || !m) return alert('Joueur ou match introuvable.');
-    const label=outcomeLabel(data.prediction,m);
-    let ok=true;
-    if(typeof bpConfirmBet==='function') ok=await bpConfirmBet({match:m.teamA+' vs '+m.teamB,result:label,score:data.score,stake:data.stake});
-    if(!ok) return false;
-    window.bpUpsertBetSingleSource(day,matchId,p.name,data,'VALIDATED',new Date().toISOString());
-    try{ if(typeof log==='function') log(p.name,'Mise validée '+matchId,0); }catch(e){}
-    if(typeof save==='function') save();
-    if(typeof renderAll==='function') renderAll(); else window.renderBets();
-    return true;
+    try{
+      const p = currentPlayer();
+      if(!p) throw new Error('Joueur introuvable.');
+      const day = typeof currentPronoDay === 'function' ? Number(currentPronoDay()) : Number((window.state||state).currentDay || 1);
+      const scoreA = Number(document.querySelector(`.scoreA[data-match="${matchId}"]`)?.value ?? 0);
+      const scoreB = Number(document.querySelector(`.scoreB[data-match="${matchId}"]`)?.value ?? 0);
+      const stake = Number(document.querySelector(`.stake[data-match="${matchId}"]`)?.value ?? 1);
+      const pred = scoreA > scoreB ? 'A' : scoreB > scoreA ? 'B' : 'N';
+      const st = window.state || state;
+      st.bets = Array.isArray(st.bets) ? st.bets : [];
+      st.bets = st.bets.filter(b => !(Number(b.day) === day && String(b.matchId) === String(matchId) && String(b.player).trim() === String(p.name).trim()));
+      st.bets.push({day,matchId:String(matchId),player:p.name,scoreA,scoreB,score:`${scoreA} - ${scoreB}`,prediction:pred,predictedOutcome:pred,stake,status:'VALIDATED',validatedAt:new Date().toISOString()});
+      window.state = st; try{ state = st; }catch(e){}
+      await writeSource('user-bet');
+      if(typeof renderAll === 'function') renderAll();
+      if(typeof bpAlert === 'function') await bpAlert('Mise validée et sauvegardée en BDD.', {icon:'✅'}); else alert('Mise validée et sauvegardée en BDD.');
+      return true;
+    }catch(e){ alert('Mise non sauvegardée : ' + (e.message || e)); return false; }
   };
-  try{ validateSingleBet = window.validateSingleBet; }catch(e){}
 
-  window.editBet = function(matchId){
-    const day=getDay(), p=currentP();
-    if(!pronoDayIsAvailable(day)) return bpAlert('Les pronostics sont clôturés.',{icon:'🔒'});
-    const b=p && window.bpFindBet(day,matchId,p.name);
-    if(b){ b.status='DRAFT'; b.validatedAt=null; }
-    if(typeof save==='function') save();
-    if(typeof renderAll==='function') renderAll(); else window.renderBets();
+  // Sauvegarde ADMIN : même source state.bets puis app_state.data.bets.
+  const oldAdminSaveBet = window.adminSaveBet;
+  window.adminSaveBet = async function(day, matchId, playerName){
+    try{
+      if(typeof oldAdminSaveBet === 'function') oldAdminSaveBet.apply(this, arguments);
+      await writeSource('admin-bet');
+      await readSource();
+      if(typeof renderAll === 'function') renderAll();
+      if(typeof renderAdminBetsTable === 'function') renderAdminBetsTable();
+      return true;
+    }catch(e){ alert('Sauvegarde admin non écrite en BDD : ' + (e.message || e)); return false; }
   };
-  try{ editBet = window.editBet; }catch(e){}
 
-  window.bpAuditBetsSingleSource = function(playerName){
-    window.bpNormalizeBetsSingleSource();
-    const s=S();
-    const rows=arr(s.bets).filter(b=>!playerName || samePlayer(b.player,playerName))
-      .sort((a,b)=>Number(a.day)-Number(b.day)||String(a.matchId).localeCompare(String(b.matchId))||String(a.player).localeCompare(String(b.player)));
-    console.table(rows.map(b=>({joueur:b.player,journee:b.day,matchId:b.matchId,score:b.score,mise:b.stake,statut:b.status,validation:b.validatedAt})));
+  // Audit console rapide.
+  window.bpV110AuditBets = async function(playerName){
+    await readSource();
+    const name = playerName || (currentPlayer() && currentPlayer().name) || '';
+    const rows = ((window.state||state).bets||[]).filter(b => !name || String(b.player).trim() === String(name).trim())
+      .map(b => ({joueur:b.player, journee:b.day, matchId:b.matchId, score:b.score, mise:b.stake, statut:b.status}));
+    console.table(rows);
     return rows;
   };
 
-  const oldAll=window.renderAll;
-  if(typeof oldAll === 'function' && !oldAll.__bpV108Wrapped){
-    window.renderAll=function(){
-      window.bpNormalizeBetsSingleSource();
-      const r=oldAll.apply(this,arguments);
-      if(window.currentRole==='user') setTimeout(window.renderBets,30);
-      if(window.currentRole==='admin') setTimeout(function(){ try{window.renderAdminBetsTable();}catch(e){} },30);
-      return r;
-    };
-    window.renderAll.__bpV108Wrapped=true;
-  }
-
-  document.addEventListener('DOMContentLoaded',function(){
-    setTimeout(function(){
-      window.bpNormalizeBetsSingleSource();
-      if(window.currentRole==='user') window.renderBets();
-      if(window.currentRole==='admin') try{window.renderAdminBetsTable();}catch(e){}
-    },150);
+  // Au démarrage : précharge seulement si déjà authentifié, sinon le login chargera la BDD.
+  document.addEventListener('DOMContentLoaded', function(){
+    const input=$('loginCode');
+    if(input) input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); window.loginWithCode(); } });
   });
 })();
 </script>
