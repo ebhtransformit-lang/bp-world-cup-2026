@@ -14613,6 +14613,96 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V94 — Suppression joueur sans confirmation, sans popup, disparition immédiate UI */
+(function(){
+  'use strict';
+  if(window.__BP_V94_DELETE_NO_POPUP__) return;
+  window.__BP_V94_DELETE_NO_POPUP__ = true;
+
+  function norm(v){ return String(v || '').trim().toLowerCase(); }
+  function isDeleteConfirm(msg){
+    msg = norm(msg);
+    return msg.includes('supprimer définitivement') || msg.includes('utilisateur supprimé') || msg.includes('suppression sera écrite');
+  }
+
+  // Supprime les popups existantes sur le flux suppression uniquement.
+  const nativeConfirm = window.confirm ? window.confirm.bind(window) : null;
+  const nativeAlert = window.alert ? window.alert.bind(window) : null;
+  window.confirm = function(msg){
+    if(isDeleteConfirm(msg)) return true;
+    return nativeConfirm ? nativeConfirm(msg) : true;
+  };
+  window.alert = function(msg){
+    if(isDeleteConfirm(msg)) return;
+    return nativeAlert ? nativeAlert(msg) : undefined;
+  };
+
+  function playerKeys(p){
+    return [p && p.code, p && p.name, p && p.pseudo]
+      .map(norm).filter(Boolean);
+  }
+  function getState(){ return window.state || window.APP_STATE || window.appState || {}; }
+  function deletedKeys(){
+    const s = getState();
+    if(!Array.isArray(s.deletedPlayerKeys)) s.deletedPlayerKeys = [];
+    return new Set(s.deletedPlayerKeys.map(norm).filter(Boolean));
+  }
+  function persistDeleted(set){
+    const arr = Array.from(set).filter(Boolean);
+    const s = getState();
+    s.deletedPlayerKeys = arr;
+    try{ localStorage.setItem('bp_v92_deleted_player_keys', JSON.stringify(arr)); }catch(e){}
+    try{ localStorage.setItem('bp_v94_deleted_player_keys', JSON.stringify(arr)); }catch(e){}
+  }
+  function cardInfo(card){
+    const vals = [];
+    if(card){
+      card.querySelectorAll('input,.user-code').forEach(el => vals.push(el.value || el.textContent || ''));
+    }
+    const code = vals.find(v => /^\s*\d{3,}\s*$/.test(v)) || '';
+    const name = vals.find(v => v && !/^\s*\d{3,}\s*$/.test(v)) || '';
+    return {code: String(code).trim(), name: String(name).trim(), pseudo: String(name).trim()};
+  }
+  function removeCardNow(card, hint){
+    const s = getState();
+    const keys = playerKeys(hint);
+    const del = deletedKeys();
+    keys.forEach(k => del.add(k));
+    persistDeleted(del);
+
+    if(Array.isArray(s.players) && keys.length){
+      s.players = s.players.filter(p => !playerKeys(p).some(k => del.has(k)));
+    }
+    if(Array.isArray(s.bets)){
+      s.bets = s.bets.filter(b => !del.has(norm(b.player)) && !del.has(norm(b.playerCode)));
+    }
+
+    if(card){
+      card.style.display = 'none';
+      card.remove();
+    }
+  }
+
+  // Disparition immédiate dès le clic, avant même le retour Supabase.
+  document.addEventListener('click', function(e){
+    const b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(!b) return;
+    const txt = norm(b.textContent);
+    const card = b.closest && b.closest('.admin-player-card');
+    if(card && (txt.includes('suppr') || txt.includes('delete'))){
+      removeCardNow(card, cardInfo(card));
+      // On laisse les anciens handlers écrire en BDD, mais confirm/alert sont neutralisés.
+      setTimeout(function(){
+        try{ if(typeof window.renderAdmin === 'function') window.renderAdmin(); }catch(e){}
+      }, 350);
+    }
+  }, true);
+})();
+</script>
+
 </body></html>
 <script>
 /* V87 — HARD FIX calcul des gains
