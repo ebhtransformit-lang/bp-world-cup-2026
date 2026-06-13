@@ -16206,4 +16206,351 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+<script>
+/* V108 — SOURCE UNIQUE DES MISES
+   Objectif : ADMIN et USER lisent/écrivent exclusivement state.bets.
+   Aucun localStorage, aucune source legacy, aucun fallback DOM.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V108_SINGLE_BETS_SOURCE__) return;
+  window.__BP_V108_SINGLE_BETS_SOURCE__ = true;
+
+  function S(){ return window.state || state; }
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function norm(v){ return String(v == null ? '' : v).trim(); }
+  function n(v,d){ v=Number(v); return Number.isFinite(v)?v:(d||0); }
+  function samePlayer(a,b){ return norm(a).toLowerCase() === norm(b).toLowerCase(); }
+  function ensureBets(){ const s=S(); if(!Array.isArray(s.bets)) s.bets=[]; return s.bets; }
+  function getDay(){ try{return Number(currentPronoDay());}catch(e){return Number(S().currentDay||1);} }
+  function currentP(){
+    try{
+      if(typeof window.bpCurrentPlayer === 'function'){
+        const p=window.bpCurrentPlayer();
+        if(p) return p;
+      }
+    }catch(e){}
+    try{
+      if(typeof window.player === 'function'){
+        const p=window.player();
+        if(p) return p;
+      }
+    }catch(e){}
+    return null;
+  }
+  function split(score){
+    try{ if(typeof splitScore === 'function') return splitScore(score); }catch(e){}
+    const parts=String(score||'0 - 0').replace(/\s/g,'').split('-');
+    return [n(parts[0],0), n(parts[1],0)];
+  }
+  function scoreTxt(a,b){
+    try{ return scoreText(a,b); }catch(e){ return String(n(a,0))+' - '+String(n(b,0)); }
+  }
+  function outcome(a,b){
+    try{ return outcomeFromScore(a,b); }catch(e){ a=n(a); b=n(b); return a>b?'A':a<b?'B':'N'; }
+  }
+  function matchById(id){ return arr(S().matches).find(m=>String(m.id)===String(id)) || null; }
+
+  window.bpFindBet = function(day, matchId, playerName){
+    return ensureBets().find(b =>
+      Number(b.day) === Number(day) &&
+      String(b.matchId) === String(matchId) &&
+      samePlayer(b.player, playerName)
+    ) || null;
+  };
+
+  window.bpNormalizeBetsSingleSource = function(){
+    const s=S();
+    s.bets = arr(s.bets).map(b=>{
+      const ss = split(b.score);
+      const scoreA = n(b.scoreA, ss[0]);
+      const scoreB = n(b.scoreB, ss[1]);
+      const pred = b.prediction || b.predictedOutcome || outcome(scoreA, scoreB);
+      return Object.assign({}, b, {
+        day: n(b.day, 1),
+        matchId: String(b.matchId || ''),
+        player: norm(b.player || b.playerName || b.name || ''),
+        scoreA,
+        scoreB,
+        score: scoreTxt(scoreA, scoreB),
+        prediction: pred,
+        predictedOutcome: pred,
+        stake: Math.min(4, Math.max(1, n(b.stake || b.mise, 1))),
+        status: String(b.status || 'DRAFT').toUpperCase(),
+        validatedAt: b.validatedAt || null
+      });
+    }).filter(b=>b.player && b.matchId);
+    // Déduplication stricte : une seule mise par joueur / journée / match.
+    const map = new Map();
+    s.bets.forEach(b=>{
+      const key = [Number(b.day), String(b.matchId), norm(b.player).toLowerCase()].join('|');
+      map.set(key, b);
+    });
+    s.bets = Array.from(map.values());
+    return s.bets;
+  };
+
+  window.bpUpsertBetSingleSource = function(day, matchId, playerName, data, status, validatedAt){
+    window.bpNormalizeBetsSingleSource();
+    const s=S();
+    const old = window.bpFindBet(day, matchId, playerName);
+    const scoreA = n(data && data.scoreA, split(data && data.score)[0]);
+    const scoreB = n(data && data.scoreB, split(data && data.score)[1]);
+    const st = String(status || (data && data.status) || (old && old.status) || 'DRAFT').toUpperCase();
+    const payload = Object.assign({}, old || {}, data || {}, {
+      day: Number(day),
+      matchId: String(matchId),
+      player: norm(playerName),
+      scoreA,
+      scoreB,
+      score: scoreTxt(scoreA, scoreB),
+      prediction: outcome(scoreA, scoreB),
+      predictedOutcome: outcome(scoreA, scoreB),
+      stake: Math.min(4, Math.max(1, n(data && (data.stake || data.mise), old ? old.stake : 1))),
+      status: st,
+      validatedAt: st === 'VALIDATED' ? (validatedAt || (old && old.validatedAt) || new Date().toISOString()) : null
+    });
+    s.bets = arr(s.bets).filter(b => !(
+      Number(b.day) === Number(day) &&
+      String(b.matchId) === String(matchId) &&
+      samePlayer(b.player, playerName)
+    ));
+    s.bets.push(payload);
+    return payload;
+  };
+
+  function formData(matchId){
+    const a = n(document.querySelector('.scoreA[data-match="'+matchId+'"]')?.value, 0);
+    const b = n(document.querySelector('.scoreB[data-match="'+matchId+'"]')?.value, 0);
+    const stake = n(document.querySelector('.stake[data-match="'+matchId+'"]')?.value, 1);
+    return {scoreA:a, scoreB:b, score:scoreTxt(a,b), prediction:outcome(a,b), predictedOutcome:outcome(a,b), stake};
+  }
+
+  // Fonctions historiques réorientées vers la source unique.
+  window.getAdminBet = function(day, matchId, playerName){ return window.bpFindBet(day, matchId, playerName); };
+  try{ getAdminBet = window.getAdminBet; }catch(e){}
+
+  window.ensureAdminBet = function(day, matchId, playerName){
+    return window.bpFindBet(day, matchId, playerName) ||
+      window.bpUpsertBetSingleSource(day, matchId, playerName, {scoreA:0,scoreB:0,stake:1}, 'DRAFT', null);
+  };
+  try{ ensureAdminBet = window.ensureAdminBet; }catch(e){}
+
+  window.upsertBet = function(matchId, data, status){
+    const p=currentP();
+    if(!p) return null;
+    return window.bpUpsertBetSingleSource(getDay(), matchId, p.name, data, status);
+  };
+  try{ upsertBet = window.upsertBet; }catch(e){}
+
+  window.renderAdminBetsTable = function(){
+    window.bpNormalizeBetsSingleSource();
+    const body=document.getElementById('adminBetsBody');
+    if(!body) return;
+    if(!document.getElementById('adminBetsDay')) return;
+    if(!adminBetsDay.innerHTML && typeof renderAdminBetsFilters==='function') renderAdminBetsFilters();
+
+    const day=Number(adminBetsDay.value || S().currentDay || 1);
+    const selected=adminBetsPlayer.value || '__ALL__';
+    const matches=arr(S().matches).filter(m=>Number(m.day)===day);
+    const players=arr(S().players).filter(p=>selected==='__ALL__' || p.name===selected);
+    const rows=[];
+
+    matches.forEach(m=>{
+      players.forEach(p=>{
+        const b=window.bpFindBet(day,m.id,p.name);
+        const pname=String(p.name||'').replace(/'/g,"\\'");
+        if(!b){
+          rows.push('<tr><td>J'+day+'</td><td>'+f(m.teamA)+' vs '+f(m.teamB)+'</td><td>'+p.name+'</td><td colspan="5" class="muted">Aucune mise</td><td><button class="action secondary admin-mini-btn" onclick="adminCreateBet('+day+',\''+m.id+'\',\''+pname+'\')">Créer</button></td></tr>');
+          return;
+        }
+        const rid=adminBetId(day,m.id,p.name);
+        const sc=split(b.score);
+        const sa=n(b.scoreA,sc[0]), sb=n(b.scoreB,sc[1]);
+        rows.push('<tr>'+
+          '<td>J'+day+'</td>'+
+          '<td>'+f(m.teamA)+' vs '+f(m.teamB)+'</td>'+
+          '<td>'+p.name+'</td>'+
+          '<td><span class="badge">'+outcomeLabel(outcome(sa,sb),m)+'</span></td>'+
+          '<td><div class="score-selects"><select id="'+rid+'_sa">'+scoreOptions(sa)+'</select><span class="score-dash">-</span><select id="'+rid+'_sb">'+scoreOptions(sb)+'</select></div></td>'+
+          '<td><select id="'+rid+'_stake">'+stakeOptions(b.stake||1)+'</select></td>'+
+          '<td><select id="'+rid+'_status"><option value="DRAFT" '+(b.status==='DRAFT'?'selected':'')+'>Brouillon</option><option value="VALIDATED" '+(b.status==='VALIDATED'?'selected':'')+'>Validé</option></select></td>'+
+          '<td>'+(b.validatedAt ? new Date(b.validatedAt).toLocaleString('fr-FR') : '<span class="muted">—</span>')+'</td>'+
+          '<td><button class="action admin-mini-btn" onclick="adminSaveBet('+day+',\''+m.id+'\',\''+pname+'\')">Sauver</button><button class="action danger admin-mini-btn" onclick="adminDeleteBet('+day+',\''+m.id+'\',\''+pname+'\')">Suppr.</button></td>'+
+        '</tr>');
+      });
+    });
+    body.innerHTML = rows.join('') || '<tr><td colspan="9" class="muted">Aucun match sur cette journée.</td></tr>';
+  };
+  try{ renderAdminBetsTable = window.renderAdminBetsTable; }catch(e){}
+
+  window.adminCreateBet = function(day,matchId,playerName){
+    window.ensureAdminBet(day,matchId,playerName);
+    if(typeof save==='function') save();
+    window.renderAdminBetsTable();
+  };
+  try{ adminCreateBet = window.adminCreateBet; }catch(e){}
+
+  window.adminSaveBet = function(day,matchId,playerName){
+    const rid=adminBetId(day,matchId,playerName);
+    const old=window.bpFindBet(day,matchId,playerName);
+    const sa=n(document.getElementById(rid+'_sa')?.value,0);
+    const sb=n(document.getElementById(rid+'_sb')?.value,0);
+    const stake=n(document.getElementById(rid+'_stake')?.value,1);
+    const status=String(document.getElementById(rid+'_status')?.value || 'DRAFT').toUpperCase();
+    window.bpUpsertBetSingleSource(day,matchId,playerName,{scoreA:sa,scoreB:sb,stake:stake},status,(old&&old.status===status)?old.validatedAt:null);
+    try{ if(typeof log==='function') log('SYSTEM','Admin correction mise '+playerName+' '+matchId,0); }catch(e){}
+    if(typeof save==='function') save();
+    window.renderAdminBetsTable();
+    try{ if(typeof renderAdmin==='function') renderAdmin(); }catch(e){}
+  };
+  try{ adminSaveBet = window.adminSaveBet; }catch(e){}
+
+  window.adminDeleteBet = async function(day,matchId,playerName){
+    const s=S();
+    s.bets=ensureBets().filter(b=>!(Number(b.day)===Number(day)&&String(b.matchId)===String(matchId)&&samePlayer(b.player,playerName)));
+    try{ if(typeof log==='function') log('SYSTEM','Admin suppression mise '+playerName+' '+matchId,0); }catch(e){}
+    if(typeof save==='function') save();
+    window.renderAdminBetsTable();
+    try{ if(typeof renderAdmin==='function') renderAdmin(); }catch(e){}
+  };
+  try{ adminDeleteBet = window.adminDeleteBet; }catch(e){}
+
+  window.renderBets = function(){
+    window.bpNormalizeBetsSingleSource();
+    const p=currentP();
+    const rows=document.getElementById('betRows');
+    if(!p){
+      if(rows) rows.innerHTML='<div class="card muted">Connecte-toi avec ton code joueur pour afficher les pronostics.</div>';
+      return;
+    }
+
+    const day=getDay();
+    if(document.getElementById('pronoDayTitle')) pronoDayTitle.textContent='Journée '+day+' / '+maxCalendarDay();
+    if(document.getElementById('pronoDayDate')) pronoDayDate.textContent=dayDate(day)||'—';
+    if(document.getElementById('pronoDayStatus')){
+      const available=pronoDayIsAvailable(day);
+      const future=Number(day)>Number(onlyOpenDay());
+      pronoDayStatus.innerHTML = available
+        ? '<span class="day-status-open">Journée ouverte aux mises</span>'
+        : future ? '<span class="day-status-closed">Journée future · mise non disponible</span>'
+        : isDayClosed(day) ? '<span class="day-status-closed">Journée fermée · mise non disponible</span>'
+        : '<span class="day-status-closed">Mise non disponible</span>';
+    }
+    if(document.getElementById('prevPronoDayBtn')) prevPronoDayBtn.disabled=day<=1;
+    if(document.getElementById('nextPronoDayBtn')) nextPronoDayBtn.disabled=day>=maxCalendarDay();
+    const active=document.getElementById('activePlayer');
+    if(active){
+      active.innerHTML=arr(S().players).map((x,i)=>'<option value="'+i+'">'+x.name+'</option>').join('');
+      const idx=arr(S().players).findIndex(x=>samePlayer(x.name,p.name));
+      if(idx>=0) active.value=String(idx);
+    }
+
+    const todays=arr(S().matches).filter(m=>Number(m.day)===Number(day));
+    if(!rows) return;
+    rows.innerHTML=todays.map(m=>{
+      const found=window.bpFindBet(day,m.id,p.name);
+      const b=found || {day,matchId:m.id,player:p.name,prediction:'N',score:'0 - 0',scoreA:0,scoreB:0,stake:1,status:'DRAFT',validatedAt:null};
+      const sc=split(b.score), sa=n(b.scoreA,sc[0]), sb=n(b.scoreB,sc[1]);
+      const isValidated=String(b.status||'DRAFT').toUpperCase()==='VALIDATED';
+      const available=pronoDayIsAvailable(day);
+      const locked=!available || isValidated;
+      const unavailableLabel = Number(day)>Number(onlyOpenDay()) ? 'Journée future' : isDayClosed(day) ? 'Journée fermée' : 'Mise non disponible';
+
+      return '<div class="card bet-card '+(locked?'lockedCard':'')+'" id="betCard_'+m.id+'">'+
+        '<div class="bet-title"><h3 style="margin:0">'+f(m.teamA)+' vs '+f(m.teamB)+'</h3>'+
+        (!available ? '<span class="badge closed">Mise non disponible</span>' : isValidated ? '<span class="badge ok">✅ Validée</span>' : '<span class="badge">Brouillon</span>')+
+        '</div>'+
+        matchInfoHTML(m)+
+        '<div class="bet-form score-only"><label style="width:100%"><span class="score-main-label">Score pronostiqué</span>'+
+        '<div class="bet-inline-row"><div class="flag-wrap">'+flagOnly(m.teamA)+'</div>'+
+        '<input type="number" min="0" max="99" aria-label="Score '+m.teamA+'" data-match="'+m.id+'" class="scoreA" value="'+sa+'" '+(locked?'disabled':'')+'>'+
+        '<span class="score-dash">-</span>'+
+        '<input type="number" min="0" max="99" aria-label="Score '+m.teamB+'" data-match="'+m.id+'" class="scoreB" value="'+sb+'" '+(locked?'disabled':'')+'>'+
+        '<div class="flag-wrap">'+flagOnly(m.teamB)+'</div></div>'+
+        '<div class="team-label-row"><span>'+m.teamA+'</span><span>'+m.teamB+'</span></div>'+
+        '<div class="stake-container"><div class="stake-label">Mise</div><select data-match="'+m.id+'" class="stake" '+(locked?'disabled':'')+'>'+stakeOptions(b.stake||1)+'</select></div>'+
+        '<div class="score-helper">Le résultat est déduit automatiquement du score choisi.</div></label></div>'+
+        '<div class="prediction-derived">Résultat pronostiqué : <b>'+outcomeLabel(outcome(sa,sb),m)+'</b></div>'+
+        betOutcomeHTML(b,m)+
+        '<div class="bet-actions"><div class="bet-status muted">'+
+        (!available ? unavailableLabel : isValidated && b.validatedAt ? 'Validée le '+new Date(b.validatedAt).toLocaleString('fr-FR') : 'À confirmer avant clôture.')+
+        '</div>'+
+        (!available ? '<button class="action secondary" disabled>Mise non disponible</button>' : isValidated ? '<button class="action editBtn" onclick="editBet(\''+m.id+'\')">✏️ Modifier la mise</button>' : '<button class="action" onclick="validateSingleBet(\''+m.id+'\')">Valider la mise</button>')+
+        '</div></div>';
+    }).join('');
+
+    if(p.secrets && p.secrets.sealed){
+      if(window.secretWinner) secretWinner.value=p.secrets.winner||'';
+      if(window.secretBestPlayer) secretBestPlayer.value=p.secrets.bestPlayer||'';
+      if(window.secretTopScorer) secretTopScorer.value=p.secrets.topScorer||'';
+      if(window.secretWinner) secretWinner.disabled=true;
+      if(window.secretBestPlayer) secretBestPlayer.disabled=true;
+      if(window.secretTopScorer) secretTopScorer.disabled=true;
+      const when=p.secrets.validatedAt ? new Date(p.secrets.validatedAt).toLocaleString('fr-FR') : '';
+      if(window.secretInfo) secretInfo.innerHTML='<div class="secret-saved">🔒 Choix secrets sauvegardés'+(when?' le '+when:'')+'. Ils sont visibles par l’admin.</div>';
+    }
+    try{ if(typeof renderPersonalDailyRecap==='function') renderPersonalDailyRecap(p); }catch(e){}
+  };
+  try{ renderBets = window.renderBets; }catch(e){}
+
+  window.validateSingleBet = async function(matchId){
+    const day=getDay();
+    if(!pronoDayIsAvailable(day)) return bpAlert('Mise non disponible sur cette journée.',{icon:'🔒'});
+    const p=currentP(), m=matchById(matchId), data=formData(matchId);
+    if(!p || !m) return alert('Joueur ou match introuvable.');
+    const label=outcomeLabel(data.prediction,m);
+    let ok=true;
+    if(typeof bpConfirmBet==='function') ok=await bpConfirmBet({match:m.teamA+' vs '+m.teamB,result:label,score:data.score,stake:data.stake});
+    if(!ok) return false;
+    window.bpUpsertBetSingleSource(day,matchId,p.name,data,'VALIDATED',new Date().toISOString());
+    try{ if(typeof log==='function') log(p.name,'Mise validée '+matchId,0); }catch(e){}
+    if(typeof save==='function') save();
+    if(typeof renderAll==='function') renderAll(); else window.renderBets();
+    return true;
+  };
+  try{ validateSingleBet = window.validateSingleBet; }catch(e){}
+
+  window.editBet = function(matchId){
+    const day=getDay(), p=currentP();
+    if(!pronoDayIsAvailable(day)) return bpAlert('Les pronostics sont clôturés.',{icon:'🔒'});
+    const b=p && window.bpFindBet(day,matchId,p.name);
+    if(b){ b.status='DRAFT'; b.validatedAt=null; }
+    if(typeof save==='function') save();
+    if(typeof renderAll==='function') renderAll(); else window.renderBets();
+  };
+  try{ editBet = window.editBet; }catch(e){}
+
+  window.bpAuditBetsSingleSource = function(playerName){
+    window.bpNormalizeBetsSingleSource();
+    const s=S();
+    const rows=arr(s.bets).filter(b=>!playerName || samePlayer(b.player,playerName))
+      .sort((a,b)=>Number(a.day)-Number(b.day)||String(a.matchId).localeCompare(String(b.matchId))||String(a.player).localeCompare(String(b.player)));
+    console.table(rows.map(b=>({joueur:b.player,journee:b.day,matchId:b.matchId,score:b.score,mise:b.stake,statut:b.status,validation:b.validatedAt})));
+    return rows;
+  };
+
+  const oldAll=window.renderAll;
+  if(typeof oldAll === 'function' && !oldAll.__bpV108Wrapped){
+    window.renderAll=function(){
+      window.bpNormalizeBetsSingleSource();
+      const r=oldAll.apply(this,arguments);
+      if(window.currentRole==='user') setTimeout(window.renderBets,30);
+      if(window.currentRole==='admin') setTimeout(function(){ try{window.renderAdminBetsTable();}catch(e){} },30);
+      return r;
+    };
+    window.renderAll.__bpV108Wrapped=true;
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    setTimeout(function(){
+      window.bpNormalizeBetsSingleSource();
+      if(window.currentRole==='user') window.renderBets();
+      if(window.currentRole==='admin') try{window.renderAdminBetsTable();}catch(e){}
+    },150);
+  });
+})();
+</script>
+
 </body></html>
