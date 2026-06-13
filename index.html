@@ -2439,7 +2439,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
   <div class="kpis">
     <div class="user-identity">
       <span id="headerAvatar" class="avatar">S</span>
-      <span id="headerUserName">Admin · Peitt oiseau!</span>
+      <span id="headerUserName">Admin · Utilisateur</span>
     </div>
     <div class="kpi">Solde: <span id="kpiBalance">50</span> FID</div>
     <div class="kpi">Rang: <span id="kpiRank">#1/15</span></div>
@@ -2503,7 +2503,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
           </div>
 
           <div class="profile-info">
-            <div id="profileName" class="profile-name">Peitt oiseau!</div>
+            <div id="profileName" class="profile-name">Utilisateur</div>
             <div class="avatar-upload" style="margin:8px 0 10px">
               <input id="profilePseudoInput" maxlength="20" placeholder="Ton pseudo" onchange="saveMyPseudo()">
               <button class="action secondary" onclick="saveMyPseudo()">Sauver pseudo</button>
@@ -2683,7 +2683,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
   <h2>🏅 Hall of Fame 2026</h2>
   <table><thead><tr><th>Rang</th><th>Joueur</th><th>Solde FID</th><th>Évolution</th><th>Bons pronos</th><th>Scores exacts</th></tr></thead><tbody id="rankingBody"><tr>
     <td>🥇</td>
-    <td>Peitt oiseau!</td>
+    <td>Utilisateur</td>
     <td>50</td>
     <td class="good">+0</td>
     <td>0</td>
@@ -2795,7 +2795,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
     <div>
       <div class="award-title">Striker</div>
       <div class="award-desc">Plus longue série de pronostics gagnants</div>
-      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 victoire(s) d’affilée)</div>
+      <div class="muted">Leader actuel : <b>Utilisateur</b> (0 victoire(s) d’affilée)</div>
     </div>
     <div class="award-prize">50 FID</div>
   </div><div class="award-card">
@@ -2803,7 +2803,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
     <div>
       <div class="award-title">Loser</div>
       <div class="award-desc">Plus longue série de pronostics perdants</div>
-      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 défaite(s) d’affilée)</div>
+      <div class="muted">Leader actuel : <b>Utilisateur</b> (0 défaite(s) d’affilée)</div>
     </div>
     <div class="award-prize">25 FID</div>
   </div><div class="award-card">
@@ -2811,7 +2811,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
     <div>
       <div class="award-title">Sniper</div>
       <div class="award-desc">Nombre de scores exacts le plus important</div>
-      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 score(s) exact(s))</div>
+      <div class="muted">Leader actuel : <b>Utilisateur</b> (0 score(s) exact(s))</div>
     </div>
     <div class="award-prize">100 FID</div>
   </div><div class="award-card">
@@ -2819,7 +2819,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
     <div>
       <div class="award-title">Cannibale</div>
       <div class="award-desc">Nombre de points pris à d’autres joueurs</div>
-      <div class="muted">Leader actuel : <b>Peitt oiseau!</b> (0 FID)</div>
+      <div class="muted">Leader actuel : <b>Utilisateur</b> (0 FID)</div>
     </div>
     <div class="award-prize">25 FID</div>
   </div><div class="help">Les prix spéciaux sont attribués à la fin de la compétition. Le classement principal reste basé sur le total de FID.</div></div>
@@ -15672,4 +15672,185 @@ window.BP_LOCAL_ONLY = true;
   else { setLoggedOut(); cleanupLegacyUI(); renderHeaderSafe(); }
 })();
 </script>
+
+
+<script>
+/* V103 — ADMIN ONLY LOAD + NO DEFAULT PROFILE
+   - Aucun profil joueur par défaut.
+   - Les codes joueurs ne fonctionnent que si la BDD est déjà chargée.
+   - Recharger BDD uniquement en mode ADMIN, sans popup navigateur.
+   - Après chargement BDD, on reste ADMIN sur l'écran BDD. */
+(function(){
+  'use strict';
+  if(window.__BP_V103_ADMIN_LOAD_ONLY__) return;
+  window.__BP_V103_ADMIN_LOAD_ONLY__ = true;
+
+  const TABLE='app_state';
+  const APP_ID=window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const USER_KEY='bpwc_current_user_code';
+  let sbClient=null;
+
+  function S(){ try{return window.state || state;}catch(e){return window.state || {players:[],bets:[],matches:[]};} }
+  function players(){ const s=S(); return Array.isArray(s.players)?s.players:[]; }
+  function bets(){ const s=S(); return Array.isArray(s.bets)?s.bets:[]; }
+  function matches(){ const s=S(); return Array.isArray(s.matches)?s.matches:[]; }
+  function setRole(r,i){ try{currentRole=r;}catch(e){} try{currentUserIndex=i;}catch(e){} window.currentRole=r; window.currentUserIndex=i; }
+  function getRole(){ try{return currentRole;}catch(e){return window.currentRole||null;} }
+  function getIdx(){ try{return currentUserIndex;}catch(e){return window.currentUserIndex;} }
+  function loggedPlayer(){ const r=getRole(); const i=getIdx(); if(r==='user' && i!==null && i!==undefined && Number(i)>=0) return players()[Number(i)]||null; return null; }
+  function initials(x){ return String(x||'?').trim().charAt(0).toUpperCase() || '?'; }
+  function num(v,d=0){ v=Number(v); return Number.isFinite(v)?v:d; }
+  function findByCode(code){ code=String(code||'').trim(); return players().findIndex(p=>String(p.code||'').trim()===code); }
+  function configured(){ return !!(window.supabase && (window.BP_MANUAL_SUPABASE_URL||window.BP_SUPABASE_URL) && (window.BP_MANUAL_SUPABASE_ANON_KEY||window.BP_SUPABASE_ANON_KEY)); }
+  function supa(){ if(!configured()) throw new Error('Supabase non configuré'); if(!sbClient) sbClient=window.supabase.createClient(window.BP_MANUAL_SUPABASE_URL||window.BP_SUPABASE_URL, window.BP_MANUAL_SUPABASE_ANON_KEY||window.BP_SUPABASE_ANON_KEY); return sbClient; }
+  function counts(){ return {players:players().length,bets:bets().length,matches:matches().length}; }
+  function setStatus(msg,kind){ const el=document.getElementById('bpManualBDDStatus'); if(el){ el.className='help '+(kind||''); el.textContent=msg; } console.log('[V103]',msg); }
+  function normalizeRemote(d){ d=d&&typeof d==='object'?JSON.parse(JSON.stringify(d)):{}; d.players=Array.isArray(d.players)?d.players:[]; d.bets=Array.isArray(d.bets)?d.bets:[]; d.matches=Array.isArray(d.matches)?d.matches:[]; d.players=d.players.map(p=>{ p=p&&typeof p==='object'?p:{}; const start=num(p.startFid ?? p.fid ?? p.balance,50); return Object.assign({},p,{name:String(p.name||p.player||'').trim(),pseudo:String(p.pseudo||p.name||'').trim(),code:String(p.code||'').trim(),startFid:start,balance:num(p.balance,start),good:num(p.good,0),exact:num(p.exact,0),evolution:num(p.evolution,0)}); }).filter(p=>p.name && /^\d{4}$/.test(p.code)); return d; }
+  function replaceState(d){ d=normalizeRemote(d); try{ Object.keys(S()).forEach(k=>delete S()[k]); Object.assign(S(),d); window.state=S(); }catch(e){ window.state=d; try{state=d;}catch(_){}} }
+
+  function blankProfile(){
+    const p=loggedPlayer();
+    const profileName=document.getElementById('profileName');
+    const profileAvatar=document.getElementById('profileAvatar');
+    const input=document.getElementById('profilePseudoInput');
+    if(!p){
+      if(profileName) profileName.textContent='Aucun joueur connecté';
+      if(profileAvatar) profileAvatar.textContent='?';
+      if(input){ input.value=''; input.placeholder='Connecte-toi avec ton code joueur'; }
+      ['profileRankCard','profileBalanceCard','profileGoodCard','profileExactCard'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=id==='profileBalanceCard'?'— FID':'—'; });
+      return;
+    }
+    if(profileName) profileName.textContent=p.pseudo||p.name;
+    if(profileAvatar) profileAvatar.textContent=initials(p.name||p.pseudo);
+    if(input) input.value=p.pseudo||p.name||'';
+  }
+
+  function headerSafe(){
+    const p=loggedPlayer();
+    const name=document.getElementById('headerUserName');
+    const av=document.getElementById('headerAvatar');
+    const bal=document.getElementById('kpiBalance');
+    const rank=document.getElementById('kpiRank');
+    const reserve=document.getElementById('kpiReserve');
+    const day=document.getElementById('kpiDay');
+    const status=document.getElementById('kpiStatus');
+    if(getRole()==='admin'){
+      if(name) name.textContent='Admin';
+      if(av) av.textContent='A';
+      if(bal) bal.textContent='—';
+      if(rank) rank.textContent='—/'+players().length;
+    }else if(p){
+      if(name) name.textContent=p.pseudo||p.name||'Utilisateur';
+      if(av) av.textContent=initials(p.name||p.pseudo);
+      if(bal) bal.textContent=num(p.balance,0);
+      if(rank){ const sorted=[...players()].sort((a,b)=>num(b.balance)-num(a.balance)); rank.textContent='#'+(sorted.findIndex(x=>x.name===p.name)+1)+'/'+players().length; }
+    }else{
+      if(name) name.textContent='Utilisateur';
+      if(av) av.textContent='?';
+      if(bal) bal.textContent='—';
+      if(rank) rank.textContent='—/'+players().length;
+    }
+    if(reserve) reserve.textContent='500';
+    if(day) day.textContent=S().currentDay||1;
+    if(status && !status.textContent) status.textContent='';
+    blankProfile();
+  }
+
+  window.player=loggedPlayer;
+  try{player=loggedPlayer;}catch(e){}
+  window.renderUserIdentity=headerSafe;
+  window.renderHeader=headerSafe;
+
+  window.loginWithCode=function(){
+    const input=document.getElementById('loginCode');
+    const code=String(input&&input.value||'').trim();
+    const err=document.getElementById('loginError');
+    if(err){err.style.display='none';err.textContent='';}
+    if(code==='1573'){
+      setRole('admin',null);
+      try{localStorage.removeItem(USER_KEY);}catch(e){}
+      const ls=document.getElementById('loginScreen'); if(ls) ls.style.display='none';
+      if(typeof applyRoleUI==='function') applyRoleUI();
+      const lock=document.getElementById('adminLock'); if(lock) lock.style.display='none';
+      const panel=document.getElementById('adminPanel'); if(panel) panel.style.display='block';
+      if(typeof tab==='function') tab('backup',document.getElementById('navBackup'));
+      if(typeof renderAll==='function') renderAll();
+      cleanup(); headerSafe();
+      return false;
+    }
+    if(!players().length){
+      if(err){err.textContent='Données non chargées. Connecte-toi en ADMIN puis recharge la BDD.'; err.style.display='block';}
+      headerSafe();
+      return false;
+    }
+    const i=findByCode(code);
+    if(i>=0){
+      setRole('user',i);
+      try{localStorage.setItem(USER_KEY,code);}catch(e){}
+      const ls=document.getElementById('loginScreen'); if(ls) ls.style.display='none';
+      if(typeof applyRoleUI==='function') applyRoleUI();
+      if(typeof tab==='function') tab('bets',document.getElementById('navBets'));
+      if(typeof renderAll==='function') renderAll();
+      cleanup(); headerSafe();
+      return false;
+    }
+    if(err){err.textContent='Code incorrect.';err.style.display='block';}
+    headerSafe();
+    return false;
+  };
+
+  window.bpManualLoadBDD=async function(){
+    if(getRole()!=='admin') { alert('Chargement BDD réservé à l’ADMIN.'); return false; }
+    try{
+      setStatus('Chargement BDD…','warn');
+      const r=await supa().from(TABLE).select('data,updated_at').eq('id',APP_ID).maybeSingle();
+      if(r.error) throw r.error;
+      const remote=normalizeRemote(r.data&&r.data.data);
+      const c={players:remote.players.length,bets:remote.bets.length,matches:remote.matches.length};
+      if(c.players===0){ setStatus('Chargement annulé : BDD à 0 joueur. Restaure le backup 21/7.','bad'); alert('Chargement annulé : la BDD contient 0 joueur.'); return false; }
+      replaceState(remote);
+      setRole('admin',null);
+      if(typeof applyRoleUI==='function') applyRoleUI();
+      if(typeof renderAll==='function') renderAll();
+      if(typeof tab==='function') tab('backup',document.getElementById('navBackup'));
+      cleanup(); headerSafe();
+      setStatus('BDD chargée — joueurs : '+c.players+' — mises : '+c.bets+' — matchs : '+c.matches,'good');
+      return true;
+    }catch(e){ console.error(e); setStatus('Erreur chargement BDD : '+(e.message||e),'bad'); alert('Erreur chargement BDD : '+(e.message||e)); return false; }
+  };
+
+  const oldSave=window.bpManualSaveBDD;
+  window.bpManualSaveBDD=async function(){
+    if(getRole()!=='admin') { alert('Sauvegarde BDD réservée à l’ADMIN.'); return false; }
+    if(players().length===0){ alert('BLOCAGE : impossible de sauvegarder 0 joueur en BDD.'); return false; }
+    return oldSave?oldSave.apply(this,arguments):false;
+  };
+
+  const oldBets=window.renderBets;
+  window.renderBets=function(){
+    if(getRole()!=='user' || !loggedPlayer()){
+      blankProfile();
+      const rows=document.getElementById('betRows');
+      if(rows) rows.innerHTML='<div class="card muted">Connecte-toi avec ton code joueur pour afficher les pronostics.</div>';
+      headerSafe();
+      return;
+    }
+    const r=oldBets?oldBets.apply(this,arguments):undefined;
+    headerSafe();
+    return r;
+  };
+
+  const oldAll=window.renderAll;
+  window.renderAll=function(){ const r=oldAll?oldAll.apply(this,arguments):undefined; cleanup(); headerSafe(); return r; };
+
+  function cleanup(){
+    document.querySelectorAll('#bpSyncPill,#bpV84Log,#bpV93Status,#bpV49DataSafetyPanel,#bpForceLoadSupabasePanel,#githubPersistPanel,#dailyBackupPanel').forEach(el=>el.remove());
+    document.querySelectorAll('button').forEach(b=>{ const t=(b.textContent||'').trim(); if(['Auditer Supabase','Forcer chargement Supabase','Restaurer sauvegarde locale','Sauver joueurs en local'].includes(t)) b.style.display='none'; });
+    blankProfile();
+  }
+  document.addEventListener('DOMContentLoaded',()=>{ setRole(null,null); cleanup(); headerSafe(); setInterval(()=>{cleanup(); headerSafe();},1000); });
+  setTimeout(()=>{cleanup(); headerSafe();},50);
+})();
+</script>
+
 </body></html>
