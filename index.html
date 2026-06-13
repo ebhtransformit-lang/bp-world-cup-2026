@@ -16000,4 +16000,94 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V105 — correctif login définitif : ADMIN toujours accessible, aucun profil fallback. */
+(function(){
+  'use strict';
+  if(window.__BP_V105_LOGIN_FINAL__) return;
+  window.__BP_V105_LOGIN_FINAL__ = true;
+  const USER_KEY='bpwc_current_user_code';
+  function st(){ try{return window.state || state || {players:[]};}catch(e){return window.state || {players:[]};} }
+  function players(){ const a=st().players; return Array.isArray(a)?a:[]; }
+  function setRole(r,i){ try{currentRole=r;}catch(e){} try{currentUserIndex=i;}catch(e){} window.currentRole=r; window.currentUserIndex=i; }
+  function idx(){ try{return currentUserIndex;}catch(e){return window.currentUserIndex;} }
+  function role(){ try{return currentRole;}catch(e){return window.currentRole||null;} }
+  function byCode(code){ code=String(code||'').trim(); return players().findIndex(p=>String(p && p.code || '').trim()===code); }
+  function el(id){ return document.getElementById(id); }
+  function setText(id,v){ const x=el(id); if(x) x.textContent=v; }
+  function setVal(id,v){ const x=el(id); if(x) x.value=v; }
+  function init(v){ return String(v||'?').trim().charAt(0).toUpperCase() || '?'; }
+  function currentPlayer(){ const i=Number(idx()); return role()==='user' && Number.isInteger(i) && i>=0 ? (players()[i]||null) : null; }
+  function safeProfile(){
+    const p=currentPlayer();
+    if(!p){
+      setText('profileName', role()==='admin' ? 'Admin' : 'Aucun joueur connecté');
+      setText('profileAvatar', role()==='admin' ? 'A' : '?');
+      setVal('profilePseudoInput','');
+      setText('headerUserName', role()==='admin' ? 'Admin' : 'Utilisateur');
+      setText('headerAvatar', role()==='admin' ? 'A' : '?');
+      setText('kpiBalance','—');
+      return null;
+    }
+    const label=p.pseudo || p.name || 'Utilisateur';
+    setText('profileName',label); setText('profileAvatar',init(p.name||p.pseudo)); setVal('profilePseudoInput',label);
+    setText('headerUserName',label); setText('headerAvatar',init(p.name||p.pseudo)); setText('kpiBalance', String(Number(p.balance ?? p.startFid ?? 50)));
+    const sel=el('activePlayer'); if(sel) sel.value=String(idx());
+    return p;
+  }
+  function showAdmin(){
+    setRole('admin',null);
+    try{localStorage.removeItem(USER_KEY);}catch(e){}
+    const login=el('loginScreen'); if(login) login.style.display='none';
+    if(typeof applyRoleUI==='function') applyRoleUI();
+    const lock=el('adminLock'); if(lock) lock.style.display='none';
+    const panel=el('adminPanel'); if(panel) panel.style.display='block';
+    if(typeof tab==='function') tab('backup',el('navBackup'));
+    if(typeof renderAll==='function') renderAll();
+    safeProfile();
+    return false;
+  }
+  function showUser(i,code){
+    setRole('user',i);
+    try{localStorage.setItem(USER_KEY,code);}catch(e){}
+    const sel=el('activePlayer'); if(sel) sel.value=String(i);
+    const login=el('loginScreen'); if(login) login.style.display='none';
+    if(typeof applyRoleUI==='function') applyRoleUI();
+    if(typeof tab==='function') tab('bets',el('navBets'));
+    if(typeof renderAll==='function') renderAll();
+    safeProfile(); setTimeout(safeProfile,50);
+    return false;
+  }
+  function strictLogin(){
+    const input=el('loginCode'); const code=String(input&&input.value||'').trim(); const err=el('loginError');
+    if(err){err.style.display='none'; err.textContent='';}
+    if(code==='1573') return showAdmin();
+    if(!players().length){ if(err){err.textContent='Données non chargées. Connecte-toi en ADMIN puis recharge la BDD.'; err.style.display='block';} safeProfile(); return false; }
+    const i=byCode(code);
+    if(i>=0) return showUser(i,code);
+    if(err){err.textContent='Code incorrect.'; err.style.display='block';}
+    safeProfile(); return false;
+  }
+  window.loginWithCode=strictLogin;
+  window.__bpForceProfile=safeProfile;
+  window.player=currentPlayer;
+  try{player=currentPlayer;}catch(e){}
+  document.addEventListener('click',function(e){
+    const b=e.target && e.target.closest ? e.target.closest('button') : null;
+    if(b && el('loginScreen') && el('loginScreen').contains(b) && String(b.textContent||'').trim()==='Entrer'){
+      e.preventDefault(); e.stopImmediatePropagation(); strictLogin(); return false;
+    }
+  },true);
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Enter' && e.target && e.target.id==='loginCode'){
+      e.preventDefault(); e.stopImmediatePropagation(); strictLogin(); return false;
+    }
+  },true);
+  const oldRenderAll=window.renderAll;
+  window.renderAll=function(){ const r=oldRenderAll?oldRenderAll.apply(this,arguments):undefined; safeProfile(); return r; };
+  document.addEventListener('DOMContentLoaded',safeProfile);
+})();
+</script>
 </body></html>
