@@ -15853,4 +15853,151 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+<script>
+/* V104 — Correctif final login strict : aucun profil hardcodé, aucun fallback vers premier joueur.
+   Le profil affiché est toujours recalculé depuis le code saisi et le joueur exact en BDD. */
+(function(){
+  'use strict';
+  if(window.__BP_V104_STRICT_LOGIN_PROFILE__) return;
+  window.__BP_V104_STRICT_LOGIN_PROFILE__ = true;
+
+  const USER_KEY = 'bpwc_current_user_code';
+
+  function S(){ try{return window.state || state || {players:[],bets:[],matches:[]};}catch(e){return window.state || {players:[],bets:[],matches:[]};} }
+  function players(){ const s=S(); return Array.isArray(s.players) ? s.players : []; }
+  function setRole(r,i){
+    try{ currentRole = r; }catch(e){}
+    try{ currentUserIndex = i; }catch(e){}
+    window.currentRole = r;
+    window.currentUserIndex = i;
+  }
+  function getRole(){ try{return currentRole;}catch(e){return window.currentRole || null;} }
+  function getIdx(){ try{return currentUserIndex;}catch(e){return window.currentUserIndex ?? null;} }
+  function loggedPlayer(){
+    const i = Number(getIdx());
+    if(getRole() === 'user' && Number.isInteger(i) && i >= 0 && players()[i]) return players()[i];
+    return null;
+  }
+  function initials(v){
+    return String(v || '?').trim().charAt(0).toUpperCase() || '?';
+  }
+  function byCode(code){
+    code = String(code || '').trim();
+    return players().findIndex(p => String(p && p.code || '').trim() === code);
+  }
+  function setText(id,value){
+    const el=document.getElementById(id);
+    if(el) el.textContent=value;
+  }
+  function setValue(id,value){
+    const el=document.getElementById(id);
+    if(el) el.value=value;
+  }
+  function syncActiveSelect(i){
+    const sel=document.getElementById('activePlayer');
+    if(sel && i !== null && i !== undefined && Number(i) >= 0) sel.value=String(i);
+  }
+  function forceProfile(){
+    const p = loggedPlayer();
+    if(!p){
+      setText('profileName','Aucun joueur connecté');
+      setText('profileAvatar','?');
+      setValue('profilePseudoInput','');
+      setText('headerUserName', getRole()==='admin' ? 'Admin' : 'Utilisateur');
+      setText('headerAvatar', getRole()==='admin' ? 'A' : '?');
+      setText('kpiBalance','—');
+      return null;
+    }
+    const label = p.pseudo || p.name || 'Utilisateur';
+    setText('profileName', label);
+    setText('profileAvatar', initials(p.name || p.pseudo));
+    setValue('profilePseudoInput', label);
+    setText('headerUserName', label);
+    setText('headerAvatar', initials(p.name || p.pseudo));
+    setText('kpiBalance', Number(p.balance ?? p.startFid ?? 50));
+    syncActiveSelect(getIdx());
+    return p;
+  }
+
+  window.player = loggedPlayer;
+  try{ player = loggedPlayer; }catch(e){}
+  window.__bpLoggedPlayer = loggedPlayer;
+  window.__bpForceProfile = forceProfile;
+
+  window.loginWithCode = function(){
+    const input=document.getElementById('loginCode');
+    const code=String(input && input.value || '').trim();
+    const err=document.getElementById('loginError');
+    if(err){ err.style.display='none'; err.textContent=''; }
+
+    if(code === '1573'){
+      setRole('admin', null);
+      try{ localStorage.removeItem(USER_KEY); }catch(e){}
+      const ls=document.getElementById('loginScreen'); if(ls) ls.style.display='none';
+      if(typeof applyRoleUI === 'function') applyRoleUI();
+      const lock=document.getElementById('adminLock'); if(lock) lock.style.display='none';
+      const panel=document.getElementById('adminPanel'); if(panel) panel.style.display='block';
+      if(typeof tab === 'function') tab('backup', document.getElementById('navBackup'));
+      if(typeof renderAll === 'function') renderAll();
+      forceProfile();
+      return false;
+    }
+
+    if(!players().length){
+      if(err){ err.textContent='Données non chargées. Connecte-toi en ADMIN puis recharge la BDD.'; err.style.display='block'; }
+      setRole(null,null);
+      forceProfile();
+      return false;
+    }
+
+    const i = byCode(code);
+    if(i >= 0){
+      setRole('user', i);
+      try{ localStorage.setItem(USER_KEY, code); }catch(e){}
+      syncActiveSelect(i);
+      const ls=document.getElementById('loginScreen'); if(ls) ls.style.display='none';
+      if(typeof applyRoleUI === 'function') applyRoleUI();
+      if(typeof tab === 'function') tab('bets', document.getElementById('navBets'));
+      if(typeof renderAll === 'function') renderAll();
+      setTimeout(forceProfile, 0);
+      setTimeout(forceProfile, 50);
+      return false;
+    }
+
+    setRole(null,null);
+    if(err){ err.textContent='Code incorrect.'; err.style.display='block'; }
+    forceProfile();
+    return false;
+  };
+
+  const oldRenderAll = window.renderAll;
+  window.renderAll = function(){
+    const r = oldRenderAll ? oldRenderAll.apply(this, arguments) : undefined;
+    forceProfile();
+    return r;
+  };
+
+  const oldRenderBets = window.renderBets;
+  window.renderBets = function(){
+    const p = loggedPlayer();
+    if(!p){
+      const rows=document.getElementById('betRows');
+      if(rows) rows.innerHTML='<div class="card muted">Connecte-toi avec ton code joueur pour afficher les pronostics.</div>';
+      forceProfile();
+      return;
+    }
+    syncActiveSelect(getIdx());
+    const r = oldRenderBets ? oldRenderBets.apply(this, arguments) : undefined;
+    forceProfile();
+    return r;
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    if(getRole() !== 'user') setRole(null,null);
+    forceProfile();
+  });
+})();
+</script>
+
 </body></html>
