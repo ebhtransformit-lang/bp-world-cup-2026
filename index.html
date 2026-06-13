@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V95 BDD MANUELLE SANS AUTOSAVE</title>
+<title>B Partner FIFA World Cup 2026 - V97 BDD MANUELLE CLEAN STRICT</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -3088,13 +3088,13 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 <section id="backup">
   <h2>🗄️ BDD Supabase</h2>
   <div class="card" id="bpManualBDDPanel" style="border-color:rgba(250,204,21,.55)">
-    <h2>Mode manuel uniquement</h2>
+    <h2>Mode manuel strict</h2>
     <div class="help">
-      <b>Important :</b> aucune sauvegarde automatique en BDD. La BDD ne change que si tu cliques sur <b>Forcer sauvegarde en BDD</b> et confirmes le warning.
+      <b>Important :</b> aucune sauvegarde automatique. La BDD ne change que si tu cliques sur <b>Forcer sauvegarde en BDD</b> et confirmes le warning.
     </div>
     <div class="muted" style="margin-bottom:12px">
-      <b>Recharger depuis BDD</b> remplace les données affichées/locales par le contenu Supabase.<br>
-      <b>Forcer sauvegarde en BDD</b> écrase Supabase avec l’état actuellement affiché dans le jeu.
+      <b>Recharger depuis BDD</b> remplace l’écran par le contenu Supabase.<br>
+      <b>Forcer sauvegarde en BDD</b> écrase Supabase avec l’état actuellement affiché.
     </div>
     <button class="action secondary" onclick="bpManualLoadBDD()">Recharger depuis BDD</button>
     <button class="action danger" onclick="bpManualSaveBDD()">Forcer sauvegarde en BDD</button>
@@ -4785,16 +4785,10 @@ function readEmbeddedState(){
     return JSON.parse(txt);
   }catch(e){ console.warn("État embarqué illisible", e); return null; }
 }
-try {
-  const rawState = localStorage.getItem("bp_wc_dev");
-  state = rawState ? JSON.parse(rawState) : (readEmbeddedState() || initState());
-} catch(e) {
-  const corrupted = localStorage.getItem("bp_wc_dev");
-  if(corrupted){
-    localStorage.setItem("bp_wc_dev_CORRUPTED_BACKUP_" + new Date().toISOString(), corrupted);
-  }
-  state = readEmbeddedState() || initState();
-}
+// V97 CLEAN STRICT : démarrage neutre.
+// Aucune donnée n’est chargée automatiquement depuis LocalStorage ou état embarqué.
+// Supabase est rechargé uniquement via le bouton admin « Recharger depuis BDD ».
+state = initState();
 
 let currentUserIndex = null;
 let currentRole = null;
@@ -4899,7 +4893,7 @@ function migrateCalendar(){
   state.scheduleVersion="official-fifa-2026-v1";
   save();renderAll();alert("Calendrier réparé sans modifier les utilisateurs.");
 }
-function save(){localStorage.setItem("bp_wc_dev",JSON.stringify(state));}
+function save(){ window.__BP_DIRTY_LOCAL__ = true; return true; }
 function f(team){let c=flagCodes[team];return c?`<img class="flag" src="https://flagcdn.com/${c}.svg" alt="">${team}`:`<span class="muted">${team}</span>`;}
 function flagOnly(team){
   let c=flagCodes[team];
@@ -14826,863 +14820,195 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
-</body></html>
+
 <script>
-/* V87 — HARD FIX calcul des gains
-   Problème traité : le flag gainsCalculatedDays pouvait être TRUE alors qu'aucun règlement réel n'avait été appliqué.
-   Ce correctif recalcule réellement les pronostics validés, met à jour les soldes joueurs et écrit l'état en BDD.
-*/
+/* V97 CLEAN STRICT — Source de vérité = Supabase uniquement sur action manuelle.
+   Objectif : empêcher les empilements LocalStorage / état embarqué / autosave / DOM recovery. */
 (function(){
   'use strict';
-  if(window.__BP_V87_GAINS_HARD_FIX__) return;
-  window.__BP_V87_GAINS_HARD_FIX__ = true;
+  if(window.__BP_V97_CLEAN_STRICT__) return;
+  window.__BP_V97_CLEAN_STRICT__ = true;
 
   const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
   const TABLE = 'app_state';
-  let client = null;
+  let sbClient = null;
 
-  function S(){ return window.state || (window.state = {}); }
-  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return{};} }
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function clone(x){ try { return JSON.parse(JSON.stringify(x || {})); } catch(e){ return {}; } }
   function iso(){ return new Date().toISOString(); }
-  function norm(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
-  function n(v,d){ const x=Number(v); return Number.isFinite(x)?x:d; }
-  function supa(){
-    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) return null;
-    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
-    return client;
-  }
-  function maxDay(){ try{return typeof maxCalendarDay==='function'?Number(maxCalendarDay())||1:Math.max(1,...(S().matches||[]).map(m=>Number(m.day||1)));}catch(e){return 1;} }
-  function targetDay(){
-    try{ if(typeof window.scoreEntryDay==='function') return Math.max(1, Math.min(maxDay(), Number(window.scoreEntryDay())||1)); }catch(e){}
-    const d = Math.max(1, Math.min(maxDay(), Number(S().currentDay||1)));
-    return (S().closedDays && S().closedDays[d] === true) ? d : Math.max(1,d-1);
-  }
-  function matchesOf(day){ return (S().matches||[]).filter(m=>Number(m.day)===Number(day)); }
-  function isClosed(day){ return !!(S().closedDays && S().closedDays[Number(day)]===true); }
-  function keyPlayer(p){ return [p&&p.name,p&&p.pseudo,p&&p.code].map(norm).filter(Boolean); }
-  function findPlayer(ref){
-    const r=norm(ref);
-    return (S().players||[]).find(p=>keyPlayer(p).includes(r));
-  }
-  function outcome(a,b){ a=Number(a); b=Number(b); return a>b?'A':a<b?'B':'N'; }
-  function outcomeLabel(o,m){ return o==='A'?m.teamA:o==='B'?m.teamB:'Nul'; }
-  function scoreText(a,b){ return String(Number(a))+' - '+String(Number(b)); }
-  function betScore(b){
-    if(b.scoreA!==undefined && b.scoreB!==undefined) return {a:Number(b.scoreA),b:Number(b.scoreB)};
-    const parts=String(b.score||'0-0').split(/[-–]/);
-    return {a:Number(parts[0]||0),b:Number(parts[1]||0)};
-  }
-  function getStoredScore(id,day){
-    const s=S();
-    return s.officialScoresByMatch?.[String(id)] || s.officialScores?.[String(day)]?.[String(id)] || s.officialScoresByDay?.[String(day)]?.[String(id)] || null;
-  }
-  function applyScoresFromEverywhere(day){
-    if(!S().officialScoresByMatch) S().officialScoresByMatch={};
-    if(!S().officialScoresByDay) S().officialScoresByDay={};
-    if(!S().officialScores) S().officialScores={};
-    matchesOf(day).forEach(m=>{
-      const ia=document.getElementById('sa_'+m.id), ib=document.getElementById('sb_'+m.id);
-      if(ia && ib && ia.value!=='' && ib.value!==''){
-        m.scoreA=Number(ia.value); m.scoreB=Number(ib.value); m.status='done';
-        const sc={a:Number(ia.value),b:Number(ib.value),scoreA:Number(ia.value),scoreB:Number(ib.value),day:Number(day),savedAt:iso()};
-        S().officialScoresByMatch[String(m.id)]=sc;
-        if(!S().officialScoresByDay[String(day)]) S().officialScoresByDay[String(day)]={};
-        if(!S().officialScores[String(day)]) S().officialScores[String(day)]={};
-        S().officialScoresByDay[String(day)][String(m.id)]=sc;
-        S().officialScores[String(day)][String(m.id)]=sc;
-      }else{
-        const sc=getStoredScore(m.id,day);
-        if(sc){
-          const a=sc.a ?? sc.scoreA, b=sc.b ?? sc.scoreB;
-          if(a!==undefined && b!==undefined && a!==null && b!==null){ m.scoreA=Number(a); m.scoreB=Number(b); m.status='done'; }
-        }
-      }
-    });
-    if(!S().officialScoresSavedDays || typeof S().officialScoresSavedDays!=='object') S().officialScoresSavedDays={};
-    const ok=matchesOf(day).length>0 && matchesOf(day).every(m=>m.scoreA!==undefined&&m.scoreA!==null&&m.scoreB!==undefined&&m.scoreB!==null&&String(m.scoreA)!==''&&String(m.scoreB)!=='');
-    if(ok) S().officialScoresSavedDays[String(day)]=true;
-    return ok;
-  }
-  function rollback(day){
-    const old=(S().settlementDetails||[]).filter(d=>Number(d.day)===Number(day) && d.player && d.player!=='RÉSERVE');
-    old.forEach(d=>{
-      const p=findPlayer(d.player); if(!p) return;
-      const amount=Number(d.netGain||0);
-      p.balance=Number(p.balance||0)-amount;
-      p.evolution=Number(p.evolution||0)-amount;
-      if(String(d.status||'').includes('GAGNÉ')) p.good=Math.max(0,Number(p.good||0)-1);
-      if(String(d.status||'').includes('SCORE EXACT')) p.exact=Math.max(0,Number(p.exact||0)-1);
-    });
-    S().settlementDetails=(S().settlementDetails||[]).filter(d=>Number(d.day)!==Number(day));
-  }
-  function settlementExists(day){ return (S().settlementDetails||[]).some(d=>Number(d.day)===Number(day) && d.player && d.player!=='RÉSERVE'); }
-  function compact(st){ const c=clone(st); if(Array.isArray(c.logs)) c.logs=c.logs.slice(-300); if(Array.isArray(c.settlementDetails)) c.settlementDetails=c.settlementDetails.slice(-5000); c.schemaVersion='v87-gains-hard-fix'; c.lastSavedAt=iso(); return c; }
-  function saveLocal(){ try{ localStorage.setItem('bp_wc_dev',JSON.stringify(compact(S()))); }catch(e){} try{ localStorage.setItem('bpwc_state_v1',JSON.stringify(compact(S()))); }catch(e){} }
-  async function writeCloud(){ const c=supa(); if(!c) return false; const r=await c.from(TABLE).upsert({id:APP_ID,data:compact(S()),updated_at:iso()},{onConflict:'id'}); if(r.error) throw r.error; return true; }
-
-  window.calculateGains = async function(showAlert=true, force=false){
-    if(window.currentRole && window.currentRole!=='admin'){ alert('Accès réservé à l’admin.'); return false; }
-    const day=targetDay();
-    if(!isClosed(day)){ alert('La journée '+day+' doit être fermée avant de calculer les gains.'); return false; }
-    if(!applyScoresFromEverywhere(day)){ alert('Scores officiels manquants pour la journée '+day+'.'); return false; }
-    if(!S().gainsCalculatedDays || typeof S().gainsCalculatedDays!=='object') S().gainsCalculatedDays={};
-    if(S().gainsCalculatedDays[String(day)] && settlementExists(day) && !force){
-      alert('Les gains de la journée '+day+' ont déjà été calculés. Utilise “Recalculer cette journée” pour les refaire.');
-      return false;
-    }
-    const validBets=(S().bets||[]).filter(b=>Number(b.day)===Number(day)&&String(b.status||'').toUpperCase()==='VALIDATED');
-    if(!validBets.length){ alert('Aucune mise VALIDÉE trouvée pour la journée '+day+'.'); return false; }
-    if(showAlert && !force){ if(!confirm('Calculer les gains de la journée '+day+' ?\n\n'+validBets.length+' mise(s) validée(s) seront analysées.')) return false; }
-
-    rollback(day);
-    let processed=0, analyzed=0, winnersCount=0, exactCount=0, netTotal=0;
-    for(const m of matchesOf(day)){
-      processed++;
-      const actual=outcome(m.scoreA,m.scoreB), actualLabel=outcomeLabel(actual,m);
-      const mbets=validBets.filter(b=>String(b.matchId)===String(m.id));
-      let lostPot=0, payoutTotal=0;
-      for(const b of mbets){
-        analyzed++;
-        const p=findPlayer(b.player);
-        const sc=betScore(b);
-        b.scoreA=sc.a; b.scoreB=sc.b; b.score=scoreText(sc.a,sc.b);
-        b.predictedOutcome=outcome(sc.a,sc.b); b.prediction=b.predictedOutcome;
-        const stake=Number(b.stake||0);
-        const exact=(Number(sc.a)===Number(m.scoreA) && Number(sc.b)===Number(m.scoreB));
-        const won=b.predictedOutcome===actual;
-        let net=0, baseGain=0, exactBonus=0, status='PERDU';
-        if(won){
-          const mult=typeof eventMultiplierForBet==='function'?Number(eventMultiplierForBet(day,m.id,exact)||1):1;
-          baseGain=stake*2*mult; exactBonus=exact?stake*mult:0; net=baseGain+exactBonus; payoutTotal+=net;
-          status=(exact?'GAGNÉ + SCORE EXACT (MISE ×3)':'GAGNÉ (MISE ×2)')+(mult>1?' · BONUS x'+mult:'');
-          winnersCount++; if(exact) exactCount++;
-          if(p){ p.balance=Number(p.balance||0)+net; p.evolution=Number(p.evolution||0)+net; p.good=Number(p.good||0)+1; if(exact) p.exact=Number(p.exact||0)+1; }
-        }else{
-          net=-stake; lostPot+=stake;
-          if(p){ p.balance=Number(p.balance||0)-stake; p.evolution=Number(p.evolution||0)-stake; }
-        }
-        netTotal+=net;
-        S().settlementDetails.push({day:Number(day),matchId:m.id,match:m.teamA+' - '+m.teamB,player:b.player,stake:stake,prediction:outcomeLabel(b.predictedOutcome,m),predictedScore:scoreText(sc.a,sc.b),officialScore:scoreText(m.scoreA,m.scoreB),result:actualLabel,status:status,baseGain:baseGain,exactBonus:exactBonus,netGain:net,validatedAt:b.validatedAt||'',calculatedAt:iso(),engine:'V87'});
-      }
-      S().settlementDetails.push({day:Number(day),matchId:m.id,match:m.teamA+' - '+m.teamB,player:'RÉSERVE',stake:0,prediction:'',predictedScore:'',officialScore:scoreText(m.scoreA,m.scoreB),result:actualLabel,status:payoutTotal>lostPot?'RÉSERVE UTILISÉE':'RÉSERVE CRÉDITÉE',baseGain:payoutTotal,exactBonus:0,netGain:lostPot-payoutTotal,calculatedAt:iso(),engine:'V87'});
-    }
-    S().gainsCalculatedDays[String(day)]=true;
-    S().lastGainsCalculation={day:Number(day),processedMatches:processed,validatedBets:validBets.length,analyzedBets:analyzed,winners:winnersCount,exactScores:exactCount,netTotal:netTotal,at:iso(),engine:'V87'};
-    const info=document.getElementById('calcInfo');
-    if(info) info.innerHTML='Journée '+day+' · '+processed+' match(s), '+analyzed+' prono(s) analysé(s), '+winnersCount+' gagnant(s), '+exactCount+' score(s) exact(s). Gains recalculés.';
-    saveLocal();
-    try{ await writeCloud(); }catch(e){ console.warn('[BP V87 write cloud]',e); }
-    try{ if(typeof renderAll==='function') renderAll(); }catch(e){}
-    alert('Gains J'+day+' calculés : '+analyzed+' prono(s) analysé(s), '+winnersCount+' gagnant(s), '+exactCount+' score(s) exact(s).');
-    return true;
-  };
-
-  window.recalculateDay = async function(){
-    const day=targetDay();
-    if(!confirm('Recalculer réellement la journée '+day+' ?\n\nLes anciens mouvements de cette journée seront annulés puis les pronostics validés seront analysés à nouveau.')) return false;
-    if(!S().gainsCalculatedDays || typeof S().gainsCalculatedDays!=='object') S().gainsCalculatedDays={};
-    S().gainsCalculatedDays[String(day)]=false;
-    return window.calculateGains(false,true);
-  };
-})();
-</script>
-
-
-<script>
-/* V88 — BDD MASTER / NO HTML RESET
-   Règle métier :
-   - Supabase est la source de vérité.
-   - Le HTML/localStorage ne doit plus réinjecter des joueurs, scores, FID ou pronos par défaut.
-   - Les données embarquées/locales ne servent qu'en secours si la BDD est vide ou inaccessible.
-*/
-(function(){
-  'use strict';
-  if(window.__BP_V88_BDD_MASTER_NO_HTML_RESET__) return;
-  window.__BP_V88_BDD_MASTER_NO_HTML_RESET__ = true;
-
-  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
-  const TABLE = 'app_state';
-  const LOCAL_KEYS = ['bpwc_state_v1','bp_wc_dev'];
-  let client = null;
-  let bootDone = false;
-  let cloudMaster = null;
-
-  function S(){ return window.state || (window.state = {}); }
-  function clone(x){ try{return JSON.parse(JSON.stringify(x));}catch(e){return x;} }
-  function iso(){ return new Date().toISOString(); }
-  function norm(v){ return String(v || '').trim().toLowerCase(); }
-  function arr(v){ return Array.isArray(v) ? v : []; }
-  function obj(v){ return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
-  function hasBusinessData(d){
-    return !!(d && (
-      arr(d.players).length ||
-      arr(d.bets).length ||
-      arr(d.matches).length ||
-      Object.keys(obj(d.closedDays)).length ||
-      Object.keys(obj(d.gainsCalculatedDays)).length ||
-      Object.keys(obj(d.officialScoresSavedDays)).length
-    ));
-  }
-  function keysOfPlayer(p){
-    const out = [];
-    [p && p.code, p && p.name, p && p.pseudo].forEach(v => {
-      v = norm(v);
-      if(v && !out.includes(v)) out.push(v);
-    });
-    return out;
-  }
-  function ensureState(d){
-    d = d && typeof d === 'object' ? d : {};
-    if(!Array.isArray(d.players)) d.players = [];
-    if(!Array.isArray(d.bets)) d.bets = [];
-    if(!Array.isArray(d.matches)) d.matches = [];
-    if(!Array.isArray(d.deletedPlayerKeys)) d.deletedPlayerKeys = [];
-    if(!Array.isArray(d.settlementDetails)) d.settlementDetails = [];
-    if(!d.closedDays || typeof d.closedDays !== 'object') d.closedDays = {};
-    if(!d.gainsCalculatedDays || typeof d.gainsCalculatedDays !== 'object') d.gainsCalculatedDays = {};
-    if(!d.officialScoresSavedDays || typeof d.officialScoresSavedDays !== 'object') d.officialScoresSavedDays = {};
-    if(!d.officialScoresByDay || typeof d.officialScoresByDay !== 'object') d.officialScoresByDay = {};
-    if(!d.officialScoresByMatch || typeof d.officialScoresByMatch !== 'object') d.officialScoresByMatch = {};
-    return d;
-  }
-  function localDeletedKeys(){
-    const set = new Set();
+  function getState(){ try { return state; } catch(e){ return {}; } }
+  function setState(next){
     try{
-      ['bp_v86_deleted_player_keys','bp_v85_deleted_player_keys','bp_deleted_player_keys_ui'].forEach(k=>{
-        JSON.parse(localStorage.getItem(k) || '[]').forEach(x => { x = norm(x); if(x) set.add(x); });
-      });
-    }catch(e){}
-    arr(S().deletedPlayerKeys).forEach(x => { x = norm(x); if(x) set.add(x); });
-    return [...set];
+      const current = getState();
+      Object.keys(current).forEach(k=>delete current[k]);
+      Object.assign(current, next || {});
+    }catch(e){ console.error('[V97 setState]', e); }
   }
-  function applyDeleted(d){
-    d = ensureState(d);
-    const deleted = new Set([...arr(d.deletedPlayerKeys), ...localDeletedKeys()].map(norm).filter(Boolean));
-    d.deletedPlayerKeys = [...deleted];
-    d.players = arr(d.players).filter(p => !keysOfPlayer(p).some(k => deleted.has(k)));
-    d.bets = arr(d.bets).filter(b => !deleted.has(norm(b.player)));
-    return d;
+  function counts(st){
+    st = st || {};
+    return { players: arr(st.players).length, bets: arr(st.bets).length, matches: arr(st.matches).length, secrets: Object.keys(st.specialEvents || {}).length };
   }
-  function supa(){
-    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
-      throw new Error('Supabase non configuré');
-    }
-    if(!client) client = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
-    return client;
-  }
-  function indicator(type, msg){
-    let el = document.getElementById('bpV88DataSource');
+  function status(msg, kind){
+    let el = document.getElementById('bpManualBDDStatus');
     if(!el){
       el = document.createElement('div');
-      el.id = 'bpV88DataSource';
-      el.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:999999;max-width:430px;padding:10px 13px;border-radius:14px;background:#101010;color:#fff;border:1px solid rgba(255,255,255,.16);box-shadow:0 12px 30px rgba(0,0,0,.45);font:12px Arial';
+      el.id = 'bpManualBDDStatus';
+      el.className = 'help';
       document.body.appendChild(el);
     }
-    el.style.borderColor = type === 'ok' ? 'rgba(74,222,128,.65)' : type === 'bad' ? 'rgba(251,113,133,.75)' : 'rgba(250,204,21,.75)';
-    el.innerHTML = '<b>Source données V88</b><br>' + String(msg || '');
+    el.className = 'help ' + (kind || '');
+    el.innerHTML = msg;
+    console.log('[V97 BDD]', String(msg).replace(/<[^>]+>/g,''));
   }
-  function saveLocal(d){
-    d = applyDeleted(clone(d || S()));
-    d.schemaVersion = 'v88-bdd-master-no-html-reset';
-    d.lastLocalSavedAt = iso();
-    LOCAL_KEYS.forEach(k => { try{ localStorage.setItem(k, JSON.stringify(d)); }catch(e){} });
-  }
-  async function readCloud(){
-    const r = await supa().from(TABLE).select('data,updated_at').eq('id', APP_ID).maybeSingle();
-    if(r.error) throw r.error;
-    const data = r.data && r.data.data ? clone(r.data.data) : null;
-    if(!hasBusinessData(data)) return null;
-    data.__cloudUpdatedAt = r.data && r.data.updated_at;
-    return applyDeleted(ensureState(data));
-  }
-  async function writeCloud(d, reason){
-    d = applyDeleted(clone(d || S()));
-    d.schemaVersion = 'v88-bdd-master-no-html-reset';
-    d.lastSavedAt = iso();
-    const r = await supa().from(TABLE).upsert({id: APP_ID, data: d, updated_at: iso()}, {onConflict:'id'});
-    if(r.error) throw r.error;
-    cloudMaster = clone(d);
-    saveLocal(d);
-    indicator('ok', '✅ SUPABASE maître — sauvegarde ' + (reason || 'OK') + '<br>Joueurs: ' + arr(d.players).length + ' · Matchs: ' + arr(d.matches).length + ' · Pronos: ' + arr(d.bets).length);
-    return d;
-  }
-  function replaceStateWith(d){
-    d = applyDeleted(ensureState(clone(d)));
-    Object.keys(S()).forEach(k => delete S()[k]);
-    Object.assign(S(), d);
-    window.state = S();
-    saveLocal(S());
-    try{ if(typeof window.bpV86ApplyDeletedPlayers === 'function') window.bpV86ApplyDeletedPlayers({forceSave:true}); }catch(e){}
-    try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(e){}
-    setTimeout(()=>{ try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(e){} }, 250);
-  }
-  async function boot(){
-    indicator('warn', 'Chargement Supabase prioritaire…');
-    try{
-      const cloud = await readCloud();
-      if(cloud){
-        cloudMaster = clone(cloud);
-        replaceStateWith(cloud);
-        bootDone = true;
-        indicator('ok', '✅ SUPABASE<br>Joueurs: ' + arr(S().players).length + ' · Matchs: ' + arr(S().matches).length + ' · Pronos: ' + arr(S().bets).length + '<br>Dernière BDD: ' + (cloud.__cloudUpdatedAt || 'n/a'));
-        return true;
-      }
-      bootDone = true;
-      indicator('warn', '⚠️ BDD vide : utilisation de l’état local uniquement. Le HTML ne réinitialise pas automatiquement.');
-      saveLocal(S());
-      return false;
-    }catch(e){
-      bootDone = true;
-      indicator('bad', '❌ BDD inaccessible : ' + (e.message || e) + '<br>Mode local de secours, sans reset HTML.');
-      saveLocal(S());
-      return false;
-    }
-  }
-
-  function wrapFunction(name, wrapper){
-    const old = window[name];
-    if(typeof old !== 'function' || old.__bpV88Wrapped) return;
-    const fn = wrapper(old);
-    fn.__bpV88Wrapped = true;
-    window[name] = fn;
-  }
-
-  function installGuards(){
-    // Toute sauvegarde passe par l'état courant filtré. Après boot Supabase,
-    // on sauvegarde l'état maître, jamais les données embarquées du HTML.
-    wrapFunction('save', old => function(){
-      applyDeleted(S());
-      saveLocal(S());
-      try{
-        const r = old.apply(this, arguments);
-        return r;
-      }catch(e){ console.warn('[V88 save ancien]', e); }
-    });
-
-    ['bpV84WriteBDD','bpV85WriteBDD','bpCloudSave','bpForceSaveSupabase'].forEach(name => {
-      wrapFunction(name, old => async function(){
-        applyDeleted(S());
-        if(cloudMaster && !hasBusinessData(S())){
-          replaceStateWith(cloudMaster);
-        }
-        try{
-          return await writeCloud(S(), name);
-        }catch(e){
-          console.warn('[V88 write guard]', name, e);
-          return await old.apply(this, arguments);
-        }
-      });
-    });
-
-    ['bpCloudLoad','bpForceLoadSupabase','bpV84Start'].forEach(name => {
-      wrapFunction(name, old => async function(){
-        try{
-          const cloud = await readCloud();
-          if(cloud){
-            cloudMaster = clone(cloud);
-            replaceStateWith(cloud);
-            indicator('ok', '✅ SUPABASE rechargé<br>Joueurs: ' + arr(S().players).length + ' · Matchs: ' + arr(S().matches).length + ' · Pronos: ' + arr(S().bets).length);
-            return true;
-          }
-        }catch(e){ console.warn('[V88 load guard]', name, e); }
-        return old.apply(this, arguments);
-      });
-    });
-  }
-
-  window.bpV88Boot = boot;
-  window.bpV88ReadCloud = readCloud;
-  window.bpV88WriteCloud = writeCloud;
-  window.bpV88DataSource = function(){ return {bootDone, source: cloudMaster ? 'SUPABASE' : 'LOCAL_FALLBACK', players: arr(S().players).length, matches: arr(S().matches).length, bets: arr(S().bets).length}; };
-
-  installGuards();
-
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', async function(){
-      installGuards();
-      await boot();
-      setInterval(installGuards, 1500);
-    });
-  }else{
-    setTimeout(async function(){
-      installGuards();
-      await boot();
-      setInterval(installGuards, 1500);
-    }, 0);
-  }
-})();
-</script>
-
-
-<script>
-/* V89 — Classement : afficher le score officiel après le pays
-   Patch non destructif : après chaque rendu, on lit state.matches et on ajoute une colonne "Score"
-   à chaque ligne de classement. Cela permet de valider GitHub sans toucher à la BDD. */
-(function(){
-  'use strict';
-  if(window.__BP_V89_STANDING_SCORE_VISIBLE__) return;
-  window.__BP_V89_STANDING_SCORE_VISIBLE__ = true;
-
-  function normalize(s){
-    return String(s || '').trim().toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/\s+/g,' ');
-  }
-
-  function scoreMap(){
-    const map = new Map();
-    const matches = Array.isArray(window.state && window.state.matches) ? window.state.matches : [];
-    matches.forEach(m => {
-      const a = m.teamA || m.home || m.a || m.t1 || m.team1 || m.homeTeam || m.countryA;
-      const b = m.teamB || m.away || m.b || m.t2 || m.team2 || m.awayTeam || m.countryB;
-      const sa = m.scoreA ?? m.homeScore ?? m.s1 ?? m.goalsA ?? m.officialA;
-      const sb = m.scoreB ?? m.awayScore ?? m.s2 ?? m.goalsB ?? m.officialB;
-      if(a && b && sa !== undefined && sa !== null && sb !== undefined && sb !== null && String(sa) !== '' && String(sb) !== ''){
-        const ka = normalize(a), kb = normalize(b);
-        if(!map.has(ka)) map.set(ka, []);
-        if(!map.has(kb)) map.set(kb, []);
-        map.get(ka).push(`${sa}-${sb}`);
-        map.get(kb).push(`${sb}-${sa}`);
-      }
-    });
-    return map;
-  }
-
-  function injectScores(){
-    const map = scoreMap();
-    document.querySelectorAll('.worldcup-group-card').forEach(card => {
-      const rows = Array.from(card.querySelectorAll('.worldcup-team-row'));
-      rows.forEach(row => {
-        if(row.dataset.bpV89ScoreDone === '1') return;
-        const children = Array.from(row.children);
-        if(!children.length) return;
-
-        const scoreCell = document.createElement('span');
-        scoreCell.className = 'bp-standing-score';
-
-        if(row.classList.contains('head')){
-          scoreCell.textContent = 'Score';
-          row.insertBefore(scoreCell, children[1] || null);
-          row.dataset.bpV89ScoreDone = '1';
-          return;
-        }
-
-        const nameEl = row.querySelector('.worldcup-team-name') || children[1] || children[0];
-        const country = normalize(nameEl ? nameEl.textContent : '');
-        const scores = map.get(country) || [];
-        scoreCell.textContent = scores.length ? scores.join(' / ') : '-';
-        row.insertBefore(scoreCell, children[2] || null);
-        row.dataset.bpV89ScoreDone = '1';
-      });
-    });
-  }
-
-  function schedule(){ setTimeout(injectScores, 50); setTimeout(injectScores, 300); setTimeout(injectScores, 900); }
-
-  const oldRenderAll = window.renderAll;
-  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV89Wrapped){
-    const wrapped = function(){
-      const r = oldRenderAll.apply(this, arguments);
-      schedule();
-      return r;
-    };
-    wrapped.__bpV89Wrapped = true;
-    window.renderAll = wrapped;
-  }
-
-  document.addEventListener('DOMContentLoaded', schedule);
-  setInterval(injectScores, 2000);
-})();
-</script>
-
-
-<script>
-/* V90 STATE GUARD */
-(function(){
-  function apply(){
-    try{
-      if(window.__BP_V90_CLOUD_BOOT_STATE__ && window.state){
-        Object.keys(window.state).forEach(function(k){ delete window.state[k]; });
-        Object.assign(window.state, JSON.parse(JSON.stringify(window.__BP_V90_CLOUD_BOOT_STATE__)));
-        localStorage.setItem("bp_wc_dev", JSON.stringify(window.state));
-        if(typeof window.renderAll === "function") window.renderAll();
-      }
-    }catch(e){ console.warn("[V90] State guard", e); }
-  }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply);
-  else setTimeout(apply, 0);
-  setTimeout(apply, 300);
-  setTimeout(apply, 1000);
-})();
-</script>
-
-<script>
-(function(){
-  if(window.__BP_V91_SYNC_MESSAGES_FIX__) return;
-  window.__BP_V91_SYNC_MESSAGES_FIX__ = true;
-
-  function removeDuplicates(){
-    ["bpSyncPill","bpV88DataSource","bpV90DataSource"].forEach(function(id){
-      var el = document.getElementById(id);
-      if(el) el.style.display = "none";
-    });
-  }
-
-  function setStatus(main, sub){
-    removeDuplicates();
-    var el = document.getElementById("bpV91SyncStatus");
-    if(!el){
-      el = document.createElement("div");
-      el.id = "bpV91SyncStatus";
-      document.body.appendChild(el);
-    }
-    el.innerHTML = String(main || "BDD Supabase") + (sub ? '<span class="muted">'+String(sub)+'</span>' : "");
-  }
-
-  window.bpV91SyncStatus = setStatus;
-
-  var oldIndicator = window.indicator;
-  window.indicator = function(type, msg){
-    setStatus("BDD Supabase", String(msg || "").replace(/<br>/g," — "));
-    if(typeof oldIndicator === "function"){
-      try { return oldIndicator.apply(this, arguments); } catch(e){}
-    }
-  };
-
-  var oldConsoleWarn = console.warn;
-  console.warn = function(){
-    removeDuplicates();
-    return oldConsoleWarn.apply(console, arguments);
-  };
-
-  document.addEventListener("DOMContentLoaded", function(){
-    removeDuplicates();
-    setStatus("BDD Supabase", "Synchronisation active");
-    setInterval(removeDuplicates, 500);
-  });
-})();
-</script>
-
-<script>
-(function(){
-  if(window.__BP_V92_PURGE_DELETED_PLAYERS_BDD__) return;
-  window.__BP_V92_PURGE_DELETED_PLAYERS_BDD__ = true;
-
-  function norm(v){ return String(v || "").trim().toLowerCase(); }
-  function arr(v){ return Array.isArray(v) ? v : []; }
-  function playerKeys(p){ return [p && p.code, p && p.name, p && p.pseudo].map(norm).filter(Boolean); }
-  function deletedSet(){
-    var s = new Set();
-    try{ arr(window.state && window.state.deletedPlayerKeys).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
-    ["bp_v86_deleted_player_keys","bp_v85_deleted_player_keys","bp_deleted_player_keys_ui","bp_v92_deleted_player_keys"].forEach(function(k){
-      try{ arr(JSON.parse(localStorage.getItem(k)||"[]")).forEach(function(x){ x=norm(x); if(x) s.add(x); }); }catch(e){}
-    });
-    return s;
-  }
-  function saveDeletedSet(s){
-    var a = Array.from(s).filter(Boolean);
-    try{ localStorage.setItem("bp_v92_deleted_player_keys", JSON.stringify(a)); }catch(e){}
-    if(window.state){
-      window.state.deletedPlayerKeys = Array.from(new Set(arr(window.state.deletedPlayerKeys).concat(a).map(norm).filter(Boolean)));
-    }
-  }
-  function hideOldBadges(){
-    ["bpSyncPill","bpV88DataSource","bpV90DataSource"].forEach(function(id){
-      var el = document.getElementById(id);
-      if(el){ el.style.display = "none"; el.remove(); }
-    });
-  }
-  function status(msg){
-    hideOldBadges();
-    var el = document.getElementById("bpV92Status");
-    if(!el){
-      el = document.createElement("div");
-      el.id = "bpV92Status";
-      el.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:999999;max-width:420px;padding:10px 14px;border-radius:14px;background:#101010;color:#fff;border:1px solid rgba(74,222,128,.6);box-shadow:0 10px 28px rgba(0,0,0,.35);font:12px Arial;font-weight:800";
-      document.body.appendChild(el);
-    }
-    el.textContent = msg || "BDD Supabase OK";
-  }
-  async function pushState(reason){
-    if(!window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY || !window.state) return false;
-    var appId = window.BP_SUPABASE_APP_ID || "bp-world-cup-2026";
-    var endpoint = window.BP_SUPABASE_URL.replace(/\/$/,"") + "/rest/v1/app_state";
-    var res = await fetch(endpoint, {
-      method:"POST",
-      headers:{
-        "apikey": window.BP_SUPABASE_ANON_KEY,
-        "Authorization": "Bearer " + window.BP_SUPABASE_ANON_KEY,
-        "Content-Type":"application/json",
-        "Prefer":"resolution=merge-duplicates"
-      },
-      body: JSON.stringify({
-        id: appId,
-        data: window.state,
-        updated_at: new Date().toISOString()
-      })
-    });
-    if(!res.ok) throw new Error("Sauvegarde BDD KO " + res.status);
-    status("BDD nettoyée — " + (reason || "OK") + " — joueurs: " + arr(window.state.players).length);
-    return true;
-  }
-  async function purge(reason){
-    if(!window.state) return;
-    var s = deletedSet();
-    saveDeletedSet(s);
-    var beforeP = arr(window.state.players).length;
-    var beforeB = arr(window.state.bets).length;
-    window.state.players = arr(window.state.players).filter(function(p){ return !playerKeys(p).some(function(k){ return s.has(k); }); });
-    window.state.bets = arr(window.state.bets).filter(function(b){ return !s.has(norm(b.player)); });
-    try{
-      localStorage.setItem("bp_wc_dev", JSON.stringify(window.state));
-      localStorage.setItem("bpwc_state_v1", JSON.stringify(window.state));
-    }catch(e){}
-    if(beforeP !== window.state.players.length || beforeB !== window.state.bets.length){
-      try{ await pushState(reason || "purge joueurs supprimés"); }catch(e){ status("Purge locale OK, BDD KO: " + (e.message || e)); }
-      try{ if(typeof window.renderAll === "function") window.renderAll(); }catch(e){}
-    }else{
-      status("BDD Supabase — joueurs: " + arr(window.state.players).length);
-    }
-  }
-  function captureDelete(btn){
-    try{
-      var card = btn.closest(".admin-player-card") || btn.closest(".admin-row") || btn.closest("tr") || btn.parentElement;
-      var values = [];
-      if(card){
-        card.querySelectorAll("input,.user-code").forEach(function(el){ values.push(el.value || el.textContent); });
-      }
-      var s = deletedSet();
-      values.map(norm).filter(Boolean).forEach(function(v){ s.add(v); });
-      saveDeletedSet(s);
-      setTimeout(function(){ purge("suppression joueur"); }, 250);
-      setTimeout(function(){ purge("suppression joueur"); }, 1200);
-    }catch(e){}
-  }
-  document.addEventListener("click", function(e){
-    var b = e.target && e.target.closest && e.target.closest("button");
-    if(!b) return;
-    var t = norm(b.textContent);
-    if(t.indexOf("suppr") !== -1 || t.indexOf("delete") !== -1) captureDelete(b);
-  }, true);
-
-  window.bpV92PurgeDeletedPlayers = purge;
-
-  function addButton(){
-    if(document.getElementById("bpV92PurgeBtn")) return;
-    var admin = document.getElementById("admin") || document.querySelector("section#admin");
-    if(!admin) return;
-    var btn = document.createElement("button");
-    btn.id = "bpV92PurgeBtn";
-    btn.className = "action danger";
-    btn.textContent = "Nettoyer BDD joueurs supprimés";
-    btn.onclick = function(){ purge("nettoyage manuel"); };
-    admin.insertBefore(btn, admin.firstChild);
-  }
-
-  document.addEventListener("DOMContentLoaded", function(){
-    addButton();
-    hideOldBadges();
-    setTimeout(function(){ purge("contrôle boot"); }, 800);
-    setInterval(function(){ hideOldBadges(); addButton(); }, 1000);
-  });
-})();
-</script>
-
-
-
-<script>
-/* V95 — Mode BDD manuel : Supabase ne s'écrase plus automatiquement.
-   - Charger BDD = remplace l'état local par le contenu Supabase.
-   - Sauvegarder BDD = écrit explicitement l'état affiché dans Supabase.
-   - Aucun autosave BDD silencieux. */
-(function(){
-  if(window.__BP_V95_BDD_MANUELLE__) return;
-  window.__BP_V95_BDD_MANUELLE__ = true;
-
-  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
-  const TABLE = 'app_state';
-  const LS_MAIN = 'bp_wc_dev';
-  const LS_ALT = 'bpwc_state_v1';
-
-  function arr(v){ return Array.isArray(v) ? v : []; }
-  function clone(v){ return JSON.parse(JSON.stringify(v)); }
-  function now(){ return new Date().toISOString(); }
-  function status(msg, type){
-    let el = document.getElementById('bpV95Status');
-    if(!el){
-      el = document.createElement('div');
-      el.id = 'bpV95Status';
-      el.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:999999;max-width:430px;padding:10px 14px;border-radius:14px;background:#101010;color:#fff;border:1px solid rgba(59,130,246,.65);box-shadow:0 10px 28px rgba(0,0,0,.35);font:12px Arial;font-weight:800';
-      document.body.appendChild(el);
-    }
-    el.style.borderColor = type === 'bad' ? 'rgba(251,113,133,.7)' : type === 'ok' ? 'rgba(74,222,128,.7)' : 'rgba(59,130,246,.65)';
-    el.textContent = msg || 'BDD manuelle active';
-  }
-  function hideOldBadges(){
-    ['bpSyncPill','bpV88DataSource','bpV90DataSource','bpV91SyncStatus','bpV92Status'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
-  }
-  function supa(){
-    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) throw new Error('Supabase non configuré');
-    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
-  }
-  function currentState(){
-    if(!window.state) throw new Error('État local introuvable');
-    return window.state;
+  function hasConfig(){ return !!(window.supabase && window.BP_MANUAL_SUPABASE_URL && window.BP_MANUAL_SUPABASE_ANON_KEY); }
+  function sb(){
+    if(!hasConfig()) throw new Error('Supabase non configuré : URL/clé manuelle absente.');
+    if(!sbClient) sbClient = window.supabase.createClient(window.BP_MANUAL_SUPABASE_URL, window.BP_MANUAL_SUPABASE_ANON_KEY);
+    return sbClient;
   }
   function compact(st){
-    const d = clone(st || {});
-    if(!Array.isArray(d.players)) d.players = [];
-    if(!Array.isArray(d.bets)) d.bets = [];
-    if(!Array.isArray(d.matches) && Array.isArray(window.starterMatches)) d.matches = clone(window.starterMatches);
-    d.schemaVersion = 'v95-manual-bdd';
-    d.lastManualStateAt = now();
-    return d;
+    const s = clone(st);
+    if(!Array.isArray(s.players)) s.players = [];
+    if(!Array.isArray(s.bets)) s.bets = [];
+    if(!Array.isArray(s.matches)) s.matches = Array.isArray(window.starterMatches) ? clone(window.starterMatches) : [];
+    if(!s.summaries) s.summaries = {};
+    s.schemaVersion = 'v97-clean-strict-manual-bdd';
+    s.lastSavedAt = iso();
+    s.cloudUpdatedAt = iso();
+    delete s._cache; delete s.debug; delete s.htmlPreview;
+    return s;
   }
-  function localOnlySave(){
-    try{ localStorage.setItem(LS_MAIN, JSON.stringify(currentState())); }catch(e){}
-    try{ localStorage.setItem(LS_ALT, JSON.stringify(currentState())); }catch(e){}
-  }
-
-  window.bpV95SaveLocalOnly = localOnlySave;
-
   async function readBDD(){
-    const r = await supa().from(TABLE).select('data,updated_at').eq('id', APP_ID).maybeSingle();
+    const r = await sb().from(TABLE).select('data,updated_at').eq('id', APP_ID).maybeSingle();
     if(r.error) throw r.error;
     return r.data || null;
   }
-
   async function writeBDD(payload){
-    const r = await supa().from(TABLE).upsert({id:APP_ID, data:compact(payload), updated_at:now()}, {onConflict:'id'});
+    const row = { id: APP_ID, data: compact(payload), updated_at: iso() };
+    const r = await sb().from(TABLE).upsert(row, {onConflict:'id'});
     if(r.error) throw r.error;
-    return true;
+    return row;
   }
 
-  window.bpV95LoadBDD = async function(){
+  // Bloque les anciennes écritures locales du jeu : elles ont causé des états parasites.
+  const nativeSetItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function(key, value){
+    if(/^bp/i.test(String(key || '')) || String(key || '').includes('worldcup')){
+      console.warn('[V97] Écriture LocalStorage bloquée:', key);
+      window.__BP_DIRTY_LOCAL__ = true;
+      return undefined;
+    }
+    return nativeSetItem.apply(this, arguments);
+  };
+
+  // Sauvegarde applicative = mémoire uniquement, jamais LocalStorage ni BDD.
+  window.save = function(){ window.__BP_DIRTY_LOCAL__ = true; status('Modification en mémoire uniquement — BDD non modifiée.', 'warn'); return true; };
+
+  // Neutralisation des anciens chemins de synchro/backup/récupération.
+  window.bpCloudSaveDebounced = function(){ return window.save(); };
+  window.bpCloudSave = async function(){ status('Autosave BDD bloqué. Utilise “Forcer sauvegarde en BDD”.', 'warn'); return false; };
+  window.bpV95SaveBDD = async function(){ return window.bpManualSaveBDD(); };
+  window.bpV96SaveBDD = async function(){ return window.bpManualSaveBDD(); };
+  window.bpForceSaveSupabase = async function(){ return window.bpManualSaveBDD(); };
+  window.bpCloudLoad = async function(){ return window.bpManualLoadBDD(); };
+  window.bpV95LoadBDD = async function(){ return window.bpManualLoadBDD(); };
+  window.bpV96LoadBDD = async function(){ return window.bpManualLoadBDD(); };
+  window.bpForceLoadSupabase = async function(){ return window.bpManualLoadBDD(); };
+  window.forceLoadEmbeddedState = function(){ alert('Désactivé en v97 : aucun état embarqué ne doit être chargé.'); return false; };
+  window.downloadStandaloneHTMLWithUsers = function(){ alert('Désactivé en v97 : export HTML autonome avec données interdit.'); return false; };
+  window.bpV95RecoverLocalBackup = function(){ alert('Désactivé en v97 : récupération LocalStorage interdite. Utiliser les Excel puis restauration propre.'); return false; };
+
+  window.bpManualLoadBDD = async function(){
     try{
-      hideOldBadges();
-      status('Chargement BDD Supabase…');
+      if(!confirm('Recharger depuis Supabase ?\n\nLes données affichées seront remplacées par la BDD.')) return false;
+      status('Chargement BDD Supabase…', 'warn');
       const row = await readBDD();
       if(!row || !row.data) throw new Error('Aucune ligne app_state trouvée pour '+APP_ID);
-      const cloud = compact(row.data);
-      Object.keys(currentState()).forEach(k=>delete currentState()[k]);
-      Object.assign(currentState(), cloud);
-      localOnlySave();
+      const remote = compact(row.data);
+      const c = counts(remote);
+      if(c.players === 0 && !confirm('ATTENTION : la BDD contient 0 joueur. Charger quand même ?')) return false;
+      setState(remote);
       if(typeof window.repairState === 'function') { try{ window.repairState(); }catch(e){} }
       if(typeof window.renderAll === 'function') window.renderAll();
-      status('BDD chargée — joueurs: '+arr(cloud.players).length+' — pronostics: '+arr(cloud.bets).length, arr(cloud.players).length ? 'ok' : 'bad');
+      status(`BDD rechargée — joueurs : ${c.players} — mises : ${c.bets} — matchs : ${c.matches}`, c.players ? 'good' : 'bad');
       return true;
     }catch(e){
-      console.error('[V95 load BDD]', e);
-      status('Erreur chargement BDD : '+(e.message||e), 'bad');
+      console.error('[V97 load]', e);
+      status('Erreur chargement BDD : ' + (e.message || e), 'bad');
+      alert('Erreur chargement BDD : ' + (e.message || e));
       return false;
     }
   };
 
-  window.bpV95SaveBDD = async function(){
+  window.bpManualSaveBDD = async function(){
     try{
-      hideOldBadges();
-      const st = compact(currentState());
-      status('Sauvegarde manuelle BDD…');
-      await writeBDD(st);
-      localOnlySave();
-      status('BDD sauvegardée manuellement — joueurs: '+arr(st.players).length+' — pronostics: '+arr(st.bets).length, 'ok');
-      return true;
-    }catch(e){
-      console.error('[V95 save BDD]', e);
-      status('Erreur sauvegarde BDD : '+(e.message||e), 'bad');
-      return false;
-    }
-  };
+      const local = compact(getState());
+      const localC = counts(local);
+      let remote = null, remoteC = {players:0,bets:0,matches:0};
+      try{ const r = await readBDD(); remote = r && r.data ? r.data : null; remoteC = counts(remote || {}); }catch(e){}
 
-  window.bpV95InspectBDD = async function(){
-    try{
-      hideOldBadges();
-      const row = await readBDD();
-      const d = row && row.data ? row.data : {};
-      status('BDD actuelle — joueurs: '+arr(d.players).length+' — pronostics: '+arr(d.bets).length+' — MAJ: '+(row && row.updated_at ? new Date(row.updated_at).toLocaleString('fr-FR') : '-'), arr(d.players).length ? 'ok' : 'bad');
-      return d;
-    }catch(e){ status('Erreur lecture BDD : '+(e.message||e), 'bad'); return null; }
-  };
-
-  window.bpV95RecoverLocalBackup = function(){
-    try{
-      const candidates = [];
-      for(let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
-        if(!k || !/^bp/i.test(k)) continue;
-        try{
-          const v = JSON.parse(localStorage.getItem(k)||'null');
-          const p = arr(v && v.players).length;
-          const b = arr(v && v.bets).length;
-          if(p>0) candidates.push({k,p,b,v});
-        }catch(e){}
+      if(localC.players === 0 && remoteC.players > 0){
+        alert('BLOCAGE SÉCURITÉ : impossible d’écraser une BDD qui contient des joueurs avec un écran à 0 joueur.');
+        status('Sauvegarde bloquée — écran à 0 joueur.', 'bad');
+        return false;
       }
-      candidates.sort((a,b)=>(b.p-a.p)||(b.b-a.b));
-      if(!candidates.length){ status('Aucune sauvegarde locale avec joueurs trouvée', 'bad'); return false; }
-      const best = candidates[0];
-      Object.keys(currentState()).forEach(k=>delete currentState()[k]);
-      Object.assign(currentState(), compact(best.v));
-      localOnlySave();
-      if(typeof window.renderAll === 'function') window.renderAll();
-      status('Sauvegarde locale restaurée — '+best.k+' — joueurs: '+best.p+' — pronostics: '+best.b, 'ok');
+      if(localC.matches === 0 && remoteC.matches > 0){
+        alert('BLOCAGE SÉCURITÉ : impossible d’écraser une BDD qui contient des matchs avec un écran à 0 match.');
+        status('Sauvegarde bloquée — écran à 0 match.', 'bad');
+        return false;
+      }
+
+      const warning = `ATTENTION — ÉCRASEMENT BDD\n\nÉcran actuel :\n- Joueurs : ${localC.players}\n- Mises : ${localC.bets}\n- Matchs : ${localC.matches}\n\nBDD actuelle :\n- Joueurs : ${remoteC.players}\n- Mises : ${remoteC.bets}\n- Matchs : ${remoteC.matches}\n\nTape exactement ECRASER BDD pour confirmer.`;
+      const ok = prompt(warning);
+      if(ok !== 'ECRASER BDD') { status('Sauvegarde annulée.', 'warn'); return false; }
+
+      status('Sauvegarde forcée en BDD…', 'warn');
+      await writeBDD(local);
+      status(`BDD sauvegardée — joueurs : ${localC.players} — mises : ${localC.bets} — matchs : ${localC.matches}`, 'good');
+      alert('Sauvegarde BDD terminée.');
       return true;
-    }catch(e){ status('Erreur restauration locale : '+(e.message||e),'bad'); return false; }
+    }catch(e){
+      console.error('[V97 save]', e);
+      status('Erreur sauvegarde BDD : ' + (e.message || e), 'bad');
+      alert('Erreur sauvegarde BDD : ' + (e.message || e));
+      return false;
+    }
   };
 
-  // Désactive les autosaves BDD silencieux : les actions restent locales jusqu'au clic manuel.
-  window.bpCloudSaveDebounced = function(){ localOnlySave(); status('Modification locale non sauvegardée en BDD — clique Sauvegarder BDD', 'warn'); };
-  window.bpCloudSave = async function(showAlert){ return window.bpV95SaveBDD(); };
-  window.bpCloudLoad = async function(showAlert){ return window.bpV95LoadBDD(); };
-  window.bpForceLoadSupabase = window.bpV95LoadBDD;
-  window.bpForceSaveSupabase = window.bpV95SaveBDD;
-
-  const oldSave = window.save;
-  window.save = function(){
-    try{ if(typeof oldSave === 'function') oldSave.apply(this, arguments); }catch(e){}
-    localOnlySave();
-    return true;
-  };
-
-  function installPanel(){
-    hideOldBadges();
-    let target = document.getElementById('adminPlayers');
-    const admin = document.getElementById('admin') || document.querySelector('section#admin');
-    if(!admin) return;
-    if(document.getElementById('bpV95ManualPanel')) return;
-    const panel = document.createElement('div');
-    panel.id = 'bpV95ManualPanel';
-    panel.className = 'card';
-    panel.style.borderColor = 'rgba(59,130,246,.55)';
-    panel.innerHTML = `
-      <h2>🗄️ BDD Supabase — mode manuel</h2>
-      <div class="muted" style="margin-bottom:10px">
-        <b>Charger BDD</b> remplace l'écran par le contenu Supabase. <b>Sauvegarder BDD</b> écrit l'écran actuel dans Supabase.
-        Les modifications ne sont plus envoyées automatiquement.
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="action" onclick="bpV95InspectBDD()">Voir état BDD</button>
-        <button class="action" onclick="bpV95LoadBDD()">Charger contenu BDD</button>
-        <button class="action" onclick="bpV95SaveBDD()">Sauvegarder contenu actuel en BDD</button>
-        <button class="action secondary" onclick="bpV95RecoverLocalBackup()">Restaurer meilleure sauvegarde locale</button>
-      </div>
-    `;
-    const h = admin.querySelector('h2');
-    if(h && h.parentElement) h.parentElement.insertBefore(panel, h.nextSibling);
-    else admin.insertBefore(panel, admin.firstChild);
+  function cleanUI(){
+    const backup = document.getElementById('backup');
+    if(backup){
+      backup.innerHTML = `
+        <h2>🗄️ BDD Supabase</h2>
+        <div class="card" id="bpManualBDDPanel" style="border-color:rgba(250,204,21,.55)">
+          <h2>Mode manuel strict</h2>
+          <div class="help"><b>Important :</b> aucune sauvegarde automatique, aucun LocalStorage, aucun état embarqué. La BDD ne change que via le bouton rouge.</div>
+          <div class="muted" style="margin-bottom:12px"><b>Recharger depuis BDD</b> remplace l’écran par Supabase.<br><b>Forcer sauvegarde en BDD</b> écrase Supabase avec l’état actuellement affiché, après saisie de confirmation.</div>
+          <button class="action secondary" onclick="bpManualLoadBDD()">Recharger depuis BDD</button>
+          <button class="action danger" onclick="bpManualSaveBDD()">Forcer sauvegarde en BDD</button>
+          <div id="bpManualBDDStatus" class="help">Statut : prêt. Autosave BDD désactivé.</div>
+        </div>`;
+    }
+    const nav = document.getElementById('navBackup');
+    if(nav) nav.textContent = '🗄️ BDD';
+    document.querySelectorAll('#bpSupabasePanel,#bpAutoSavePanel,#bpForceLoadSupabasePanel,#bpV49DataSafetyPanel,#bpV50AuditPanel,#bpV52AuditPanel,#bpV54CloudAuditPanel,#bpV95ManualPanel,#githubPersistPanel,#dailyBackupPanel,#downloadStandaloneHTMLBtn').forEach(el=>el.remove());
+    ['bpSyncPill','bpV88DataSource','bpV90DataSource','bpV91SyncStatus','bpV92Status','bpV95Status'].forEach(id=>{ const el=document.getElementById(id); if(el) el.remove(); });
   }
 
-  function cleanOldButtons(){
-    document.querySelectorAll('button').forEach(btn=>{
-      const t=(btn.textContent||'').trim().toLowerCase();
-      if(t==='nettoyer bdd joueurs supprimés') btn.style.display='none';
-      if(t==='charger depuis supabase') btn.textContent='Charger contenu BDD';
-      if(t==='sauvegarder vers supabase') btn.textContent='Sauvegarder contenu actuel en BDD';
-    });
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function'){
+    window.renderAll = function(){
+      const r = oldRenderAll.apply(this, arguments);
+      setTimeout(cleanUI, 30);
+      return r;
+    };
   }
 
   document.addEventListener('DOMContentLoaded', function(){
-    installPanel(); cleanOldButtons(); status('BDD manuelle active — joueurs écran: '+arr(currentState().players).length, 'ok');
-    setInterval(function(){ hideOldBadges(); installPanel(); cleanOldButtons(); }, 1000);
+    cleanUI();
+    status('V97 prêt — état neutre. Clique “Recharger depuis BDD” après restauration propre.', 'good');
+    setInterval(cleanUI, 1000);
   });
 })();
 </script>
+</body></html>
