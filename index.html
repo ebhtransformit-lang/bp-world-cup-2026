@@ -1,10 +1,3 @@
-
-<script>
-function confirmBetLock(){
-  return confirm("Êtes-vous certain de vouloir valider cette mise ?\n\nUne fois validée, vous ne pourrez plus modifier votre pronostic.");
-}
-</script>
-
 <!DOCTYPE html>
 <!-- saved from url=(0102)file:///C:/Users/Hassan%20EL%20BAKKALI/Downloads/BPartner_FIFA_WorldCup_2026_DEV_HallOfFame_Final.html -->
 <html lang="fr"><head>
@@ -13791,7 +13784,14 @@ window.BP_LOCAL_ONLY = true;
       ensureStores(); applyDeleted(); saveLocal();
       log('warn','Sauvegarde en cours… '+(reason||''));
       const payload={id:APP_ID,data:compact(S()),updated_at:iso()};
-      const r=await supa().from('app_state').upsert(payload,{onConflict:'id'});
+      const previousAllow = window.__BP_ALLOW_BDD_WRITE__;
+      window.__BP_ALLOW_BDD_WRITE__ = true;
+      let r;
+      try{
+        r=await supa().from('app_state').upsert(payload,{onConflict:'id'});
+      } finally {
+        window.__BP_ALLOW_BDD_WRITE__ = previousAllow === true;
+      }
       if(r.error) throw r.error;
       log('ok','Sauvegarde OK — '+(reason||'')+' — '+new Date().toLocaleTimeString('fr-FR'));
       return true;
@@ -13817,7 +13817,11 @@ window.BP_LOCAL_ONLY = true;
     let old='';
     if(btn){ old=btn.innerHTML; btn.disabled=true; btn.classList.add('bp-v83-busy'); btn.innerHTML='<span class="bp-v83-spinner"></span>'+label; }
     try{ return await fn(); }
-    catch(e){ alert('Erreur BDD : '+(e.message||e)); throw e; }
+    catch(e){
+      const msg = (e && e.message) ? e.message : (()=>{try{return JSON.stringify(e)}catch(_){return String(e)}})();
+      alert('Erreur BDD : ' + msg);
+      throw e;
+    }
     finally{ if(btn){ btn.disabled=false; btn.classList.remove('bp-v83-busy'); btn.innerHTML=old; } }
   }
   document.addEventListener('click',function(e){
@@ -15879,7 +15883,7 @@ window.BP_LOCAL_ONLY = true;
   };
 
   window.bpManualLoadBDD=async function(){
-    if(getRole()!=='admin') { alert('Chargement BDD réservé à l’ADMIN.'); return false; }
+    if(getRole()!=='admin') { return false; }
     try{
       setStatus('Chargement BDD…','warn');
       const r=await supa().from(TABLE).select('data,updated_at').eq('id',APP_ID).maybeSingle();
@@ -15900,7 +15904,7 @@ window.BP_LOCAL_ONLY = true;
 
   const oldSave=window.bpManualSaveBDD;
   window.bpManualSaveBDD=async function(){
-    if(getRole()!=='admin') { alert('Sauvegarde BDD réservée à l’ADMIN.'); return false; }
+    if(getRole()!=='admin') { return false; }
     if(players().length===0){ alert('BLOCAGE : impossible de sauvegarder 0 joueur en BDD.'); return false; }
     return oldSave?oldSave.apply(this,arguments):false;
   };
@@ -16553,4 +16557,96 @@ document.addEventListener('click', function(e){
   }, 50);
 }, true);
 </script>
+
+<script>
+/* V113 — Correctifs utilisateur :
+   1) suppression popup "Chargement/Sauvegarde BDD réservé à l'ADMIN"
+   2) confirmation claire avant validation / modification de mise
+   3) erreurs BDD lisibles au lieu de [object Object]
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V113_USER_FIX__) return;
+  window.__BP_V113_USER_FIX__ = true;
+
+  function stringifyError(e){
+    if(!e) return 'Erreur inconnue';
+    if(typeof e === 'string') return e;
+    if(e.message) return e.message;
+    try { return JSON.stringify(e); } catch(_) { return String(e); }
+  }
+
+  const nativeAlert = window.alert ? window.alert.bind(window) : null;
+  window.alert = function(msg){
+    const s = String(msg || '');
+    if(/Chargement BDD réservé à l[’']ADMIN/i.test(s)) return;
+    if(/Sauvegarde BDD réservée à l[’']ADMIN/i.test(s)) return;
+    if(/Erreur BDD\s*:\s*\[object Object\]/i.test(s)){
+      return nativeAlert && nativeAlert("Erreur BDD : la sauvegarde n'a pas pu être vérifiée. Ouvre la console pour le détail technique.");
+    }
+    return nativeAlert && nativeAlert(msg);
+  };
+
+  window.bpConfirmBet = function({match,result,score,stake}={}){
+    const html = `<div class="bp-confirm-grid">
+      <div class="bp-confirm-row"><span>Match</span><strong>${match || "—"}</strong></div>
+      <div class="bp-confirm-row"><span>Résultat</span><strong>${result || "—"}</strong></div>
+      <div class="bp-confirm-row"><span>Score exact</span><strong>${score || "—"}</strong></div>
+      <div class="bp-confirm-row"><span>Mise</span><strong>${stake || "—"} FID</strong></div>
+      <div style="margin-top:14px;padding:14px;border-radius:12px;background:rgba(250,204,21,.10);border:1px solid rgba(250,204,21,.35);font-weight:900;color:#fff;">
+        ⚠️ Êtes-vous certain de vouloir valider cette mise ?<br>
+        Une fois validée, vous ne pourrez plus modifier votre pronostic.
+      </div>
+    </div>`;
+
+    if(typeof window.bpDialog === 'function'){
+      return window.bpDialog({
+        title:"Confirmer la mise",
+        subtitle:"Validation définitive du pronostic.",
+        icon:"🎯",
+        confirmText:"Oui, je valide",
+        cancelText:"Annuler",
+        html
+      });
+    }
+
+    return Promise.resolve(confirm(
+      "Êtes-vous certain de vouloir valider cette mise ?\n\n" +
+      "Une fois validée, vous ne pourrez plus modifier votre pronostic."
+    ));
+  };
+
+  // Si l'utilisateur tente d'ouvrir une mise déjà validée en édition, afficher aussi un warning clair.
+  const oldEditBet = window.editBet;
+  if(typeof oldEditBet === 'function' && !oldEditBet.__bp_v113_wrapped){
+    const wrapped = async function(matchId){
+      const ok = await (typeof window.bpDialog === 'function'
+        ? window.bpDialog({
+            title:"Modifier une mise validée ?",
+            subtitle:"Attention : après nouvelle validation, la mise sera définitive.",
+            icon:"⚠️",
+            confirmText:"Oui, ouvrir l’édition",
+            cancelText:"Annuler",
+            html:`<div style="line-height:1.55">
+              Tu vas ouvrir cette mise en modification.<br><br>
+              Après sauvegarde, une confirmation te sera demandée et tu ne pourras plus modifier ton pronostic.
+            </div>`
+          })
+        : Promise.resolve(confirm("Modifier cette mise validée ?\n\nAprès sauvegarde, tu ne pourras plus modifier ton pronostic."))
+      );
+      if(!ok) return false;
+      return oldEditBet.apply(this, arguments);
+    };
+    wrapped.__bp_v113_wrapped = true;
+    window.editBet = wrapped;
+  }
+
+  // Sécurise les erreurs non interceptées venant de Supabase.
+  window.addEventListener('unhandledrejection', function(ev){
+    const msg = stringifyError(ev && ev.reason);
+    if(/object Object/i.test(msg)) console.error('[BDD]', ev.reason);
+  });
+})();
+</script>
+
 </body></html>
