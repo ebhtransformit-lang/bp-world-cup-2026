@@ -1,6 +1,100 @@
 <!DOCTYPE html>
 <!-- saved from url=(0102)file:///C:/Users/Hassan%20EL%20BAKKALI/Downloads/BPartner_FIFA_WorldCup_2026_DEV_HallOfFame_Final.html -->
-<html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<html lang="fr"><head>
+
+<script>
+/* V101 HARD GUARD — aucune écriture BDD automatique, aucun état jeu en localStorage.
+   LocalStorage autorisé uniquement pour le code du user connecté. */
+(function(){
+  'use strict';
+  if(window.__BP_V101_HARD_GUARD__) return;
+  window.__BP_V101_HARD_GUARD__ = true;
+  window.__BP_ALLOW_BDD_WRITE__ = false;
+  window.__BP_CURRENT_USER_KEY__ = 'bpwc_current_user_code';
+
+  function isAppStateUrl(u){
+    try { return String(u && (u.url || u)).includes('/rest/v1/app_state'); }
+    catch(e){ return false; }
+  }
+  function methodOf(input, init){
+    return String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+  }
+
+  const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+  if(nativeFetch && !window.__BP_V101_FETCH_PATCHED__){
+    window.__BP_V101_FETCH_PATCHED__ = true;
+    window.fetch = function(input, init){
+      const method = methodOf(input, init);
+      if(isAppStateUrl(input) && !['GET','HEAD'].includes(method) && window.__BP_ALLOW_BDD_WRITE__ !== true){
+        console.warn('[V101] Écriture Supabase bloquée hors sauvegarde manuelle', method, String(input && (input.url || input)));
+        return Promise.resolve(new Response(JSON.stringify({error:'V101 blocked non-manual Supabase write'}), {
+          status: 409,
+          headers: {'content-type':'application/json'}
+        }));
+      }
+      return nativeFetch(input, init);
+    };
+  }
+
+  function allowedKey(key){ return String(key||'') === window.__BP_CURRENT_USER_KEY__; }
+  if(window.Storage && !Storage.prototype.__BP_V101_STORAGE_PATCHED__){
+    Storage.prototype.__BP_V101_STORAGE_PATCHED__ = true;
+    const nativeGet = Storage.prototype.getItem;
+    const nativeSet = Storage.prototype.setItem;
+    const nativeRemove = Storage.prototype.removeItem;
+    Storage.prototype.getItem = function(key){
+      if(this === window.localStorage && !allowedKey(key)) return null;
+      return nativeGet.apply(this, arguments);
+    };
+    Storage.prototype.setItem = function(key, value){
+      if(this === window.localStorage && !allowedKey(key)) return undefined;
+      return nativeSet.apply(this, arguments);
+    };
+    Storage.prototype.removeItem = function(key){
+      if(this === window.localStorage && !allowedKey(key)) return undefined;
+      return nativeRemove.apply(this, arguments);
+    };
+  }
+
+  function looksLegacy(fn){
+    const s = Function.prototype.toString.call(fn || '');
+    return /loadBDD|readBDD|writeBDD|bpCloud|cloudLoad|cloudSave|Supabase V8|V83|V84|V93|bpForceLoad|auto.?save|sync/i.test(s);
+  }
+  const nativeSetTimeout = window.setTimeout.bind(window);
+  const nativeSetInterval = window.setInterval.bind(window);
+  const nativeAddEventListener = window.addEventListener.bind(window);
+  window.setTimeout = function(fn, delay){
+    if(typeof fn === 'function' && looksLegacy(fn)) {
+      console.warn('[V101] Timer legacy bloqué');
+      return 0;
+    }
+    return nativeSetTimeout.apply(window, arguments);
+  };
+  window.setInterval = function(fn, delay){
+    if(typeof fn === 'function' && looksLegacy(fn)) {
+      console.warn('[V101] Interval legacy bloqué');
+      return 0;
+    }
+    return nativeSetInterval.apply(window, arguments);
+  };
+  window.addEventListener = function(type, fn, opts){
+    if((type === 'load' || type === 'DOMContentLoaded') && typeof fn === 'function' && looksLegacy(fn)){
+      console.warn('[V101] Listener legacy bloqué:', type);
+      return undefined;
+    }
+    return nativeAddEventListener.apply(window, arguments);
+  };
+})();
+</script>
+<style>
+/* V101 — masque les anciens widgets/toasts legacy */
+#bpSyncPill,#bpV83Log,#bpV84Log,#bpV93Status,#bpV60Panel,#bpV61Panel,#bpAutoSaveStatus,#bpCloudStatus{
+  display:none!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+</style>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>B Partner FIFA World Cup 2026 - V99 BDD MANUELLE SUPABASE ONLY</title>
@@ -15243,6 +15337,179 @@ window.BP_LOCAL_ONLY = true;
       }
     };
   }
+})();
+</script>
+
+
+<script>
+/* V101 MANUAL SUPABASE ONLY — remplace les anciens boutons BDD.
+   La seule écriture possible est bpManualSaveBDD(), avec double warning et blocage si 0 joueur. */
+(function(){
+  'use strict';
+  if(window.__BP_V101_MANUAL_ONLY__) return;
+  window.__BP_V101_MANUAL_ONLY__ = true;
+
+  const APP_ID = 'bp-world-cup-2026';
+  const TABLE = 'app_state';
+  const URL = window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL;
+  const KEY = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY;
+
+  function status(msg, type){
+    const el = document.getElementById('bpManualBDDStatus');
+    if(el){
+      el.textContent = msg;
+      el.className = 'help ' + (type || '');
+    }
+    try{ console.log('[V101 BDD]', msg); }catch(e){}
+  }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return {};}}
+  function normalize(s){
+    s = clone(s);
+    if(!Array.isArray(s.players)) s.players = [];
+    if(!Array.isArray(s.bets)) s.bets = [];
+    if(!Array.isArray(s.matches)) s.matches = [];
+    if(!s.specialEvents || typeof s.specialEvents !== 'object') s.specialEvents = {};
+    if(!s.officialScoresByMatch || typeof s.officialScoresByMatch !== 'object') s.officialScoresByMatch = {};
+    if(!s.officialScoresByDay || typeof s.officialScoresByDay !== 'object') s.officialScoresByDay = {};
+    if(!s.officialScoresSavedDays || typeof s.officialScoresSavedDays !== 'object') s.officialScoresSavedDays = {};
+    if(!s.closedDays || typeof s.closedDays !== 'object') s.closedDays = {};
+    if(!s.adminForcedOpenDays || typeof s.adminForcedOpenDays !== 'object') s.adminForcedOpenDays = {};
+    if(!s.currentDay) s.currentDay = 1;
+    s.schemaVersion = 'v101-manual-supabase-only';
+    return s;
+  }
+  function counts(s){
+    s = normalize(s);
+    return {players:s.players.length, bets:s.bets.length, matches:s.matches.length};
+  }
+  function headers(extra){
+    return Object.assign({
+      apikey: KEY,
+      authorization: 'Bearer ' + KEY,
+      'content-type': 'application/json'
+    }, extra || {});
+  }
+  async function dbRead(){
+    if(!URL || !KEY) throw new Error('Supabase non configuré');
+    const u = URL.replace(/\/$/,'') + '/rest/v1/' + TABLE + '?id=eq.' + encodeURIComponent(APP_ID) + '&select=data,updated_at';
+    const r = await fetch(u, {method:'GET', headers:headers()});
+    if(!r.ok) throw new Error('Lecture Supabase impossible: HTTP ' + r.status);
+    const arr = await r.json();
+    const row = Array.isArray(arr) ? arr[0] : null;
+    if(!row || !row.data) throw new Error('Ligne app_state introuvable: ' + APP_ID);
+    return normalize(row.data);
+  }
+  async function dbWrite(data){
+    if(!URL || !KEY) throw new Error('Supabase non configuré');
+    const payload = normalize(data);
+    const c = counts(payload);
+    if(c.players === 0) throw new Error('Blocage sécurité: sauvegarde BDD interdite avec 0 joueur');
+    if(c.matches === 0) throw new Error('Blocage sécurité: sauvegarde BDD interdite avec 0 match');
+    const u = URL.replace(/\/$/,'') + '/rest/v1/' + TABLE;
+    const row = {id:APP_ID, data:payload, updated_at:new Date().toISOString()};
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      const r = await fetch(u, {
+        method:'POST',
+        headers:headers({'prefer':'resolution=merge-duplicates,return=representation'}),
+        body:JSON.stringify(row)
+      });
+      if(!r.ok) throw new Error('Écriture Supabase impossible: HTTP ' + r.status + ' — ' + await r.text());
+    } finally {
+      window.__BP_ALLOW_BDD_WRITE__ = false;
+    }
+    return payload;
+  }
+
+  window.bpManualLoadBDD = async function(){
+    try{
+      if(!confirm('Recharger depuis Supabase ?\n\nLes données affichées seront remplacées par la BDD.')) return false;
+      status('Chargement BDD…','warn');
+      const remote = await dbRead();
+      const c = counts(remote);
+      if(c.players === 0){
+        status('Chargement annulé : la BDD contient 0 joueur.','bad');
+        alert('Chargement annulé : la BDD contient 0 joueur. Restaure d’abord le backup 21/7.');
+        return false;
+      }
+      window.state = remote;
+      try{ window.currentUserIndex = -1; }catch(e){}
+      try{ window.currentRole = null; }catch(e){}
+      if(typeof window.renderAll === 'function') window.renderAll();
+      status('BDD chargée — joueurs : '+c.players+' — mises : '+c.bets+' — matchs : '+c.matches,'good');
+      return true;
+    }catch(e){
+      status('Erreur chargement BDD : '+(e.message||e),'bad');
+      alert('Erreur chargement BDD : '+(e.message||e));
+      return false;
+    }
+  };
+
+  window.bpManualSaveBDD = async function(){
+    try{
+      const local = normalize(window.state || {});
+      const c = counts(local);
+      if(c.players === 0 || c.matches === 0){
+        alert('Sauvegarde bloquée : écran incomplet ('+c.players+' joueurs, '+c.matches+' matchs).');
+        status('Sauvegarde bloquée — données écran incomplètes.','bad');
+        return false;
+      }
+      const remote = await dbRead().catch(()=>null);
+      const rc = counts(remote || {});
+      const msg =
+        'ATTENTION : tu vas écraser la BDD Supabase.\n\n' +
+        'Écran actuel : '+c.players+' joueurs / '+c.bets+' mises / '+c.matches+' matchs\n' +
+        'BDD actuelle : '+rc.players+' joueurs / '+rc.bets+' mises / '+rc.matches+' matchs\n\n' +
+        'Tape exactement : ECRASER BDD';
+      if(prompt(msg) !== 'ECRASER BDD'){
+        status('Sauvegarde annulée.','warn');
+        return false;
+      }
+      status('Sauvegarde BDD en cours…','warn');
+      await dbWrite(local);
+      status('BDD sauvegardée — joueurs : '+c.players+' — mises : '+c.bets+' — matchs : '+c.matches,'good');
+      alert('Sauvegarde BDD terminée.');
+      return true;
+    }catch(e){
+      status('Erreur sauvegarde BDD : '+(e.message||e),'bad');
+      alert('Erreur sauvegarde BDD : '+(e.message||e));
+      return false;
+    }
+  };
+
+  function cleanupLegacy(){
+    ['bpSyncPill','bpV83Log','bpV84Log','bpV93Status','bpV60Panel','bpV61Panel','bpAutoSaveStatus','bpCloudStatus'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.remove();
+    });
+    const b = document.getElementById('backup');
+    if(b && !b.__BP_V101_UI__){
+      b.__BP_V101_UI__ = true;
+      b.innerHTML =
+        '<h2>🗄️ BDD Supabase</h2>' +
+        '<div class="card" id="bpManualBDDPanel" style="border-color:rgba(250,204,21,.55)">' +
+        '<h2>Mode manuel strict</h2>' +
+        '<div class="help"><b>Important :</b> aucune sauvegarde automatique, aucun état jeu en LocalStorage. Seul le code utilisateur connecté peut rester en local.</div>' +
+        '<div class="muted" style="margin-bottom:12px"><b>Recharger depuis BDD</b> lit Supabase. <b>Forcer sauvegarde en BDD</b> écrit Supabase uniquement après confirmation.</div>' +
+        '<button class="action secondary" onclick="bpManualLoadBDD()">Recharger depuis BDD</button>' +
+        '<button class="action danger" onclick="bpManualSaveBDD()">Forcer sauvegarde en BDD</button>' +
+        '<div id="bpManualBDDStatus" class="help">Statut : prêt. Écritures automatiques bloquées.</div>' +
+        '</div>';
+    }
+  }
+  setInterval(cleanupLegacy, 800);
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cleanupLegacy);
+  else cleanupLegacy();
+
+  const oldLogin = window.loginWithCode;
+  window.loginWithCode = function(){
+    const code = (document.getElementById('loginCode') && document.getElementById('loginCode').value || '').trim();
+    const r = oldLogin ? oldLogin.apply(this, arguments) : undefined;
+    try{
+      if(code && window.currentRole === 'user') localStorage.setItem(window.__BP_CURRENT_USER_KEY__ || 'bpwc_current_user_code', code);
+    }catch(e){}
+    return r;
+  };
 })();
 </script>
 
