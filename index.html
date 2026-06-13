@@ -3,7 +3,7 @@
 <html lang="fr"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V92 PURGE DELETED PLAYERS BDD</title>
+<title>B Partner FIFA World Cup 2026 - V95 BDD MANUELLE SANS AUTOSAVE</title>
 <style>
 :root {
   --bg:#070707; --card:#141414; --card2:#1f1f1f; --line:#333;
@@ -2190,8 +2190,10 @@ SANITY V18
    1) Crée le projet Supabase
    2) Colle ici ton Project URL et ta anon public key
 */
-window.BP_SUPABASE_URL = "https://kzompicmlxapjpfqrdit.supabase.co";
-window.BP_SUPABASE_ANON_KEY = "sb_publishable_u2rK6amJNW07tL-aD9x69Q_S8gbYTEi";
+window.BP_MANUAL_SUPABASE_URL = "https://kzompicmlxapjpfqrdit.supabase.co";
+window.BP_SUPABASE_URL = ""; // Legacy Supabase désactivé : seule la sauvegarde manuelle utilise BP_MANUAL_SUPABASE_URL
+window.BP_MANUAL_SUPABASE_ANON_KEY = "sb_publishable_u2rK6amJNW07tL-aD9x69Q_S8gbYTEi";
+window.BP_SUPABASE_ANON_KEY = ""; // Legacy Supabase désactivé
 window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 </script>
 
@@ -2199,7 +2201,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>window.BP_APP_VERSION = "v90-early-bdd-master-fix";</script>
+<script>window.BP_APP_VERSION = "v95-bdd-manuelle-sans-autosave";</script>
 <script>
 /* V83 EARLY GUARD — bloque les anciens timers de synchro avant leur création */
 (function(){
@@ -2828,8 +2830,8 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
       <h2>Joueurs</h2><div class="help">Les utilisateurs créés sont sauvegardés. Chaque joueur reçoit un code aléatoire à 4 chiffres. Le code ADMIN reste toujours <b>1573</b>.</div>
       <div class="admin-row muted players-header"><b>Joueur</b><b>Pseudo</b><b>Code</b><b>FID départ</b><b>Solde</b><b>Détail</b><b>Action</b></div><div id="adminPlayers" class="admin-players-list"></div>
       <button class="action" onclick="addPlayer()">Ajouter utilisateur</button>
-      <button class="action secondary" onclick="restoreBeforeUserChangeBackup()">Restaurer utilisateurs</button>
-      <button class="action" onclick="savePlayersAdmin()">Sauvegarder utilisateurs</button>
+      <button class="action secondary" onclick="restoreBeforeUserChangeBackup()" title="Restaure une sauvegarde locale du navigateur, pas forcément la BDD Supabase.">Restaurer sauvegarde locale</button>
+      <button class="action secondary" onclick="savePlayersAdmin()" title="Sauvegarde locale navigateur uniquement. Utiliser Sauvegarder BDD pour écrire dans Supabase.">Sauver joueurs en local</button>
       <button class="action secondary" onclick="applyDefaultFid()">Appliquer FID défaut à tous</button>
       <div id="adminUserDetail"></div>
     </div>
@@ -3084,69 +3086,19 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 
 
 <section id="backup">
-  <h2>💾 Excel / Backup</h2>
-
-  <div class="card">
-    <h2>📂 Import rapide depuis ton ordinateur</h2>
-    <div class="muted">
-      Clique sur un bouton pour ouvrir l’explorateur et choisir un fichier depuis ton Bureau / OneDrive.
-      Formats acceptés : CSV, XLSX, XLS et JSON pour la sauvegarde complète.
-    </div>
-
-    <button class="action" onclick="openBackupFilePicker('players')">Importer utilisateurs Excel/CSV</button>
-    <button class="action" onclick="openBackupFilePicker('bets')">Importer pronostics Excel/CSV</button>
-    <button class="action" onclick="openBackupFilePicker('results')">Importer résultats Excel/CSV</button>
-    <button class="action" onclick="openBackupFilePicker('secrets')">Importer questions secrètes Excel/CSV</button>
-    <button class="action" onclick="openBackupFilePicker('events')">Importer événements Excel/CSV</button>
-    <button class="action secondary" onclick="openBackupFilePicker('json')">Importer sauvegarde JSON complète</button>
-
+  <h2>🗄️ BDD Supabase</h2>
+  <div class="card" id="bpManualBDDPanel" style="border-color:rgba(250,204,21,.55)">
+    <h2>Mode manuel uniquement</h2>
     <div class="help">
-      Pour ton fichier <b>bp_worldcup_players</b>, utilise le bouton <b>Importer utilisateurs Excel/CSV</b>.
+      <b>Important :</b> aucune sauvegarde automatique en BDD. La BDD ne change que si tu cliques sur <b>Forcer sauvegarde en BDD</b> et confirmes le warning.
     </div>
-  </div>
-
-  <div class="grid">
-    <div class="card">
-      <h3>Exports compatibles Excel</h3>
-      <button class="action" onclick="exportCSV('players')">Exporter joueurs CSV</button>
-      <button class="action" onclick="exportCSV('bets')">Exporter tous les pronostics CSV</button>
-      <button class="action" onclick="exportCSV('validated_report')">Exporter pronostics validés + gains CSV</button>
-      <button class="action" onclick="exportCSV('results')">Exporter résultats CSV</button>
-      <button class="action" onclick="exportCSV('logs')">Exporter journal FID CSV</button>
-      <button class="action" onclick="exportCSV('secrets')">Exporter questions secrètes CSV</button>
-      <button class="action" onclick="exportCSV('events')">Exporter événements CSV</button>
-      <button class="action secondary" onclick="downloadJSON()">Exporter sauvegarde JSON complète</button>
-      <p class="muted">Les CSV s’ouvrent dans Excel. Le JSON restaure toute l’application.</p>
+    <div class="muted" style="margin-bottom:12px">
+      <b>Recharger depuis BDD</b> remplace les données affichées/locales par le contenu Supabase.<br>
+      <b>Forcer sauvegarde en BDD</b> écrase Supabase avec l’état actuellement affiché dans le jeu.
     </div>
-
-    <div class="card">
-      <h3>Imports classiques</h3>
-
-      <label>Importer sauvegarde JSON complète</label>
-      <input type="file" accept=".json,application/json" onchange="importSmartFile('json',event)">
-
-      <label>Importer utilisateurs Excel/CSV</label>
-      <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onchange="importSmartFile('players',event)">
-
-      <label>Importer pronostics Excel/CSV</label>
-      <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onchange="importSmartFile('bets',event)">
-
-      <label>Importer résultats Excel/CSV</label>
-      <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onchange="importSmartFile('results',event)">
-
-      <label>Importer questions secrètes Excel/CSV</label>
-      <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onchange="importSmartFile('secrets',event)">
-
-      <label>Importer événements Excel/CSV</label>
-      <input type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onchange="importSmartFile('events',event)">
-
-      <div class="help">
-        Les imports sont enregistrés immédiatement dans le navigateur après chargement.
-      </div>
-
-      <button class="action secondary" onclick="migrateCalendar();renderAll();alert('Calendrier réparé / mis à jour.')">Réparer calendrier</button>
-      <button class="action danger" onclick="resetApp()">Réinitialiser toute la démo</button>
-    </div>
+    <button class="action secondary" onclick="bpManualLoadBDD()">Recharger depuis BDD</button>
+    <button class="action danger" onclick="bpManualSaveBDD()">Forcer sauvegarde en BDD</button>
+    <div id="bpManualBDDStatus" class="help">Statut : prêt. Autosave BDD désactivé.</div>
   </div>
 </section>
 
@@ -14703,6 +14655,177 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V96 CLEAN — BDD manuelle stricte : aucun autosave, aucune option backup secondaire. */
+(function(){
+  window.__BP_V96_MANUAL_BDD_ONLY__ = true;
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  let sbClient = null;
+
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function clone(x){ try { return JSON.parse(JSON.stringify(x || {})); } catch(e){ return {}; } }
+  function current(){ return window.state || {}; }
+  function status(msg, kind){
+    const el = document.getElementById('bpManualBDDStatus') || document.getElementById('bpSyncPill');
+    if(el){ el.className = 'help ' + (kind || ''); el.innerHTML = msg; }
+    console.log('[BDD manuelle]', msg.replace(/<[^>]+>/g,''));
+  }
+  function hasConfig(){
+    return !!(window.supabase && window.BP_MANUAL_SUPABASE_URL && window.BP_MANUAL_SUPABASE_ANON_KEY);
+  }
+  function sb(){
+    if(!hasConfig()) throw new Error('Supabase non configuré.');
+    if(!sbClient) sbClient = window.supabase.createClient(window.BP_MANUAL_SUPABASE_URL, window.BP_MANUAL_SUPABASE_ANON_KEY);
+    return sbClient;
+  }
+  function compactState(st){
+    const s = clone(st);
+    s.schemaVersion = 'v96-manual-bdd-only';
+    s.lastSavedAt = new Date().toISOString();
+    s.cloudUpdatedAt = new Date().toISOString();
+    if(Array.isArray(s.logs)) s.logs = s.logs.slice(-250);
+    if(Array.isArray(s.settlementDetails)) s.settlementDetails = s.settlementDetails.slice(-2000);
+    delete s._cache; delete s.debug; delete s.htmlPreview;
+    return s;
+  }
+  function localSave(){
+    try { localStorage.setItem('bp_wc_dev', JSON.stringify(current())); } catch(e) { console.warn(e); }
+  }
+  async function readBDD(){
+    const {data,error} = await sb().from('app_state').select('data,updated_at').eq('id', APP_ID).maybeSingle();
+    if(error) throw error;
+    return data || null;
+  }
+  async function writeBDD(st){
+    const payload = { id: APP_ID, data: compactState(st), updated_at: new Date().toISOString() };
+    const {error} = await sb().from('app_state').upsert(payload, {onConflict:'id'});
+    if(error) throw error;
+    return payload;
+  }
+  function counts(st){
+    return {
+      players: arr(st.players).length,
+      bets: arr(st.bets).length,
+      matches: arr(st.matches).length,
+      deleted: arr(st.deletedPlayerKeys).length
+    };
+  }
+  function warningText(local, remote){
+    const l = counts(local), r = counts(remote || {});
+    return `ATTENTION — sauvegarde forcée en BDD\n\nCette action va ÉCRASER Supabase avec les données actuellement affichées.\n\nÉcran actuel :\n- Joueurs : ${l.players}\n- Mises : ${l.bets}\n- Matchs : ${l.matches}\n\nBDD actuelle :\n- Joueurs : ${r.players}\n- Mises : ${r.bets}\n- Matchs : ${r.matches}\n\nContinuer ?`;
+  }
+
+  // Neutralise tous les anciens chemins de sauvegarde cloud. Ils ne doivent plus écrire en BDD.
+  window.bpCloudSaveDebounced = function(){ localSave(); status('Modification locale uniquement — BDD non modifiée.', 'warn'); return false; };
+  window.bpCloudSave = async function(){ localSave(); status('Autosave BDD bloqué. Utilise “Forcer sauvegarde en BDD”.', 'warn'); return false; };
+  window.bpForceSaveSupabase = async function(){ return window.bpManualSaveBDD(); };
+  window.bpV95SaveBDD = async function(){ return window.bpManualSaveBDD(); };
+
+  // Les anciens boutons “charger” redirigent vers le chargement manuel explicite.
+  window.bpCloudLoad = async function(){ return window.bpManualLoadBDD(); };
+  window.bpForceLoadSupabase = async function(){ return window.bpManualLoadBDD(); };
+  window.bpV95LoadBDD = async function(){ return window.bpManualLoadBDD(); };
+
+  const oldSave = window.save;
+  window.save = function(){
+    try { if(typeof oldSave === 'function') oldSave.apply(this, arguments); } catch(e){}
+    localSave();
+    return true;
+  };
+
+  window.bpManualLoadBDD = async function(){
+    try{
+      if(!confirm('Recharger depuis Supabase ?\n\nLes données locales/écran seront remplacées par la BDD.')) return false;
+      status('Chargement BDD en cours…', 'warn');
+      const row = await readBDD();
+      if(!row || !row.data) throw new Error('Aucune donnée trouvée dans Supabase.');
+      const remote = compactState(row.data);
+      const c = counts(remote);
+      if(c.players === 0 && !confirm('La BDD contient 0 joueur. Charger quand même ?')) return false;
+      window.state = remote;
+      localSave();
+      if(typeof window.repairState === 'function') { try{ window.repairState(); }catch(e){} }
+      if(typeof window.renderAll === 'function') window.renderAll();
+      status(`BDD rechargée — joueurs : ${c.players} — mises : ${c.bets} — matchs : ${c.matches}`, c.players ? 'good' : 'bad');
+      return true;
+    }catch(e){
+      console.error('[BDD load]', e);
+      status('Erreur chargement BDD : ' + (e.message || e), 'bad');
+      alert('Erreur chargement BDD : ' + (e.message || e));
+      return false;
+    }
+  };
+
+  window.bpManualSaveBDD = async function(){
+    try{
+      const local = compactState(current());
+      let remote = null;
+      try { const row = await readBDD(); remote = row && row.data ? row.data : null; } catch(e) {}
+      const l = counts(local), r = counts(remote || {});
+      if(l.players === 0 && r.players > 0){
+        alert('BLOCAGE SÉCURITÉ : impossible d’écraser une BDD qui contient des joueurs avec un écran à 0 joueur.');
+        status('Sauvegarde bloquée — écran à 0 joueur alors que la BDD contient des joueurs.', 'bad');
+        return false;
+      }
+      if(l.matches === 0 && r.matches > 0){
+        alert('BLOCAGE SÉCURITÉ : impossible d’écraser une BDD qui contient des matchs avec un écran à 0 match.');
+        status('Sauvegarde bloquée — écran à 0 match alors que la BDD contient des matchs.', 'bad');
+        return false;
+      }
+      if(!confirm(warningText(local, remote))) return false;
+      status('Sauvegarde forcée en BDD…', 'warn');
+      await writeBDD(local);
+      localSave();
+      status(`BDD sauvegardée — joueurs : ${l.players} — mises : ${l.bets} — matchs : ${l.matches}`, 'good');
+      alert('Sauvegarde BDD terminée.');
+      return true;
+    }catch(e){
+      console.error('[BDD save]', e);
+      status('Erreur sauvegarde BDD : ' + (e.message || e), 'bad');
+      alert('Erreur sauvegarde BDD : ' + (e.message || e));
+      return false;
+    }
+  };
+
+  function installCleanBackupUI(){
+    const backup = document.getElementById('backup');
+    if(backup){
+      backup.innerHTML = `
+        <h2>🗄️ BDD Supabase</h2>
+        <div class="card" id="bpManualBDDPanel" style="border-color:rgba(250,204,21,.55)">
+          <h2>Mode manuel uniquement</h2>
+          <div class="help"><b>Important :</b> aucune sauvegarde automatique en BDD. La BDD ne change que si tu cliques sur <b>Forcer sauvegarde en BDD</b> et confirmes le warning.</div>
+          <div class="muted" style="margin-bottom:12px"><b>Recharger depuis BDD</b> remplace les données affichées/locales par Supabase.<br><b>Forcer sauvegarde en BDD</b> écrase Supabase avec l’état actuellement affiché.</div>
+          <button class="action secondary" onclick="bpManualLoadBDD()">Recharger depuis BDD</button>
+          <button class="action danger" onclick="bpManualSaveBDD()">Forcer sauvegarde en BDD</button>
+          <div id="bpManualBDDStatus" class="help">Statut : prêt. Autosave BDD désactivé.</div>
+        </div>`;
+    }
+    const nav = document.getElementById('navBackup');
+    if(nav) nav.textContent = '🗄️ BDD';
+    document.querySelectorAll('#bpSupabasePanel,#bpAutoSavePanel,#bpForceLoadSupabasePanel,#bpV49DataSafetyPanel,#bpV50AuditPanel,#bpV52AuditPanel,#bpV54CloudAuditPanel,#bpV95ManualPanel').forEach(el=>el.remove());
+  }
+
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV96Manual){
+    window.renderAll = function(){
+      const r = oldRenderAll.apply(this, arguments);
+      setTimeout(installCleanBackupUI, 50);
+      return r;
+    };
+    window.renderAll.__bpV96Manual = true;
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    installCleanBackupUI();
+    status('Prêt — BDD en mode manuel strict. Autosave désactivé.', 'good');
+    setInterval(installCleanBackupUI, 1500);
+  });
+})();
+</script>
+
 </body></html>
 <script>
 /* V87 — HARD FIX calcul des gains
@@ -15365,3 +15488,201 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<script>
+/* V95 — Mode BDD manuel : Supabase ne s'écrase plus automatiquement.
+   - Charger BDD = remplace l'état local par le contenu Supabase.
+   - Sauvegarder BDD = écrit explicitement l'état affiché dans Supabase.
+   - Aucun autosave BDD silencieux. */
+(function(){
+  if(window.__BP_V95_BDD_MANUELLE__) return;
+  window.__BP_V95_BDD_MANUELLE__ = true;
+
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const TABLE = 'app_state';
+  const LS_MAIN = 'bp_wc_dev';
+  const LS_ALT = 'bpwc_state_v1';
+
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function clone(v){ return JSON.parse(JSON.stringify(v)); }
+  function now(){ return new Date().toISOString(); }
+  function status(msg, type){
+    let el = document.getElementById('bpV95Status');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'bpV95Status';
+      el.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:999999;max-width:430px;padding:10px 14px;border-radius:14px;background:#101010;color:#fff;border:1px solid rgba(59,130,246,.65);box-shadow:0 10px 28px rgba(0,0,0,.35);font:12px Arial;font-weight:800';
+      document.body.appendChild(el);
+    }
+    el.style.borderColor = type === 'bad' ? 'rgba(251,113,133,.7)' : type === 'ok' ? 'rgba(74,222,128,.7)' : 'rgba(59,130,246,.65)';
+    el.textContent = msg || 'BDD manuelle active';
+  }
+  function hideOldBadges(){
+    ['bpSyncPill','bpV88DataSource','bpV90DataSource','bpV91SyncStatus','bpV92Status'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  }
+  function supa(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY) throw new Error('Supabase non configuré');
+    return window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+  }
+  function currentState(){
+    if(!window.state) throw new Error('État local introuvable');
+    return window.state;
+  }
+  function compact(st){
+    const d = clone(st || {});
+    if(!Array.isArray(d.players)) d.players = [];
+    if(!Array.isArray(d.bets)) d.bets = [];
+    if(!Array.isArray(d.matches) && Array.isArray(window.starterMatches)) d.matches = clone(window.starterMatches);
+    d.schemaVersion = 'v95-manual-bdd';
+    d.lastManualStateAt = now();
+    return d;
+  }
+  function localOnlySave(){
+    try{ localStorage.setItem(LS_MAIN, JSON.stringify(currentState())); }catch(e){}
+    try{ localStorage.setItem(LS_ALT, JSON.stringify(currentState())); }catch(e){}
+  }
+
+  window.bpV95SaveLocalOnly = localOnlySave;
+
+  async function readBDD(){
+    const r = await supa().from(TABLE).select('data,updated_at').eq('id', APP_ID).maybeSingle();
+    if(r.error) throw r.error;
+    return r.data || null;
+  }
+
+  async function writeBDD(payload){
+    const r = await supa().from(TABLE).upsert({id:APP_ID, data:compact(payload), updated_at:now()}, {onConflict:'id'});
+    if(r.error) throw r.error;
+    return true;
+  }
+
+  window.bpV95LoadBDD = async function(){
+    try{
+      hideOldBadges();
+      status('Chargement BDD Supabase…');
+      const row = await readBDD();
+      if(!row || !row.data) throw new Error('Aucune ligne app_state trouvée pour '+APP_ID);
+      const cloud = compact(row.data);
+      Object.keys(currentState()).forEach(k=>delete currentState()[k]);
+      Object.assign(currentState(), cloud);
+      localOnlySave();
+      if(typeof window.repairState === 'function') { try{ window.repairState(); }catch(e){} }
+      if(typeof window.renderAll === 'function') window.renderAll();
+      status('BDD chargée — joueurs: '+arr(cloud.players).length+' — pronostics: '+arr(cloud.bets).length, arr(cloud.players).length ? 'ok' : 'bad');
+      return true;
+    }catch(e){
+      console.error('[V95 load BDD]', e);
+      status('Erreur chargement BDD : '+(e.message||e), 'bad');
+      return false;
+    }
+  };
+
+  window.bpV95SaveBDD = async function(){
+    try{
+      hideOldBadges();
+      const st = compact(currentState());
+      status('Sauvegarde manuelle BDD…');
+      await writeBDD(st);
+      localOnlySave();
+      status('BDD sauvegardée manuellement — joueurs: '+arr(st.players).length+' — pronostics: '+arr(st.bets).length, 'ok');
+      return true;
+    }catch(e){
+      console.error('[V95 save BDD]', e);
+      status('Erreur sauvegarde BDD : '+(e.message||e), 'bad');
+      return false;
+    }
+  };
+
+  window.bpV95InspectBDD = async function(){
+    try{
+      hideOldBadges();
+      const row = await readBDD();
+      const d = row && row.data ? row.data : {};
+      status('BDD actuelle — joueurs: '+arr(d.players).length+' — pronostics: '+arr(d.bets).length+' — MAJ: '+(row && row.updated_at ? new Date(row.updated_at).toLocaleString('fr-FR') : '-'), arr(d.players).length ? 'ok' : 'bad');
+      return d;
+    }catch(e){ status('Erreur lecture BDD : '+(e.message||e), 'bad'); return null; }
+  };
+
+  window.bpV95RecoverLocalBackup = function(){
+    try{
+      const candidates = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(!k || !/^bp/i.test(k)) continue;
+        try{
+          const v = JSON.parse(localStorage.getItem(k)||'null');
+          const p = arr(v && v.players).length;
+          const b = arr(v && v.bets).length;
+          if(p>0) candidates.push({k,p,b,v});
+        }catch(e){}
+      }
+      candidates.sort((a,b)=>(b.p-a.p)||(b.b-a.b));
+      if(!candidates.length){ status('Aucune sauvegarde locale avec joueurs trouvée', 'bad'); return false; }
+      const best = candidates[0];
+      Object.keys(currentState()).forEach(k=>delete currentState()[k]);
+      Object.assign(currentState(), compact(best.v));
+      localOnlySave();
+      if(typeof window.renderAll === 'function') window.renderAll();
+      status('Sauvegarde locale restaurée — '+best.k+' — joueurs: '+best.p+' — pronostics: '+best.b, 'ok');
+      return true;
+    }catch(e){ status('Erreur restauration locale : '+(e.message||e),'bad'); return false; }
+  };
+
+  // Désactive les autosaves BDD silencieux : les actions restent locales jusqu'au clic manuel.
+  window.bpCloudSaveDebounced = function(){ localOnlySave(); status('Modification locale non sauvegardée en BDD — clique Sauvegarder BDD', 'warn'); };
+  window.bpCloudSave = async function(showAlert){ return window.bpV95SaveBDD(); };
+  window.bpCloudLoad = async function(showAlert){ return window.bpV95LoadBDD(); };
+  window.bpForceLoadSupabase = window.bpV95LoadBDD;
+  window.bpForceSaveSupabase = window.bpV95SaveBDD;
+
+  const oldSave = window.save;
+  window.save = function(){
+    try{ if(typeof oldSave === 'function') oldSave.apply(this, arguments); }catch(e){}
+    localOnlySave();
+    return true;
+  };
+
+  function installPanel(){
+    hideOldBadges();
+    let target = document.getElementById('adminPlayers');
+    const admin = document.getElementById('admin') || document.querySelector('section#admin');
+    if(!admin) return;
+    if(document.getElementById('bpV95ManualPanel')) return;
+    const panel = document.createElement('div');
+    panel.id = 'bpV95ManualPanel';
+    panel.className = 'card';
+    panel.style.borderColor = 'rgba(59,130,246,.55)';
+    panel.innerHTML = `
+      <h2>🗄️ BDD Supabase — mode manuel</h2>
+      <div class="muted" style="margin-bottom:10px">
+        <b>Charger BDD</b> remplace l'écran par le contenu Supabase. <b>Sauvegarder BDD</b> écrit l'écran actuel dans Supabase.
+        Les modifications ne sont plus envoyées automatiquement.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="action" onclick="bpV95InspectBDD()">Voir état BDD</button>
+        <button class="action" onclick="bpV95LoadBDD()">Charger contenu BDD</button>
+        <button class="action" onclick="bpV95SaveBDD()">Sauvegarder contenu actuel en BDD</button>
+        <button class="action secondary" onclick="bpV95RecoverLocalBackup()">Restaurer meilleure sauvegarde locale</button>
+      </div>
+    `;
+    const h = admin.querySelector('h2');
+    if(h && h.parentElement) h.parentElement.insertBefore(panel, h.nextSibling);
+    else admin.insertBefore(panel, admin.firstChild);
+  }
+
+  function cleanOldButtons(){
+    document.querySelectorAll('button').forEach(btn=>{
+      const t=(btn.textContent||'').trim().toLowerCase();
+      if(t==='nettoyer bdd joueurs supprimés') btn.style.display='none';
+      if(t==='charger depuis supabase') btn.textContent='Charger contenu BDD';
+      if(t==='sauvegarder vers supabase') btn.textContent='Sauvegarder contenu actuel en BDD';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    installPanel(); cleanOldButtons(); status('BDD manuelle active — joueurs écran: '+arr(currentState().players).length, 'ok');
+    setInterval(function(){ hideOldBadges(); installPanel(); cleanOldButtons(); }, 1000);
+  });
+})();
+</script>
