@@ -97,7 +97,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V119 BDD VERIFY</title>
+<title>B Partner FIFA World Cup 2026 - V126 SPINNER PRONO RESERVE</title>
 <!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
@@ -18046,6 +18046,216 @@ window.BP_LOCAL_ONLY = true;
     [50,300,800,1500,3000].forEach(ms=>setTimeout(()=>{ restoreSession(); afterRender(); },ms));
   });
   setInterval(()=>{ cleanStaticMessages(); },1500);
+})();
+</script>
+
+
+
+<style id="bp-v126-action-result-fixes">
+/* V126 — spinner bouton + couleurs résultat pronos + réserve dynamique */
+button.bp-btn-loading{
+  position:relative!important;
+  pointer-events:none!important;
+  opacity:.86!important;
+}
+button.bp-btn-loading::before{
+  content:"";
+  width:14px;
+  height:14px;
+  border:2px solid rgba(255,255,255,.45);
+  border-top-color:#fff;
+  border-radius:50%;
+  display:inline-block;
+  margin-right:8px;
+  vertical-align:-2px;
+  animation:bpBtnSpin .75s linear infinite;
+}
+@keyframes bpBtnSpin{to{transform:rotate(360deg)}}
+#bets .bet-card.bp-bet-won{
+  border-color:rgba(74,222,128,.65)!important;
+  box-shadow:0 0 0 1px rgba(74,222,128,.18),0 14px 34px rgba(74,222,128,.08)!important;
+}
+#bets .bet-card.bp-bet-won .bet-title{
+  background:linear-gradient(90deg,rgba(22,101,52,.96),rgba(20,20,20,.95))!important;
+}
+#bets .bet-card.bp-bet-lost{
+  border-color:rgba(251,113,133,.70)!important;
+  box-shadow:0 0 0 1px rgba(251,113,133,.18),0 14px 34px rgba(251,113,133,.08)!important;
+}
+#bets .bet-card.bp-bet-lost .bet-title{
+  background:linear-gradient(90deg,rgba(127,29,29,.96),rgba(20,20,20,.95))!important;
+}
+#bets .bet-card.bp-bet-exact{
+  border-color:rgba(74,222,128,.90)!important;
+  position:relative!important;
+}
+#bets .bet-card.bp-bet-exact::before{
+  content:"⭐";
+  position:absolute;
+  left:10px;
+  top:13px;
+  z-index:3;
+  font-size:26px;
+  filter:drop-shadow(0 3px 8px rgba(0,0,0,.55));
+}
+#bets .bet-card.bp-bet-exact .bet-title{
+  padding-left:48px!important;
+  background:linear-gradient(90deg,rgba(21,128,61,.98),rgba(20,20,20,.95))!important;
+}
+#bets .bet-card.bp-bet-won .bet-result-box{border-color:rgba(74,222,128,.35)!important;background:rgba(74,222,128,.075)!important}
+#bets .bet-card.bp-bet-lost .bet-result-box{border-color:rgba(251,113,133,.35)!important;background:rgba(251,113,133,.075)!important}
+</style>
+<script id="bp-v126-action-result-fixes">
+(function(){
+  'use strict';
+  if(window.__BP_V126_FIXES__) return;
+  window.__BP_V126_FIXES__=true;
+
+  const originalCalcReserve = window.calcReserve;
+  function reserveMovements(){
+    try{
+      return (window.state?.settlementDetails||[])
+        .filter(d=>String(d.player||'').toUpperCase()==='RÉSERVE' || String(d.player||'').toUpperCase()==='RESERVE')
+        .reduce((s,d)=>s+Number(d.netGain||0),0);
+    }catch(e){return 0;}
+  }
+  window.bpActualReserve=function(){
+    const base=Number(window.state?.reserveTarget ?? 500);
+    return base + reserveMovements();
+  };
+  window.calcReserve=function(){
+    const allocated=(window.state?.players||[]).reduce((s,p)=>s+Number(p.startFid||0),0);
+    const reserveTarget=Number(window.state?.reserveTarget ?? 500);
+    const reserve=window.bpActualReserve();
+    const budget=allocated+reserveTarget;
+    if(window.state) window.state.budget=budget;
+    const min=Math.ceil(budget*0.05);
+    return {allocated,reserve,min,valid:reserve>=min,budget,reserveTarget,baseReserve:reserveTarget,reserveMovements:reserveMovements()};
+  };
+
+  function resetButtonSpinners(){
+    document.querySelectorAll('button.bp-btn-loading').forEach(btn=>{
+      btn.classList.remove('bp-btn-loading');
+      if(btn.dataset.bpOldText!==undefined){ btn.textContent=btn.dataset.bpOldText; delete btn.dataset.bpOldText; }
+      if(btn.dataset.bpWasDisabled==='0') btn.disabled=false;
+      delete btn.dataset.bpWasDisabled;
+      if(btn.__bpSpinTimer){ clearTimeout(btn.__bpSpinTimer); btn.__bpSpinTimer=null; }
+    });
+  }
+  window.bpResetButtonSpinners=resetButtonSpinners;
+  function startButtonSpinner(btn){
+    if(!btn || btn.disabled || btn.classList.contains('bp-btn-loading')) return;
+    btn.dataset.bpWasDisabled=btn.disabled?'1':'0';
+    btn.dataset.bpOldText=btn.textContent;
+    btn.classList.add('bp-btn-loading');
+    btn.disabled=true;
+    btn.__bpSpinTimer=setTimeout(()=>resetButtonSpinners(),12000);
+  }
+  document.addEventListener('click',function(e){
+    const btn=e.target?.closest?.('button');
+    if(!btn) return;
+    if(btn.closest('.bp-modal-backdrop')) return;
+    if(btn.disabled) return;
+    if(btn.classList.contains('action') || btn.getAttribute('onclick')){
+      window.__bpLastClickedButton=btn;
+      startButtonSpinner(btn);
+    }
+  },true);
+
+  const actionFns=['validateSingleBet','saveBets','sealSecrets','editBet','openBets','closeBets','bpV55OpenSpecificDay','calculateGains','saveAdmin','saveScores','workflowNextStep','recalculateDay','bpCloudSave','bpCloudLoad','bpV61LoadCloud','bpV61SaveCloud'];
+  function wrapAction(name){
+    const fn=window[name];
+    if(typeof fn!=='function' || fn.__bpV126Wrapped) return;
+    const wrapped=function(){
+      const btn=window.__bpLastClickedButton;
+      try{
+        const r=fn.apply(this,arguments);
+        if(r && typeof r.then==='function'){
+          return r.finally(()=>setTimeout(resetButtonSpinners,120));
+        }
+        setTimeout(resetButtonSpinners,250);
+        return r;
+      }catch(e){
+        setTimeout(resetButtonSpinners,120);
+        throw e;
+      }
+    };
+    wrapped.__bpV126Wrapped=true;
+    window[name]=wrapped;
+  }
+  function wrapAllActions(){actionFns.forEach(wrapAction);}
+  wrapAllActions();
+  setTimeout(wrapAllActions,500);
+  setTimeout(wrapAllActions,1500);
+
+  const oldTab=window.tab;
+  if(typeof oldTab==='function' && !oldTab.__bpV126Wrapped){
+    window.tab=function(){resetButtonSpinners(); return oldTab.apply(this,arguments);};
+    window.tab.__bpV126Wrapped=true;
+  }
+  window.addEventListener('beforeunload',resetButtonSpinners);
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden) resetButtonSpinners(); });
+
+  function classifySettlement(d){
+    const status=String(d?.status||'').toUpperCase();
+    const net=Number(d?.netGain||0);
+    return {won:status.includes('GAGNÉ') || net>0, lost:status.includes('PERDU') || net<0, exact:status.includes('SCORE EXACT') || Number(d?.exactBonus||0)>0};
+  }
+  window.bpApplyBetResultClasses=function(){
+    try{
+      const day=typeof currentPronoDay==='function'?currentPronoDay():Number(window.state?.currentDay||1);
+      const p=typeof player==='function'?player():null;
+      if(!p) return;
+      document.querySelectorAll('#bets .bet-card[id^="betCard_"]').forEach(card=>{
+        card.classList.remove('bp-bet-won','bp-bet-lost','bp-bet-exact');
+        const matchId=String(card.id).replace('betCard_','');
+        const bet=(window.state?.bets||[]).find(b=>Number(b.day)===Number(day)&&String(b.matchId)===matchId&&b.player===p.name&&String(b.status||'').toUpperCase()==='VALIDATED');
+        if(!bet) return;
+        const d=(window.state?.settlementDetails||[]).find(x=>Number(x.day)===Number(bet.day)&&String(x.matchId)===String(bet.matchId)&&x.player===bet.player);
+        if(!d) return;
+        const c=classifySettlement(d);
+        if(c.exact) card.classList.add('bp-bet-exact','bp-bet-won');
+        else if(c.won) card.classList.add('bp-bet-won');
+        else if(c.lost) card.classList.add('bp-bet-lost');
+      });
+    }catch(e){console.warn('V126 apply classes',e);}
+  };
+
+  const oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function' && !oldRenderBets.__bpV126Wrapped){
+    window.renderBets=function(){const r=oldRenderBets.apply(this,arguments); setTimeout(window.bpApplyBetResultClasses,0); return r;};
+    window.renderBets.__bpV126Wrapped=true;
+  }
+  const oldRenderHeader=window.renderHeader;
+  if(typeof oldRenderHeader==='function' && !oldRenderHeader.__bpV126Wrapped){
+    window.renderHeader=function(){
+      const r=oldRenderHeader.apply(this,arguments);
+      const k=document.getElementById('kpiReserve');
+      if(k) k.textContent=String(window.bpActualReserve());
+      return r;
+    };
+    window.renderHeader.__bpV126Wrapped=true;
+  }
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function' && !oldRenderAll.__bpV126Wrapped){
+    window.renderAll=function(){const r=oldRenderAll.apply(this,arguments); setTimeout(()=>{resetButtonSpinners(); window.bpApplyBetResultClasses(); const k=document.getElementById('kpiReserve'); if(k) k.textContent=String(window.bpActualReserve());},0); return r;};
+    window.renderAll.__bpV126Wrapped=true;
+  }
+
+  function adjustReserveAfterSettlement(){
+    try{
+      // Le bandeau lit désormais la réserve réelle = réserve initiale + mouvements RÉSERVE calculés.
+      const k=document.getElementById('kpiReserve');
+      if(k) k.textContent=String(window.bpActualReserve());
+      if(typeof renderReserveExposure==='function') renderReserveExposure();
+    }catch(e){}
+  }
+  const oldSave=window.save;
+  if(typeof oldSave==='function' && !oldSave.__bpV126ReserveWrapped){
+    window.save=function(){const r=oldSave.apply(this,arguments); setTimeout(adjustReserveAfterSettlement,0); return r;};
+    window.save.__bpV126ReserveWrapped=true;
+  }
+  document.addEventListener('DOMContentLoaded',()=>{wrapAllActions(); resetButtonSpinners(); setTimeout(()=>{window.bpApplyBetResultClasses(); adjustReserveAfterSettlement();},250);});
 })();
 </script>
 
