@@ -16799,7 +16799,7 @@ window.BP_LOCAL_ONLY = true;
     if(!st.officialScoresByMatch || typeof st.officialScoresByMatch !== 'object') st.officialScoresByMatch = {};
     if(!st.officialScoresByDay || typeof st.officialScoresByDay !== 'object') st.officialScoresByDay = {};
     if(!st.officialScoresSavedDays || typeof st.officialScoresSavedDays !== 'object') st.officialScoresSavedDays = {};
-    st.schemaVersion = 'v120-admin-create-bet-debug';
+    st.schemaVersion = 'v121-admin-create-bet-editable';
     st.lastSavedAt = iso();
     return st;
   }
@@ -16907,15 +16907,27 @@ window.BP_LOCAL_ONLY = true;
       const verified = await readBDD();
       const rb = findBet(verified, day, matchId, playerName);
       if(!rb) throw new Error('Vérification BDD échouée : la ligne créée est introuvable.');
+
+      // Important : on libère le bouton puis on recharge UNIQUEMENT la table des mises.
+      // renderAdmin() peut reconstruire d'autres blocs et laisser l'ancienne ligne en état "Traitement".
       syncState(verified);
-      renderSafe();
-      alert('Mise créée et vérifiée en BDD. Tu peux maintenant modifier le score, la mise et passer le statut en Validé.');
+      done();
+      if(typeof window.renderAdminBetsTable === 'function') window.renderAdminBetsTable();
+      setTimeout(()=>{
+        if(typeof window.renderAdminBetsTable === 'function') window.renderAdminBetsTable();
+        const rid = adminBetId(day, matchId, playerName);
+        const firstField = document.getElementById(rid+'_sa');
+        if(firstField){ try{ firstField.focus(); }catch(e){} }
+      }, 120);
+
+      alert('Mise créée et vérifiée en BDD. La ligne est maintenant éditable : renseigne le score, la mise, le statut, puis clique sur Sauver.');
       return true;
     }catch(e){
-      console.error('[V120 adminCreateBet]', e);
+      console.error('[V121 adminCreateBet]', e);
+      done();
       alert('Erreur création mise : '+(e.message||e));
       return false;
-    }finally{ done(); }
+    }
   };
 
   window.adminSaveBet = async function(day, matchId, playerName){
@@ -17040,6 +17052,263 @@ window.BP_LOCAL_ONLY = true;
     const r = oldRenderAdmin && oldRenderAdmin.apply(this, arguments);
     setTimeout(injectButton, 50);
     return r;
+  };
+})();
+</script>
+
+
+<script>
+/* V122 — Calcul gains paramétré BDD + résultat stocké sur chaque mise.
+   - Lit data.gainRules + data.gainRuleAssignments.
+   - Applique la règle par journée via ruleRef.
+   - Écrit le résultat dans settlementDetails ET dans chaque objet bet.
+   - Persist BDD avec vérification via le moteur V119 déjà présent. */
+(function(){
+  'use strict';
+  if(window.__BP_V122_GAIN_RULES_PER_BET__) return;
+  window.__BP_V122_GAIN_RULES_PER_BET__ = true;
+
+  function S(){ return window.state || (window.state = {}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d){ const x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function maxDay(){ const ds=arr(S().matches).map(m=>n(m.day,0)).filter(Boolean); return ds.length?Math.max.apply(null,ds):1; }
+  function selectedDay(){ const s=S(); const d=n(s.adminSelectedDay || s.currentDay || 1,1); return Math.min(Math.max(1,d),maxDay()); }
+  function dayMatches(day){ return arr(S().matches).filter(m=>n(m.day,0)===n(day,0)); }
+  function outcome(a,b){ a=n(a); b=n(b); return a>b?'A':a<b?'B':'N'; }
+  function scoreStr(a,b){ return n(a)+' - '+n(b); }
+  function splitScore(s){ const p=String(s||'0-0').split('-'); return [n(p[0]),n(p[1])]; }
+  function now(){ return new Date().toISOString(); }
+  function roundGain(x){ return Math.round(n(x,0)*100)/100; }
+
+  function betScoreA(b){ return n(b.scoreA ?? splitScore(b.score)[0],0); }
+  function betScoreB(b){ return n(b.scoreB ?? splitScore(b.score)[1],0); }
+  function isValidatedBet(b){ return String(b.status || 'DRAFT').toUpperCase() === 'VALIDATED'; }
+  function actualLabel(actual,m){ return actual==='A'?m.teamA:actual==='B'?m.teamB:'Nul'; }
+  function predictionLabel(pred,m){ return pred==='A'?m.teamA:pred==='B'?m.teamB:'Nul'; }
+
+  function getGainRuleForDay(day){
+    const s=S();
+    const rules = s.gainRules && typeof s.gainRules === 'object' ? s.gainRules : {};
+    const assignments = arr(s.gainRuleAssignments);
+    const d = n(day,1);
+    let ref = s.defaultGainRule || s.defaultGainRuleRef || 'R1';
+    const hit = assignments.find(a => {
+      const from=n(a.fromDay,1), to=(a.toDay===null || a.toDay===undefined || a.toDay==='') ? Infinity : n(a.toDay,Infinity);
+      return d>=from && d<=to && a.ruleRef;
+    });
+    if(hit) ref = hit.ruleRef;
+    let rule = rules[ref];
+    if(!rule){
+      // Fallback sécurisé, mais la règle doit normalement venir de Supabase.
+      rule = {ref:ref || 'R_FALLBACK', label:'Fallback x1.5 + bonus exact 1.5', resultMultiplier:1.5, exactScoreBonus:1.5, active:true};
+    }
+    return {
+      ref:String(rule.ref || ref || 'R1'),
+      label:String(rule.label || rule.ref || ref || 'Règle gains'),
+      resultMultiplier:n(rule.resultMultiplier,1.5),
+      exactScoreBonus:n(rule.exactScoreBonus,1.5),
+      active: rule.active !== false
+    };
+  }
+
+  function rollbackDay(day){
+    const s=S();
+    arr(s.settlementDetails).filter(d=>n(d.day,0)===n(day,0) && d.player && d.player!=='RÉSERVE').forEach(d=>{
+      const p=arr(s.players).find(x=>String(x.name)===String(d.player));
+      if(!p) return;
+      const amt=n(d.netGain,0);
+      p.balance=n(p.balance,0)-amt;
+      p.evolution=n(p.evolution,0)-amt;
+      if(String(d.status||'').includes('GAGNÉ')) p.good=Math.max(0,n(p.good,0)-1);
+      if(String(d.status||'').includes('SCORE EXACT')) p.exact=Math.max(0,n(p.exact,0)-1);
+    });
+    s.settlementDetails = arr(s.settlementDetails).filter(d=>n(d.day,0)!==n(day,0));
+    arr(s.bets).filter(b=>n(b.day,0)===n(day,0)).forEach(b=>{
+      delete b.calculation;
+      delete b.calculatedAt;
+      delete b.gainRuleRef;
+      delete b.gainRuleLabel;
+      delete b.resultStatus;
+      delete b.netGain;
+      delete b.gainLoss;
+      delete b.baseGain;
+      delete b.exactBonus;
+      delete b.exactScore;
+      delete b.officialScore;
+      delete b.officialScoreA;
+      delete b.officialScoreB;
+      delete b.actualOutcome;
+      delete b.win;
+    });
+    s.logs = arr(s.logs).filter(l=>!(n(l.day,0)===n(day,0) && /Gain |Perte |Calcul gains/i.test(l.text||'')));
+  }
+  window.rollbackDaySettlement = rollbackDay;
+
+  function persistMaybe(reason){
+    if(typeof window.__BP_V118_ADMIN_CLEAN__ !== 'undefined'){
+      // La fonction persist est privée dans V118, donc on utilise les chemins publics existants si disponibles.
+    }
+    if(typeof window.forceCloudSave === 'function') return window.forceCloudSave(reason);
+    if(typeof window.bpCloudSave === 'function') return window.bpCloudSave(reason);
+    if(typeof window.save === 'function') window.save();
+    if(typeof window.writeCloud === 'function') return window.writeCloud(reason);
+    return Promise.resolve(true);
+  }
+
+  async function v122Persist(reason){
+    // Réutilise la sauvegarde directe du bouton scores si possible : calculateGains V118 appelle une fonction persist privée,
+    // ici on refait une écriture Supabase directe autonome pour garantir la persistance des résultats par mise.
+    const st=S();
+    try{ if(typeof window.save === 'function') window.save(); }catch(e){}
+    const url=(window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL || '').replace(/\/$/,'');
+    const key=window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY || '';
+    const appId=window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+    if(!url || !key){ await persistMaybe(reason); return true; }
+    const clean=JSON.parse(JSON.stringify(st||{}));
+    if(Array.isArray(clean.logs)) clean.logs=clean.logs.slice(-300);
+    if(Array.isArray(clean.settlementDetails)) clean.settlementDetails=clean.settlementDetails.slice(-4000);
+    clean.lastSavedAt=now();
+    clean.lastSaveReason=reason || 'V122 gains';
+    clean.schemaVersion='v122-gain-rules-per-bet';
+    const headers={apikey:key, authorization:'Bearer '+key, 'content-type':'application/json', prefer:'resolution=merge-duplicates,return=representation'};
+    const prev=window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__=true;
+    try{
+      const r=await fetch(url+'/rest/v1/app_state',{method:'POST',headers,body:JSON.stringify({id:appId,data:clean,updated_at:now()})});
+      if(!r.ok) throw new Error('Écriture BDD gains KO HTTP '+r.status+' — '+(await r.text()));
+      const vr=await fetch(url+'/rest/v1/app_state?id=eq.'+encodeURIComponent(appId)+'&select=data',{method:'GET',headers:{apikey:key,authorization:'Bearer '+key}});
+      if(!vr.ok) throw new Error('Vérification BDD gains KO HTTP '+vr.status);
+      const rows=await vr.json();
+      const remote=Array.isArray(rows)&&rows[0]&&rows[0].data ? rows[0].data : null;
+      if(!remote || !Array.isArray(remote.bets)) throw new Error('Vérification BDD gains KO : bets introuvables');
+      return true;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__=prev;
+    }
+  }
+
+  window.getGainRuleForDay = getGainRuleForDay;
+
+  window.calculateGains = async function(showAlert=true, force=false){
+    const day=selectedDay();
+    const s=S();
+    const existing=arr(s.settlementDetails).some(d=>n(d.day,0)===day && d.player && d.player!=='RÉSERVE');
+    if(existing && !force){
+      const ok=confirm('Les gains de la journée '+day+' semblent déjà calculés.\n\nUtilise Recalculer pour annuler puis refaire le calcul. Continuer quand même ?');
+      if(!ok) return false;
+    }
+    if(typeof window.saveOfficialScoresDay === 'function'){
+      const saved=await window.saveOfficialScoresDay(false);
+      if(!saved) return false;
+    }
+    const matches=dayMatches(day);
+    if(!matches.length){ alert('Aucun match trouvé pour J'+day+'.'); return false; }
+    if(matches.some(m=>m.scoreA===null || m.scoreA===undefined || m.scoreB===null || m.scoreB===undefined)){
+      alert('Merci de saisir tous les scores officiels de J'+day+' avant calcul.'); return false;
+    }
+    const rule=getGainRuleForDay(day);
+    if(!rule.active){ alert('La règle '+rule.ref+' est inactive en BDD. Calcul bloqué.'); return false; }
+    const validBets=arr(s.bets).filter(b=>n(b.day,0)===day && isValidatedBet(b));
+    if(!validBets.length){ alert('Aucune mise validée pour J'+day+'.'); return false; }
+    if(showAlert){
+      const ok=confirm('Calculer les gains de J'+day+' avec la règle '+rule.ref+' ?\n\n'+rule.label+'\nBon résultat : mise × '+rule.resultMultiplier+'\nScore exact : mise × '+rule.resultMultiplier+' + '+rule.exactScoreBonus+' FID\n\nMises validées : '+validBets.length);
+      if(!ok) return false;
+    }
+
+    rollbackDay(day);
+    if(!Array.isArray(s.settlementDetails)) s.settlementDetails=[];
+    let processed=0,totalGood=0,totalExact=0,totalNet=0,totalPayout=0,totalStake=0;
+    matches.forEach(m=>{
+      processed++;
+      const actual=outcome(m.scoreA,m.scoreB);
+      const actualTxt=actualLabel(actual,m);
+      const bets=arr(s.bets).filter(b=>n(b.day,0)===day && String(b.matchId)===String(m.id) && isValidatedBet(b));
+      let payoutTotal=0, stakeTotal=0;
+      bets.forEach(b=>{
+        const p=arr(s.players).find(x=>String(x.name)===String(b.player));
+        const ba=betScoreA(b), bb=betScoreB(b);
+        const pred=outcome(ba,bb);
+        const stake=n(b.stake,0);
+        const exact=(ba===n(m.scoreA,0) && bb===n(m.scoreB,0));
+        const win=(pred===actual);
+        let net=0, status='PERDU', baseGain=0, exactBonus=0;
+        stakeTotal += stake; totalStake += stake;
+        if(win){
+          baseGain=roundGain(stake*rule.resultMultiplier);
+          exactBonus=exact?roundGain(rule.exactScoreBonus):0;
+          net=roundGain(baseGain+exactBonus);
+          status=exact ? ('GAGNÉ + SCORE EXACT ('+rule.ref+')') : ('GAGNÉ ('+rule.ref+')');
+          totalGood++;
+          if(exact) totalExact++;
+          payoutTotal += net; totalPayout += net;
+        }else{
+          net=roundGain(-stake);
+        }
+        if(p){
+          p.balance=roundGain(n(p.balance,0)+net);
+          p.evolution=roundGain(n(p.evolution,0)+net);
+          if(win) p.good=n(p.good,0)+1;
+          if(exact) p.exact=n(p.exact,0)+1;
+        }
+        totalNet=roundGain(totalNet+net);
+        const detail={
+          day, matchId:m.id, match:`${m.teamA} - ${m.teamB}`,
+          player:b.player, stake,
+          prediction:predictionLabel(pred,m), predictedScore:scoreStr(ba,bb),
+          officialScore:scoreStr(m.scoreA,m.scoreB), officialScoreA:n(m.scoreA), officialScoreB:n(m.scoreB),
+          result:actualTxt, actualOutcome:actual,
+          status, baseGain, exactBonus, netGain:net,
+          win, exactScore:exact,
+          ruleRef:rule.ref, gainRuleRef:rule.ref, gainRuleLabel:rule.label,
+          resultMultiplier:rule.resultMultiplier, calculatedAt:now()
+        };
+        s.settlementDetails.push(detail);
+        Object.assign(b, {
+          calculation: detail,
+          calculatedAt: detail.calculatedAt,
+          gainRuleRef: rule.ref,
+          gainRuleLabel: rule.label,
+          resultStatus: status,
+          netGain: net,
+          gainLoss: net,
+          baseGain,
+          exactBonus,
+          exactScore: exact,
+          officialScore: detail.officialScore,
+          officialScoreA: detail.officialScoreA,
+          officialScoreB: detail.officialScoreB,
+          actualOutcome: actual,
+          win
+        });
+        try{ if(typeof window.log==='function') window.log(b.player,(win?'Gain ':'Perte ')+m.id+(exact?' + score exact':''),net); }catch(e){}
+      });
+      s.settlementDetails.push({
+        day, matchId:m.id, match:`${m.teamA} - ${m.teamB}`, player:'RÉSERVE', stake:0,
+        prediction:'', predictedScore:'', officialScore:scoreStr(m.scoreA,m.scoreB), result:actualTxt,
+        status:payoutTotal>stakeTotal?'RÉSERVE UTILISÉE':'RÉSERVE CRÉDITÉE',
+        baseGain:payoutTotal, exactBonus:0, netGain:roundGain(stakeTotal-payoutTotal),
+        ruleRef:rule.ref, gainRuleRef:rule.ref, gainRuleLabel:rule.label, calculatedAt:now()
+      });
+    });
+    s.gainsCalculatedDays=s.gainsCalculatedDays||{};
+    s.gainsCalculatedDays[String(day)]={calculatedAt:now(), ruleRef:rule.ref, totalStake:roundGain(totalStake), totalPayout:roundGain(totalPayout), reserveImpact:roundGain(totalPayout-totalStake)};
+    s.summaries=s.summaries||{};
+    s.summaries.day={good:totalGood, exact:totalExact, gain:totalNet, rank:0};
+    try{ if(typeof window.log==='function') window.log('SYSTEM','Calcul gains J'+day+' terminé avec '+rule.ref,0); }catch(e){}
+    await v122Persist('calcul gains J'+day+' règle '+rule.ref);
+    try{ if(typeof window.renderAll==='function') window.renderAll(); else if(typeof window.renderAdmin==='function') window.renderAdmin(); }catch(e){ console.warn(e); }
+    const ci=document.getElementById('calcInfo');
+    if(ci) ci.innerHTML='Journée '+day+' · '+processed+' match(s) traité(s). Règle '+rule.ref+' appliquée. Gains sauvegardés en BDD.';
+    if(showAlert) alert('Calcul J'+day+' terminé.\nRègle : '+rule.ref+'\nMises validées : '+validBets.length+'\nTotal gains/pertes joueurs : '+roundGain(totalNet)+' FID\nRéserve consommée : '+roundGain(totalPayout-totalStake)+' FID');
+    return true;
+  };
+
+  window.recalculateDay = async function(){
+    const day=selectedDay();
+    if(!confirm('Recalculer J'+day+' ?\n\nLes anciens résultats de chaque mise seront annulés puis recalculés avec la règle BDD applicable.')) return false;
+    rollbackDay(day);
+    await v122Persist('rollback gains J'+day);
+    return window.calculateGains(true,true);
   };
 })();
 </script>
