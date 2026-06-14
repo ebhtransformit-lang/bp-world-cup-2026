@@ -95,7 +95,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V149 PRONO MODAL SPINNER STABLE</title>
+<title>B Partner FIFA World Cup 2026 - V157 ADMIN GAINS PERSIST BASELINE</title>
 <!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
@@ -20280,6 +20280,412 @@ window.BP_LOCAL_ONLY = true;
   }
 
   document.addEventListener('DOMContentLoaded', resetLoginButton, {once:true});
+})();
+</script>
+
+
+<script>
+/* V157 — Persistance BDD des gains ADMIN + scores officiels + nettoyage zombie Sarah.
+   Base: V152 PERF & FUNCTION.
+   Objectif: conserver la performance, sans polling, mais garantir que Calculer/Recalculer écrit vraiment app_state.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V157_ADMIN_GAINS_PERSIST__) return;
+  window.__BP_V157_ADMIN_GAINS_PERSIST__ = true;
+
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  const TABLE = 'app_state';
+
+  function state(){ return window.state || {}; }
+  function A(x){ return Array.isArray(x) ? x : []; }
+  function now(){ return new Date().toISOString(); }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return {};}}
+  function isAdmin(){ return window.currentRole === 'admin'; }
+  function supa(){
+    if(!window.supabase || !window.BP_SUPABASE_URL || !window.BP_SUPABASE_ANON_KEY){
+      throw new Error('Supabase non configuré');
+    }
+    if(typeof window.bpGetSupabaseClient === 'function') return window.bpGetSupabaseClient();
+    if(!window.__BP_V157_SUPABASE_CLIENT__){
+      window.__BP_V157_SUPABASE_CLIENT__ = window.supabase.createClient(window.BP_SUPABASE_URL, window.BP_SUPABASE_ANON_KEY);
+    }
+    return window.__BP_V157_SUPABASE_CLIENT__;
+  }
+  function playerSet(){
+    const s = new Set();
+    A(state().players).forEach(p=>{ if(p && p.name) s.add(String(p.name).trim()); });
+    return s;
+  }
+  function cleanZombieSettlements(){
+    const valid = playerSet();
+    state().settlementDetails = A(state().settlementDetails).filter(d=>{
+      const p = String(d && d.player || '').trim();
+      if(!p) return false;
+      if(p === 'RÉSERVE') return true;
+      if(/^EVENT_/i.test(String(d && d.matchId || ''))) return valid.has(p);
+      return valid.has(p);
+    });
+  }
+  function normalizeOfficialScoresForDay(day){
+    const s = state();
+    day = Number(day || 1);
+    if(!s.officialScores || typeof s.officialScores !== 'object') s.officialScores = {};
+    if(!s.officialScoresByDay || typeof s.officialScoresByDay !== 'object') s.officialScoresByDay = {};
+    if(!s.officialScoresByMatch || typeof s.officialScoresByMatch !== 'object') s.officialScoresByMatch = {};
+    if(!s.officialScoresSavedDays || typeof s.officialScoresSavedDays !== 'object') s.officialScoresSavedDays = {};
+    if(!s.officialScores[String(day)]) s.officialScores[String(day)] = {};
+    if(!s.officialScoresByDay[String(day)]) s.officialScoresByDay[String(day)] = {};
+    A(s.matches).filter(m=>Number(m.day)===day).forEach(m=>{
+      const has = m.scoreA !== null && m.scoreA !== undefined && m.scoreB !== null && m.scoreB !== undefined;
+      if(!has) return;
+      const rec = {a:Number(m.scoreA), b:Number(m.scoreB), scoreA:Number(m.scoreA), scoreB:Number(m.scoreB), day:day};
+      s.officialScores[String(day)][String(m.id)] = {a:rec.a,b:rec.b};
+      s.officialScoresByDay[String(day)][String(m.id)] = {a:rec.a,b:rec.b};
+      s.officialScoresByMatch[String(m.id)] = rec;
+    });
+    const ms = A(s.matches).filter(m=>Number(m.day)===day);
+    if(ms.length && ms.every(m=>m.status==='done' && m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined)){
+      s.officialScoresSavedDays[String(day)] = true;
+      s.officialScoresSavedDays[day] = true;
+    }
+  }
+  function currentScoreDay(){
+    try{ if(typeof window.scoreEntryDay === 'function') return Number(window.scoreEntryDay()) || 1; }catch(e){}
+    try{ if(typeof window.bpV68ScoreDay === 'function') return Number(window.bpV68ScoreDay()) || 1; }catch(e){}
+    return Number(state().currentDay || 1) || 1;
+  }
+  function ensureGainsFlags(day){
+    const s = state();
+    if(!s.gainsCalculatedDays || typeof s.gainsCalculatedDays !== 'object') s.gainsCalculatedDays = {};
+    const hasDetails = A(s.settlementDetails).some(d=>Number(d.day)===Number(day) && d.player && d.player !== 'RÉSERVE');
+    if(hasDetails){
+      s.gainsCalculatedDays[String(day)] = true;
+      s.gainsCalculatedDays[Number(day)] = true;
+    }
+  }
+  function compactForBDD(){
+    const s = clone(state());
+    s.logs = A(s.logs).slice(-250);
+    s.lastSavedAt = now();
+    s.schemaVersion = 'v157-admin-gains-persist';
+    delete s._cache; delete s.debug; delete s.htmlPreview;
+    if(Array.isArray(s.players)){
+      s.players = s.players.map(p=>{
+        const q = {...p};
+        if(typeof q.avatar === 'string' && q.avatar.length > 50000) q.avatar = '';
+        if(typeof q.photo === 'string' && q.photo.length > 50000) q.photo = '';
+        return q;
+      });
+    }
+    return s;
+  }
+  async function persistBDD(reason){
+    const old = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      const payload = compactForBDD();
+      const r = await supa().from(TABLE).upsert({id:APP_ID,data:payload,updated_at:now()},{onConflict:'id'});
+      if(r.error) throw r.error;
+      try{ localStorage.setItem('bpwc_state_v1', JSON.stringify(payload)); }catch(e){}
+      console.log('[V157 BDD OK]', reason || 'save', 'settlementDetails=', A(payload.settlementDetails).length);
+      return true;
+    } finally {
+      window.__BP_ALLOW_BDD_WRITE__ = old;
+    }
+  }
+  function setAdminStatus(day){
+    const info = document.getElementById('calcInfo');
+    const has = A(state().settlementDetails).some(d=>Number(d.day)===Number(day) && d.player && d.player !== 'RÉSERVE');
+    if(info && has) info.innerHTML = `Journée ${day} · gains calculés et sauvegardés en BDD.`;
+  }
+
+  const oldSaveScores = window.saveOfficialScoresDay;
+  if(typeof oldSaveScores === 'function' && !oldSaveScores.__bpV157Wrapped){
+    window.saveOfficialScoresDay = async function(showAlert=true){
+      const day = currentScoreDay();
+      const ok = await oldSaveScores.apply(this, arguments);
+      if(ok !== false){
+        try{
+          normalizeOfficialScoresForDay(day);
+          await persistBDD('scores-officiels-J'+day);
+          if(showAlert) console.log('[V157] Scores officiels J'+day+' persistés en BDD');
+        }catch(e){
+          console.error('[V157 scores BDD]', e);
+          alert('Scores enregistrés à l’écran, mais sauvegarde BDD KO : '+(e.message||e));
+        }
+      }
+      return ok;
+    };
+    window.saveOfficialScoresDay.__bpV157Wrapped = true;
+  }
+
+  const oldCalculate = window.calculateGains;
+  if(typeof oldCalculate === 'function' && !oldCalculate.__bpV157Wrapped){
+    window.calculateGains = async function(showAlert=true, force=false){
+      if(!isAdmin()) return alert('Accès réservé à l’admin.');
+      const day = currentScoreDay();
+      const result = await oldCalculate.call(this, showAlert, force);
+      if(result !== false){
+        try{
+          normalizeOfficialScoresForDay(day);
+          cleanZombieSettlements();
+          ensureGainsFlags(day);
+          await persistBDD('calcul-gains-J'+day);
+          setAdminStatus(day);
+          if(typeof window.renderRanking === 'function') window.renderRanking();
+          if(typeof window.renderScores === 'function') window.renderScores();
+          if(typeof window.renderAdmin === 'function') window.renderAdmin();
+        }catch(e){
+          console.error('[V157 gains BDD]', e);
+          alert('Gains calculés à l’écran, mais sauvegarde BDD KO : '+(e.message||e));
+          return false;
+        }
+      }
+      return result;
+    };
+    window.calculateGains.__bpV157Wrapped = true;
+  }
+
+  const oldRecalc = window.recalculateDay;
+  if(typeof oldRecalc === 'function' && !oldRecalc.__bpV157Wrapped){
+    window.recalculateDay = async function(){
+      const day = currentScoreDay();
+      const result = await oldRecalc.apply(this, arguments);
+      if(result !== false){
+        try{
+          normalizeOfficialScoresForDay(day);
+          cleanZombieSettlements();
+          ensureGainsFlags(day);
+          await persistBDD('recalcul-gains-J'+day);
+          setAdminStatus(day);
+        }catch(e){
+          console.error('[V157 recalc BDD]', e);
+          alert('Recalcul effectué, mais sauvegarde BDD KO : '+(e.message||e));
+          return false;
+        }
+      }
+      return result;
+    };
+    window.recalculateDay.__bpV157Wrapped = true;
+  }
+
+  window.bpV157AuditGainsBDD = function(day){
+    day = Number(day || currentScoreDay());
+    const currentPlayers = playerSet();
+    const rows = A(state().settlementDetails).filter(d=>Number(d.day)===day);
+    const zombies = rows.filter(d=>d.player && d.player!=='RÉSERVE' && !currentPlayers.has(String(d.player).trim()));
+    console.table(rows.map(d=>({day:d.day, matchId:d.matchId, player:d.player, status:d.status, netGain:d.netGain})));
+    if(zombies.length) console.warn('[V157] Lignes zombies détectées', zombies);
+    console.log('[V157] GainsCalculatedDays', state().gainsCalculatedDays, 'officialScoresSavedDays', state().officialScoresSavedDays);
+    return {rows,zombies};
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    try{
+      const day = currentScoreDay();
+      ensureGainsFlags(day);
+      setAdminStatus(day);
+    }catch(e){}
+  }, {once:true});
+})();
+</script>
+
+
+<script>
+/* V158 — Prévisualisation gains ADMIN robuste : calcul -> aperçu -> validation BDD.
+   Ne modifie pas le login, les mises user, ni la perf baseline. */
+(function(){
+  'use strict';
+  if(window.__BP_V158_ADMIN_PREVIEW_FLOW__) return;
+  window.__BP_V158_ADMIN_PREVIEW_FLOW__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d){ const x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function selectedDay(){
+    const el=document.getElementById('adminDaySelect') || document.getElementById('adminBetsDay') || document.querySelector('[data-admin-day-select]');
+    const raw=el ? el.value : (S().adminSelectedDay || S().currentDay || 1);
+    const m=String(raw||'').match(/\d+/);
+    return m ? Number(m[0]) : Number(raw||1);
+  }
+  function getCalcPanel(){
+    let panel=document.getElementById('calcInfo');
+    const scoreInputs=document.getElementById('scoreInputs');
+    if(!panel){
+      panel=document.createElement('div');
+      panel.id='calcInfo';
+      panel.className='help';
+      if(scoreInputs && scoreInputs.parentElement) scoreInputs.parentElement.appendChild(panel);
+    }
+    panel.style.display='block';
+    panel.style.minHeight='auto';
+    panel.style.padding='14px';
+    panel.style.marginTop='14px';
+    panel.style.borderLeft='4px solid var(--bp)';
+    return panel;
+  }
+  function setBtnLoading(btn, loading, label){
+    if(!btn) return;
+    if(loading){
+      btn.dataset.oldHtml=btn.innerHTML;
+      btn.disabled=true;
+      btn.innerHTML='<span class="bp-mini-spinner"></span> '+esc(label||'Calcul...');
+    }else{
+      btn.disabled=false;
+      if(btn.dataset.oldHtml) btn.innerHTML=btn.dataset.oldHtml;
+      delete btn.dataset.oldHtml;
+    }
+  }
+  function previewRows(p){
+    const details=arr(p.details).filter(d=>d.player && d.player!=='RÉSERVE' && !d.__ghostPlayer);
+    const rows=details.map(d=>`
+      <tr>
+        <td><b>${esc(d.player)}</b></td>
+        <td>${esc(d.match || d.matchId || '')}</td>
+        <td>${esc(d.predictedScore || '')}</td>
+        <td>${esc(d.officialScore || '')}</td>
+        <td>${esc(d.status || '')}</td>
+        <td class="${n(d.netGain,0)>=0?'good':'bad'}">${n(d.netGain,0)>=0?'+':''}${n(d.netGain,0)} FID</td>
+      </tr>`).join('');
+    return rows || '<tr><td colspan="6" class="muted">Aucune ligne calculée pour cette journée.</td></tr>';
+  }
+  function playerSummaryRows(p){
+    const rows=arr(p.players).filter(r=>r.player && r.player!=='RÉSERVE').map(r=>`
+      <tr>
+        <td><b>${esc(r.player)}</b></td>
+        <td>${n(r.bets,0)}</td>
+        <td>${n(r.stake,0)} FID</td>
+        <td>${n(r.gain,0)} FID</td>
+        <td class="${n(r.net,0)>=0?'good':'bad'}">${n(r.net,0)>=0?'+':''}${n(r.net,0)} FID</td>
+        <td>${n(r.exact,0)}</td>
+        <td>${n(r.won,0)}</td>
+        <td>${n(r.lost,0)}</td>
+      </tr>`).join('');
+    return rows || '<tr><td colspan="8" class="muted">Aucun joueur dans la prévisualisation.</td></tr>';
+  }
+  function renderAdminGainPreview(p){
+    const panel=getCalcPanel();
+    panel.dataset.previewActive='1';
+    const reserveImpact=n(p.reserveImpact,0);
+    panel.innerHTML=`
+      <h3>🧮 Prévisualisation du calcul J${esc(p.day)}</h3>
+      <div class="muted">Aucune écriture BDD à ce stade. Vérifie le détail puis clique sur <b>Valider et appliquer en BDD</b>.</div>
+      ${p.alreadyCalculated ? '<div class="help warn"><b>Attention :</b> cette journée contient déjà un calcul. La validation remplacera proprement l’ancien calcul de cette journée.</div>' : ''}
+      <div class="summary" style="margin:12px 0">
+        <div class="tile"><span>Règle</span><strong>${esc(p.rule && p.rule.ref || '')}</strong><div class="muted">${esc(p.rule && p.rule.label || '')}</div></div>
+        <div class="tile"><span>Mises validées</span><strong>${n(p.validBets,0)}</strong><div class="muted">Matchs scorés : ${n(p.scoredMatches,0)}/${n(p.matchesCount,0)}</div></div>
+        <div class="tile"><span>Total mises</span><strong>${n(p.totalStake,0)} FID</strong><div class="muted">Base de calcul</div></div>
+        <div class="tile"><span>Total gains</span><strong>${n(p.totalGain,0)} FID</strong><div class="muted">Paiement joueurs</div></div>
+      </div>
+      <div class="summary" style="margin:12px 0">
+        <div class="tile"><span>Impact réserve</span><strong class="${reserveImpact>0?'bad':'good'}">${reserveImpact>0?'-':'+'}${Math.abs(reserveImpact)} FID</strong><div class="muted">Réserve après : ${n(p.reserveAfter,0)} FID</div></div>
+        <div class="tile"><span>Scores exacts</span><strong>${n(p.exactScores,0)}</strong><div class="muted">Bonus exact : +${n(p.rule && p.rule.exactScoreBonus,0)}</div></div>
+        <div class="tile"><span>Mises gagnantes</span><strong>${n(p.winningBets,0)}</strong><div class="muted">Résultat correct</div></div>
+        <div class="tile"><span>Mises perdues</span><strong>${n(p.losingBets,0)}</strong><div class="muted">Aucun gain</div></div>
+      </div>
+      <h3>Résumé par joueur</h3>
+      <div style="overflow:auto;margin-bottom:14px">
+        <table><thead><tr><th>Joueur</th><th>Mises</th><th>Total misé</th><th>Gains</th><th>Net</th><th>Exact</th><th>Gagnées</th><th>Perdues</th></tr></thead><tbody>${playerSummaryRows(p)}</tbody></table>
+      </div>
+      <h3>Détail des lignes calculées</h3>
+      <div style="overflow:auto">
+        <table><thead><tr><th>Joueur</th><th>Match</th><th>Prono</th><th>Officiel</th><th>Statut</th><th>Net</th></tr></thead><tbody>${previewRows(p)}</tbody></table>
+      </div>
+      <div class="admin-finance-actions" style="margin-top:14px">
+        <button class="action" id="bpValidateGainPreviewBtn" onclick="bpValidateGainPreview()">✅ Valider et appliquer en BDD</button>
+        <button class="action secondary" onclick="bpCancelGainPreview()">Annuler</button>
+      </div>
+    `;
+    try{ panel.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){}
+  }
+
+  window.bpCancelGainPreview = function(){
+    window.__BP_LAST_GAIN_PREVIEW__=null;
+    const panel=getCalcPanel();
+    delete panel.dataset.previewActive;
+    if(typeof window.updateCalcInfoStatus==='function') window.updateCalcInfoStatus();
+    else panel.innerHTML='<b>Prévisualisation annulée.</b>';
+  };
+
+  window.calculateGains = async function(){
+    const btn=event && event.currentTarget ? event.currentTarget : null;
+    setBtnLoading(btn,true,'Prévisualisation...');
+    try{
+      if(typeof window.bpPreviewGainCalculation!=='function') throw new Error('Moteur de calcul introuvable.');
+      const p=window.bpPreviewGainCalculation(selectedDay());
+      window.__BP_LAST_GAIN_PREVIEW__=p;
+      renderAdminGainPreview(p);
+      return true;
+    }catch(e){
+      const panel=getCalcPanel();
+      panel.dataset.previewActive='1';
+      panel.innerHTML='<h3>❌ Prévisualisation impossible</h3><div class="bad">'+esc(e.message||String(e))+'</div>';
+      return false;
+    }finally{
+      setBtnLoading(btn,false);
+    }
+  };
+
+  window.recalculateDay = async function(){
+    return window.calculateGains();
+  };
+
+  window.bpValidateGainPreview = async function(){
+    const btn=document.getElementById('bpValidateGainPreviewBtn');
+    if(!window.__BP_LAST_GAIN_PREVIEW__){
+      alert('Aucune prévisualisation disponible.');
+      return false;
+    }
+    setBtnLoading(btn,true,'Application BDD...');
+    try{
+      if(typeof window.validateGainPreviewAndPersist==='function'){
+        return await window.validateGainPreviewAndPersist();
+      }
+      throw new Error('Fonction de validation BDD introuvable.');
+    }catch(e){
+      const panel=getCalcPanel();
+      panel.insertAdjacentHTML('beforeend','<div class="help bad"><b>Erreur validation BDD :</b> '+esc(e.message||String(e))+'</div>');
+      return false;
+    }finally{
+      setBtnLoading(btn,false);
+    }
+  };
+
+  function patchButtons(){
+    [...document.querySelectorAll('button')].forEach(btn=>{
+      const t=(btn.textContent||'').trim();
+      const oc=String(btn.getAttribute('onclick')||'');
+      if(oc.includes('calculateGains') || /Prévisualiser le calcul|Calculer les gains/i.test(t)){
+        btn.textContent='Prévisualiser le calcul de la journée';
+        btn.setAttribute('onclick','calculateGains()');
+      }
+      if(oc.includes('recalculateDay') || /Prévisualiser le recalcul|Recalculer/i.test(t)){
+        btn.textContent='Prévisualiser le recalcul';
+        btn.setAttribute('onclick','recalculateDay()');
+      }
+    });
+  }
+
+  const css=document.createElement('style');
+  css.textContent=`
+    .bp-mini-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:bpSpin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+    @keyframes bpSpin{to{transform:rotate(360deg)}}
+    #calcInfo table th,#calcInfo table td{white-space:nowrap}
+  `;
+  document.head.appendChild(css);
+
+  const oldRenderAdmin=window.renderAdmin;
+  if(typeof oldRenderAdmin==='function'){
+    window.renderAdmin=function(){
+      const r=oldRenderAdmin.apply(this,arguments);
+      setTimeout(patchButtons,0);
+      return r;
+    };
+  }
+  setTimeout(patchButtons,300);
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(patchButtons,300));
 })();
 </script>
 
