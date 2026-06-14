@@ -97,7 +97,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V126 SPINNER PRONO RESERVE</title>
+<title>B Partner FIFA World Cup 2026 - V128 FIX SYNC SPINNERS HOF</title>
 <!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
@@ -2391,7 +2391,6 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
     <p class="muted">Saisis ton code personnel à 4 chiffres pour accéder à ton espace.</p>
     <input id="loginCode" class="code-input" type="password" maxlength="10" inputmode="text" autocomplete="one-time-code" placeholder="ADMIN ou code" onkeydown="if(event.key===&#39;Enter&#39;) loginWithCode()">
     <button class="action" style="width:100%;margin-top:12px" onclick="loginWithCode()">Entrer</button>
-    <button class="action secondary" style="width:100%;margin-top:8px" onclick="if(confirm(&#39;Réinitialiser uniquement l’écran de connexion ? Les données sont conservées.&#39;)){document.getElementById(&#39;loginCode&#39;).value=&#39;&#39;;location.reload();}">Réparer l’accès</button>
     <p id="loginError" class="bad" style="display:none">Code incorrect.</p>
     
   </div>
@@ -18478,6 +18477,226 @@ button.bp-btn-loading::before{
     setTimeout(restoreSession,150);
     setTimeout(restoreSession,900);
     setInterval(()=>{hideLoginBDDAdmin(); renderBilanUser(); window.bpApplyBetResultClasses(); resetSpinners();},2500);
+  });
+})();
+</script>
+
+
+
+<style id="bp-v128-fixes">
+/* V128 — stabilité données, spinners, login nettoyé, Hall of Fame Cigale/Fourmi */
+#loginScreen button[onclick*="Réinitialiser"],
+#loginScreen button[onclick*="location.reload"],
+#loginScreen button[onclick*="Réparer"]{display:none!important}
+button.bp-v128-loading{position:relative!important;opacity:.82!important;pointer-events:none!important}
+button.bp-v128-loading::before{content:"";width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:-2px;animation:bpV128Spin .75s linear infinite}
+@keyframes bpV128Spin{to{transform:rotate(360deg)}}
+</style>
+<script id="bp-v128-fixes">
+(function(){
+  'use strict';
+  if(window.__BP_V128_FIXES__) return; window.__BP_V128_FIXES__=true;
+  const SESSION_KEY='bpwc_current_user_code';
+  const ADMIN_CODE='1573';
+  const n=(v,d=0)=>{v=Number(v);return Number.isFinite(v)?v:d};
+  const arr=x=>Array.isArray(x)?x:[];
+  const S=()=>window.state||{};
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  function players(){return arr(S().players)}
+  function playerName(p){return p?.pseudo||p?.name||''}
+  function currentPlayer(){
+    const idx=Number(window.currentUserIndex);
+    if(window.currentRole==='user' && Number.isFinite(idx) && players()[idx]) return players()[idx];
+    if(typeof window.player==='function') try{return window.player()}catch(e){}
+    return players()[0]||null;
+  }
+
+  /* 0 + 4 — nettoyage login et suppression des messages BDD ADMIN / réparer */
+  const nativeAlert=window.alert.bind(window);
+  window.alert=function(msg){
+    const t=String(msg||'');
+    if(/Chargement BDD réservé|BDD ADMIN|Accès réservé à l.?admin/i.test(t)) return;
+    return nativeAlert(msg);
+  };
+  function cleanLogin(){
+    const login=document.getElementById('loginScreen'); if(!login) return;
+    login.querySelectorAll('button').forEach(b=>{ const t=(b.textContent||'').trim(); if(/réparer/i.test(t)) b.remove(); });
+    login.querySelectorAll('*').forEach(el=>{ const t=(el.textContent||'').trim(); if(/^BDD\s*ADMIN$/i.test(t)||/Chargement BDD réservé/i.test(t)) el.style.display='none'; });
+  }
+
+  /* Réserve réelle : priorité à reserveBalance si elle existe, sinon réserve initiale + mouvements RÉSERVE */
+  function reserveMovements(){
+    return arr(S().settlementDetails).filter(d=>/^R[ÉE]SERVE$/i.test(String(d.player||''))).reduce((s,d)=>s+n(d.netGain),0);
+  }
+  window.bpActualReserve=function(){
+    if(Number.isFinite(Number(S().reserveBalance))) return n(S().reserveBalance);
+    return n(S().reserveTarget,500)+reserveMovements();
+  };
+  window.calcReserve=function(){
+    const allocated=players().reduce((s,p)=>s+n(p.startFid,50),0);
+    const reserveTarget=n(S().reserveTarget,500);
+    const reserve=window.bpActualReserve();
+    const budget=allocated+reserveTarget;
+    S().budget=budget;
+    const min=Math.ceil(budget*.05);
+    return {allocated,reserve,min,valid:reserve>=min,budget,reserveTarget,baseReserve:reserveTarget,reserveMovements:reserveMovements()};
+  };
+  function syncReserveUI(){
+    const val=String(window.bpActualReserve());
+    ['kpiReserve','reserveView'].forEach(id=>{const el=document.getElementById(id); if(el) el.textContent=val;});
+    const inp=document.getElementById('reserveInput'); if(inp && document.activeElement!==inp) inp.value=String(n(S().reserveTarget,500));
+  }
+
+  /* Spinners ciblés */
+  function startSpin(btn,label){
+    if(!btn) return;
+    if(!btn.dataset.v128Text) btn.dataset.v128Text=btn.innerHTML;
+    btn.innerHTML='⏳ '+label;
+    btn.disabled=true; btn.classList.add('bp-v128-loading');
+    clearTimeout(btn.__v128Timer); btn.__v128Timer=setTimeout(()=>stopSpin(btn),15000);
+  }
+  function stopSpin(btn){
+    if(!btn) return;
+    clearTimeout(btn.__v128Timer);
+    if(btn.dataset.v128Text){btn.innerHTML=btn.dataset.v128Text; delete btn.dataset.v128Text;}
+    btn.disabled=false; btn.classList.remove('bp-v128-loading','bp-btn-loading');
+  }
+  function stopAllSpinners(){document.querySelectorAll('button.bp-v128-loading,button.bp-btn-loading').forEach(stopSpin);}
+  window.bpResetButtonSpinners=stopAllSpinners;
+  function labelForButton(btn){
+    const t=(btn.textContent||'').trim();
+    if(/entrer/i.test(t)) return 'Connexion...';
+    if(/valider.*mise|mise validée|enregistrer.*mise/i.test(t)) return 'Sauvegarde...';
+    if(/enregistrer.*score/i.test(t)) return 'Enregistrement...';
+    if(/calculer.*gains/i.test(t)) return 'Calcul...';
+    if(/valider.*pré|valider.*pre/i.test(t)) return 'Validation...';
+    if(/enregistrer/i.test(t)) return 'Sauvegarde...';
+    return '';
+  }
+  document.addEventListener('click',e=>{
+    const btn=e.target?.closest?.('button'); if(!btn||btn.disabled||btn.closest('.bp-modal-backdrop')) return;
+    const lab=labelForButton(btn); if(lab){ window.__bpV128LastBtn=btn; startSpin(btn,lab); }
+  },true);
+
+  /* 2 — logout non bloquant : retour login immédiatement et nouveau code utilisable sans F5 */
+  function showLoginReady(){
+    try{localStorage.removeItem(SESSION_KEY)}catch(e){}
+    window.currentRole=null; window.currentUserIndex=null; window.bpIsAuthenticated=false;
+    try{ currentRole=null; currentUserIndex=null; }catch(e){}
+    document.body.classList.remove('bp-admin','bp-user'); document.body.classList.add('bp-locked');
+    const login=document.getElementById('loginScreen'); if(login) login.style.display='flex';
+    const code=document.getElementById('loginCode'); if(code){ code.value=''; code.disabled=false; setTimeout(()=>code.focus(),30); }
+    document.querySelectorAll('#loginScreen button').forEach(b=>{ b.disabled=false; stopSpin(b); });
+    cleanLogin(); stopAllSpinners();
+  }
+  window.logout=function(){ showLoginReady(); return false; };
+
+  /* 1 + 6 — bilan recalculé depuis les settlements/bets, puis visible immédiatement */
+  function isReserve(d){return /^R[ÉE]SERVE$/i.test(String(d.player||''));}
+  function playerDetails(p){return arr(S().settlementDetails).filter(d=>!isReserve(d)&&String(d.player||'')===String(p?.name||''));}
+  function isWin(d){return /GAGN[ÉE]|SCORE EXACT/i.test(String(d.status||''))||n(d.netGain)>0;}
+  function isExact(d){return /SCORE EXACT/i.test(String(d.status||''))||n(d.exactBonus)>0;}
+  function updateBilan(){
+    players().forEach(p=>{
+      const det=playerDetails(p);
+      p.good=det.filter(isWin).length;
+      p.exact=det.filter(isExact).length;
+      p.evolution=Math.round((n(p.balance, p.startFid||50)-n(p.startFid,50))*100)/100;
+    });
+    const p=currentPlayer(); if(!p) return;
+    const det=playerDetails(p); const lastDay=Math.max(0,...det.map(d=>n(d.day)).filter(Boolean));
+    const dayDet=lastDay?det.filter(d=>n(d.day)===lastDay):[];
+    const sum=a=>Math.round(a.reduce((s,d)=>s+n(d.netGain),0)*100)/100;
+    const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+    set('dayGood',dayDet.filter(isWin).length); set('dayExact',dayDet.filter(isExact).length); set('dayGain',(sum(dayDet)>=0?'+':'')+sum(dayDet)+' FID');
+    set('compGood',det.filter(isWin).length); set('compExact',det.filter(isExact).length); set('compGain',(sum(det)>=0?'+':'')+sum(det)+' FID'); set('compRank',(n(p.evolution)>=0?'+':'')+n(p.evolution)+' FID');
+  }
+
+  /* 12 — infos profil : ne pas écraser les champs existants par vide lors des merges/renders */
+  function preserveProfilesBefore(){
+    const m=new Map(); players().forEach(p=>m.set(String(p.code||p.name),{avatar:p.avatar||p.avatar_url||p.photo||'',team:p.supportedTeam||p.supported_team||p.favorite_team||p.nationalTeam||'',extra:p.profileExtra||p.extra||''}));
+    return m;
+  }
+  function preserveProfilesAfter(m){
+    players().forEach(p=>{ const old=m.get(String(p.code||p.name)); if(!old) return;
+      if(old.avatar && !(p.avatar||p.avatar_url||p.photo)){p.avatar=old.avatar;p.avatar_url=old.avatar;}
+      if(old.team && !(p.supportedTeam||p.supported_team||p.favorite_team||p.nationalTeam)){p.supportedTeam=old.team;p.supported_team=old.team;p.favorite_team=old.team;}
+      if(old.extra && !(p.profileExtra||p.extra)){p.profileExtra=old.extra;p.extra=old.extra;}
+    });
+  }
+
+  function refreshUI(){
+    updateBilan(); syncReserveUI(); cleanLogin();
+    try{ if(typeof window.renderHeader==='function') window.renderHeader(); }catch(e){}
+    try{ if(typeof window.renderSummaries==='function') window.renderSummaries(); }catch(e){}
+    try{ if(typeof window.renderRanking==='function') window.renderRanking(); }catch(e){}
+    try{ if(typeof window.renderBets==='function') window.renderBets(); }catch(e){}
+    try{ if(typeof window.renderAdminBetsTable==='function') window.renderAdminBetsTable(); }catch(e){}
+    setTimeout(()=>{ updateBilan(); syncReserveUI(); renderAwardsV128(); stopAllSpinners(); },50);
+  }
+
+  /* Wrappers actions : sauvegarde/refresh immédiat sans F5 */
+  const wrapNames=['loginWithCode','validateSingleBet','saveBets','saveOfficialScoresDay','saveScores','saveAdmin','calculateGains','validateCalculationPreview','bpValidateCalculationPreview','saveAdminBet','editBet','saveSpecialEventsFromAdmin'];
+  function wrap(name){
+    const fn=window[name]; if(typeof fn!=='function'||fn.__bpV128) return;
+    const w=async function(){
+      const mem=preserveProfilesBefore();
+      try{ const r=fn.apply(this,arguments); const out=(r&&typeof r.then==='function')?await r:r; preserveProfilesAfter(mem); refreshUI(); return out; }
+      catch(e){ preserveProfilesAfter(mem); refreshUI(); throw e; }
+      finally{ setTimeout(stopAllSpinners,120); }
+    };
+    w.__bpV128=true; window[name]=w;
+  }
+  function wrapAll(){wrapNames.forEach(wrap)}
+
+  /* 10/11 — Hall of Fame : Cannibale conservé + Cigale/Fourmi */
+  function calculatedFor(name){return arr(S().settlementDetails).filter(d=>!isReserve(d)&&String(d.player||'')===String(name));}
+  function stakeGain(name){
+    const det=calculatedFor(name); let staked=0,gain=0;
+    det.forEach(d=>{ staked+=Math.max(0,n(d.stake)); gain+=Math.max(0,n(d.baseGain)+n(d.exactBonus)+Math.max(0,n(d.netGain))); });
+    if(!staked){
+      arr(S().bets).filter(b=>String(b.player)===String(name)&&b.calculated).forEach(b=>{staked+=n(b.stake); gain+=Math.max(0,n(b.baseGain)+n(b.exactBonus)+Math.max(0,n(b.netGain)));});
+    }
+    return {staked,gain,ratio:staked>=5?gain/staked:null};
+  }
+  function longest(name,wantWin){let best=0,cur=0; calculatedFor(name).sort((a,b)=>n(a.day)-n(b.day)||String(a.matchId).localeCompare(String(b.matchId))).forEach(d=>{const ok=wantWin?isWin(d):(!isWin(d)&&/PERDU/i.test(String(d.status||''))); if(ok){cur++;best=Math.max(best,cur)}else cur=0}); return best;}
+  function exactCount(name){return calculatedFor(name).filter(isExact).length;}
+  function cannibale(name){return Math.round(calculatedFor(name).reduce((s,d)=>s+Math.max(0,n(d.netGain)),0)*100)/100;}
+  function ratioRows(high){
+    return players().map(p=>{const sg=stakeGain(p.name); return {name:p.name,value:sg.ratio,staked:sg.staked,gain:sg.gain};})
+      .filter(r=>r.value!==null && Number.isFinite(r.value))
+      .sort((a,b)=> high ? b.value-a.value : a.value-b.value);
+  }
+  function metricRows(metric,asc=false){return players().map(p=>({name:p.name,value:metric(p.name)})).sort((a,b)=>asc?n(a.value)-n(b.value):n(b.value)-n(a.value));}
+  function topGroups(rows,limit=3,positive=true){const out=[]; rows.filter(r=>positive? n(r.value)>0 : Number.isFinite(n(r.value))).forEach(r=>{const last=out[out.length-1]; if(last&&Number(last.value)===Number(r.value)) last.names.push(r.name); else out.push({value:r.value,names:[r.name],row:r});}); return out.slice(0,limit);}
+  function fmt(v,unit){const x=n(v); const s=Number.isInteger(x)?String(x):x.toFixed(2).replace('.',','); return unit==='FID'?s+' FID':unit==='x'?s+'x':s;}
+  function line(g,i,unit){return `<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${['🥇','🥈','🥉'][i]||i+1}</div><div class="hof-name">${g.names.map(nm=>esc(playerName(players().find(p=>p.name===nm))||nm)).join(', ')}</div><div class="hof-score">${fmt(g.value,unit)}</div></div>`}
+  function card(icon,title,desc,prize,unit,rows){
+    const gs=topGroups(rows,3,unit!=='x');
+    const top=gs.length?gs.map((g,i)=>line(g,i,unit)).join(''):'<div class="muted">Les leaders apparaîtront après calcul d’une journée.</div>';
+    return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start"><div class="award-icon">${icon}</div><div><div class="award-title">${title}</div><div class="award-desc">${desc}</div><div class="hof-list" style="margin-top:8px">${top}</div></div><div class="award-prize">${prize?prize+' FID':''}</div></div>`;
+  }
+  window.renderAwardsV128=renderAwardsV128;
+  function renderAwardsV128(){
+    const el=document.getElementById('awards'); if(!el) return;
+    el.innerHTML=[
+      card('⚽','Striker','Plus longue série de pronostics gagnants consécutifs',50,'',metricRows(nm=>longest(nm,true))),
+      card('🪦','Loser','Plus longue série de pronostics perdants consécutifs',25,'',metricRows(nm=>longest(nm,false))),
+      card('🎯','Sniper','Nombre de scores exacts validés',100,'',metricRows(exactCount)),
+      card('🦁','Cannibale','FID nets positifs cumulés sur les journées calculées',25,'FID',metricRows(cannibale)),
+      card('🦗','La Cigale','Top 3 meilleurs ratios gains / mises, minimum 5 FID misés',0,'x',ratioRows(true)),
+      card('🐜','La Fourmi','Top 3 plus faibles ratios gains / mises, minimum 5 FID misés',0,'x',ratioRows(false))
+    ].join('')+'<div class="help">Hall of Fame dynamique : Cannibale conservé. La Cigale et La Fourmi utilisent le ratio gains / mises avec un minimum de 5 FID misés.</div>';
+  }
+
+  const oldRenderAll=window.renderAll; if(typeof oldRenderAll==='function'&&!oldRenderAll.__bpV128){window.renderAll=function(){const mem=preserveProfilesBefore(); const r=oldRenderAll.apply(this,arguments); preserveProfilesAfter(mem); setTimeout(refreshUI,0); return r}; window.renderAll.__bpV128=true;}
+  const oldRanking=window.renderRanking; if(typeof oldRanking==='function'&&!oldRanking.__bpV128){window.renderRanking=function(){const r=oldRanking.apply(this,arguments); setTimeout(renderAwardsV128,0); return r}; window.renderRanking.__bpV128=true;}
+  const oldHeader=window.renderHeader; if(typeof oldHeader==='function'&&!oldHeader.__bpV128){window.renderHeader=function(){const r=oldHeader.apply(this,arguments); setTimeout(syncReserveUI,0); return r}; window.renderHeader.__bpV128=true;}
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    cleanLogin(); wrapAll(); refreshUI();
+    [100,500,1200,2500].forEach(ms=>setTimeout(()=>{cleanLogin();wrapAll();refreshUI();},ms));
+    setInterval(()=>{cleanLogin();wrapAll();updateBilan();syncReserveUI();renderAwardsV128();},1200);
   });
 })();
 </script>
