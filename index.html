@@ -17644,4 +17644,138 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+<script>
+/* V124 — Trophées dynamiques BDD + ex-aequo + Top 3.
+   Lecture uniquement : aucune écriture BDD, aucun impact sur gains/réserve.
+   Source : résultats stockés dans chaque mise après validation V123 (calculation/win/exactScore/netGain). */
+(function(){
+  'use strict';
+  if(window.__BP_V124_DYNAMIC_AWARDS__) return;
+  window.__BP_V124_DYNAMIC_AWARDS__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d){ const x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function esc(s){ return String(s??'').replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c])); }
+  function playerDisplay(name){
+    try{
+      const p=arr(S().players).find(x=>String(x.name)===String(name));
+      if(p && typeof window.displayName==='function') return window.displayName(p);
+      return p ? (p.pseudo ? p.name+' ('+p.pseudo+')' : p.name) : (name || '—');
+    }catch(e){ return name || '—'; }
+  }
+  function isRealMatchBet(b){
+    return b && String(b.player||'') && String(b.matchId||'').indexOf('EVENT_')!==0 && String(b.player)!=='RÉSERVE';
+  }
+  function isCalculatedBet(b){
+    return isRealMatchBet(b) && (b.calculation || b.calculatedAt || b.gainRuleRef || b.resultStatus || b.netGain!==undefined || b.win!==undefined || b.exactScore!==undefined);
+  }
+  function betOrder(a,b){
+    return n(a.day,0)-n(b.day,0) || String(a.matchId||'').localeCompare(String(b.matchId||''));
+  }
+  function calcVal(b,key,def){
+    if(b && b[key]!==undefined) return b[key];
+    if(b && b.calculation && b.calculation[key]!==undefined) return b.calculation[key];
+    return def;
+  }
+  function calcWin(b){
+    const direct=calcVal(b,'win',undefined);
+    if(direct!==undefined) return direct===true || String(direct).toLowerCase()==='true';
+    const st=String(calcVal(b,'status',b.resultStatus||'')).toUpperCase();
+    return st.includes('GAGNÉ') || st.includes('BON RÉSULTAT') || st.includes('SCORE EXACT');
+  }
+  function calcExact(b){
+    const direct=calcVal(b,'exactScore',undefined);
+    if(direct!==undefined) return direct===true || String(direct).toLowerCase()==='true';
+    return String(calcVal(b,'status',b.resultStatus||'')).toUpperCase().includes('SCORE EXACT');
+  }
+  function calcNet(b){ return n(calcVal(b,'netGain',b.gainLoss),0); }
+  function calculatedBets(){ return arr(S().bets).filter(isCalculatedBet).sort(betOrder); }
+  function playerNames(){
+    const set=new Set(arr(S().players).map(p=>p.name).filter(Boolean));
+    calculatedBets().forEach(b=>{ if(b.player) set.add(b.player); });
+    return Array.from(set);
+  }
+  function playerCalculatedBets(name){ return calculatedBets().filter(b=>String(b.player)===String(name)); }
+  function longestSeriesFor(name,type){
+    let best=0, cur=0;
+    playerCalculatedBets(name).forEach(b=>{
+      const ok = type==='win' ? calcWin(b) : !calcWin(b);
+      if(ok){ cur++; if(cur>best) best=cur; }
+      else cur=0;
+    });
+    return best;
+  }
+  function exactCount(name){ return playerCalculatedBets(name).reduce((s,b)=>s+(calcExact(b)?1:0),0); }
+  function cannibaleScore(name){ return Math.round(playerCalculatedBets(name).reduce((s,b)=>s+Math.max(0,calcNet(b)),0)*100)/100; }
+  function metricRows(metricFn){
+    return playerNames().map(name=>({name,value:metricFn(name)})).sort((a,b)=>n(b.value,0)-n(a.value,0) || playerDisplay(a.name).localeCompare(playerDisplay(b.name)));
+  }
+  function rankGroups(rows,limit){
+    const groups=[];
+    rows.filter(r=>n(r.value,0)>0).forEach(r=>{
+      const last=groups[groups.length-1];
+      if(last && Number(last.value)===Number(r.value)) last.names.push(r.name);
+      else groups.push({value:r.value,names:[r.name]});
+    });
+    return groups.slice(0,limit||3);
+  }
+  function fmtValue(v,unit){
+    const num=n(v,0);
+    const out=Number.isInteger(num)?String(num):String(num).replace('.',',');
+    return unit==='FID' ? out+' FID' : out;
+  }
+  function groupLine(g,idx,unit){
+    const medals=['🥇','🥈','🥉'];
+    const names=g.names.map(playerDisplay).map(esc).join(', ');
+    return `<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${medals[idx]||idx+1}</div><div class="hof-name">${names}</div><div class="hof-score">${fmtValue(g.value,unit)}</div></div>`;
+  }
+  function renderAwardCard(cfg){
+    const groups=rankGroups(metricRows(cfg.metric),3);
+    const leader=groups[0];
+    const leaderTxt=leader ? `${leader.names.map(playerDisplay).map(esc).join(', ')} (${fmtValue(leader.value,cfg.unit)}${cfg.valueLabel? ' '+cfg.valueLabel:''})` : 'Aucun calcul validé';
+    const top=groups.length ? groups.map((g,i)=>groupLine(g,i,cfg.unit)).join('') : '<div class="muted">Les leaders apparaîtront après calcul d’une journée.</div>';
+    return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start">
+      <div class="award-icon">${cfg.icon}</div>
+      <div>
+        <div class="award-title">${cfg.title}</div>
+        <div class="award-desc">${cfg.desc}</div>
+        <div class="muted" style="margin:8px 0">Leader(s) actuel(s) : <b>${leaderTxt}</b></div>
+        <div class="hof-list">${top}</div>
+      </div>
+      <div class="award-prize">${cfg.prize} FID</div>
+    </div>`;
+  }
+  function renderDynamicAwards(){
+    const el=document.getElementById('awards');
+    if(!el) return;
+    el.innerHTML=[
+      renderAwardCard({icon:'⚽',title:'Striker',desc:'Plus longue série de pronostics gagnants consécutifs',prize:50,unit:'',valueLabel:'victoire(s)',metric:name=>longestSeriesFor(name,'win')}),
+      renderAwardCard({icon:'🪦',title:'Loser',desc:'Plus longue série de pronostics perdants consécutifs',prize:25,unit:'',valueLabel:'défaite(s)',metric:name=>longestSeriesFor(name,'loss')}),
+      renderAwardCard({icon:'🎯',title:'Sniper',desc:'Nombre de scores exacts validés',prize:100,unit:'',valueLabel:'score(s) exact(s)',metric:name=>exactCount(name)}),
+      renderAwardCard({icon:'🦁',title:'Cannibale',desc:'FID nets positifs cumulés pris sur les journées calculées',prize:25,unit:'FID',valueLabel:'',metric:name=>cannibaleScore(name)})
+    ].join('') + '<div class="help">Trophées recalculés à partir des mises calculées et stockées en BDD. Les ex-aequo sont affichés ensemble. Les prix spéciaux restent attribués à la fin de la compétition.</div>';
+  }
+
+  const oldRenderRanking=window.renderRanking;
+  if(typeof oldRenderRanking==='function'){
+    window.renderRanking=function(){
+      const r=oldRenderRanking.apply(this,arguments);
+      try{ renderDynamicAwards(); }catch(e){ console.warn('[V124 awards]',e); }
+      return r;
+    };
+  }
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function'){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(renderDynamicAwards,0);
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(renderDynamicAwards,500));
+  setTimeout(renderDynamicAwards,900);
+})();
+</script>
+
 </body></html>
