@@ -97,7 +97,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V117 STABLE</title>
+<title>B Partner FIFA World Cup 2026 - V119 BDD VERIFY</title>
 <!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
@@ -16413,6 +16413,634 @@ window.BP_LOCAL_ONLY = true;
       try{ window.renderAdminSecrets(); }catch(e){}
     }, 600);
   });
+})();
+</script>
+
+
+
+<style>
+/* V118 — admin manuel : workflow retiré */
+.workflow-card{display:none!important}
+#bpV118AdminState{border-left:4px solid var(--bp);}
+.bp-v118-admin-note{margin-top:8px;color:var(--muted);font-size:13px;line-height:1.45}
+</style>
+<script>
+/* V118 ADMIN CLEAN — suppression workflow, navigation admin indépendante, scores/gains sur journée sélectionnée. */
+(function(){
+  'use strict';
+  if(window.__BP_V118_ADMIN_CLEAN__) return;
+  window.__BP_V118_ADMIN_CLEAN__ = true;
+
+  function S(){ return window.state || (window.state = {}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function maxDay(){
+    const days = arr(S().matches).map(m=>Number(m.day||1)).filter(Boolean);
+    return days.length ? Math.max.apply(null, days) : 1;
+  }
+  function selectedDay(){
+    const s=S();
+    if(!s.adminSelectedDay) s.adminSelectedDay = Number(s.currentDay || 1) || 1;
+    s.adminSelectedDay = Math.min(Math.max(1, Number(s.adminSelectedDay)||1), maxDay());
+    return s.adminSelectedDay;
+  }
+  function setSelectedDay(d){
+    const s=S();
+    s.adminSelectedDay = Math.min(Math.max(1, Number(d)||1), maxDay());
+    try{ window.calendarDayDisplayed = s.adminSelectedDay; }catch(e){}
+    return s.adminSelectedDay;
+  }
+  function dayMatches(day){ return arr(S().matches).filter(m=>Number(m.day)===Number(day)); }
+  function isClosed(day){
+    const s=S(); if(!s.closedDays) s.closedDays={};
+    if(s.closedDays[day] === undefined) s.closedDays[day] = true;
+    return !!s.closedDays[day];
+  }
+  function setClosed(day,closed){
+    const s=S(); if(!s.closedDays) s.closedDays={};
+    s.closedDays[day] = !!closed;
+    if(Number(s.currentDay)===Number(day)) s.closed = !!closed;
+  }
+  function openDay(){
+    const s=S(); const max=maxDay();
+    for(let d=1; d<=max; d++) if(!isClosed(d)) return d;
+    return Number(s.currentDay||selectedDay()||1);
+  }
+  function scoreStr(a,b){ return Number(a||0)+' - '+Number(b||0); }
+  function outcome(a,b){ a=Number(a); b=Number(b); return a>b?'A':a<b?'B':'N'; }
+  function esc(s){ return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function flagTeam(team){ try{return typeof window.f==='function'?window.f(team):esc(team);}catch(e){return esc(team);} }
+  function opts(val){ try{return typeof window.scoreOptions==='function'?window.scoreOptions(val):[0,1,2,3,4,5,6,7,8,9].map(x=>`<option value="${x}" ${Number(val)===x?'selected':''}>${x}</option>`).join('');}catch(e){return '';} }
+  function saveLocal(){ try{ if(typeof window.save==='function') window.save(); }catch(e){} }
+  async function persist(reason){
+    // V119: écriture BDD directe + vérification de relecture.
+    // Ne dépend plus des anciens wrappers concurrents bpCloudSave / bpV84 / local-only.
+    const st = S();
+    try{
+      if(!Array.isArray(st.players) || st.players.length===0) throw new Error('Blocage sécurité : aucun joueur dans state.');
+      if(!Array.isArray(st.matches) || st.matches.length===0) throw new Error('Blocage sécurité : aucun match dans state.');
+      st.lastSavedAt = new Date().toISOString();
+      st.lastSaveReason = reason || 'V119';
+      saveLocal();
+    }catch(e){ console.warn('[V119 saveLocal]', e); }
+
+    const appId = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+    const url = (window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL || '').replace(/\/$/,'');
+    const key = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY || '';
+    if(!url || !key) throw new Error('Supabase non configuré : sauvegarde BDD impossible.');
+
+    function slim(data){
+      const c = JSON.parse(JSON.stringify(data || {}));
+      if(Array.isArray(c.logs)) c.logs = c.logs.slice(-300);
+      if(Array.isArray(c.settlementDetails)) c.settlementDetails = c.settlementDetails.slice(-2500);
+      delete c.__backupHistory; delete c.backupHistory; delete c.dailyBackups; delete c.autoBackups;
+      return c;
+    }
+    const payloadState = slim(st);
+    const headers = {
+      apikey:key,
+      authorization:'Bearer '+key,
+      'content-type':'application/json',
+      prefer:'resolution=merge-duplicates,return=representation'
+    };
+    const endpoint = url + '/rest/v1/app_state';
+    const previous = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      const ctl = new AbortController();
+      const timer = setTimeout(()=>ctl.abort(), 20000);
+      const r = await fetch(endpoint, {
+        method:'POST',
+        headers,
+        body:JSON.stringify({id:appId, data:payloadState, updated_at:new Date().toISOString()}),
+        signal:ctl.signal
+      });
+      clearTimeout(timer);
+      if(!r.ok) throw new Error('Écriture Supabase KO HTTP '+r.status+' — '+(await r.text()));
+
+      // Vérification immédiate : on relit la ligne et on contrôle les scores/gains du state écrit.
+      const vr = await fetch(endpoint+'?id=eq.'+encodeURIComponent(appId)+'&select=data,updated_at', {method:'GET', headers:{apikey:key, authorization:'Bearer '+key}});
+      if(!vr.ok) throw new Error('Vérification Supabase KO HTTP '+vr.status);
+      const rows = await vr.json();
+      const remote = Array.isArray(rows) && rows[0] && rows[0].data ? rows[0].data : null;
+      if(!remote) throw new Error('Vérification Supabase KO : ligne app_state introuvable.');
+      if(!Array.isArray(remote.matches) || remote.matches.length===0) throw new Error('Vérification Supabase KO : matches absents.');
+      if(!Array.isArray(remote.players) || remote.players.length===0) throw new Error('Vérification Supabase KO : joueurs absents.');
+      try{ if(typeof window.bpSetSyncPill==='function') window.bpSetSyncPill('ok','☁️ BDD vérifiée <span class="muted">'+esc(reason||'V119')+'</span>'); }catch(e){}
+      return true;
+    }catch(e){
+      console.error('[V119 persist BDD]', e);
+      try{ if(typeof window.bpSetSyncPill==='function') window.bpSetSyncPill('bad','☁️ BDD non sauvegardée : '+esc(e.message||e)); }catch(_e){}
+      throw e;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = previous;
+    }
+  }
+  function settlementForDay(day){ return arr(S().settlementDetails).filter(d=>Number(d.day)===Number(day) && d.player!=='RÉSERVE'); }
+  function scoresComplete(day){ return dayMatches(day).length>0 && dayMatches(day).every(m=>m.scoreA!==null&&m.scoreA!==undefined&&m.scoreB!==null&&m.scoreB!==undefined); }
+  function readScoreInputs(day){
+    const bucket={};
+    for(const m of dayMatches(day)){
+      const a=document.getElementById('sa_'+m.id), b=document.getElementById('sb_'+m.id);
+      if(!a || !b || a.value==='' || b.value==='') return null;
+      bucket[m.id]={a:Number(a.value), b:Number(b.value)};
+    }
+    return bucket;
+  }
+  function storeScores(day,bucket){
+    const s=S();
+    if(!s.officialScores) s.officialScores={};
+    if(!s.officialScoresByDay) s.officialScoresByDay={};
+    if(!s.officialScoresByMatch) s.officialScoresByMatch={};
+    if(!s.officialScoresSavedDays) s.officialScoresSavedDays={};
+    const k=String(day), now=new Date().toISOString();
+    s.officialScores[k]=s.officialScores[k]||{};
+    s.officialScoresByDay[k]=s.officialScoresByDay[k]||{};
+    Object.entries(bucket).forEach(([id,sc])=>{
+      const data={day:Number(day),a:Number(sc.a),b:Number(sc.b),scoreA:Number(sc.a),scoreB:Number(sc.b),savedAt:now};
+      s.officialScores[k][id]=data;
+      s.officialScoresByDay[k][id]=data;
+      s.officialScoresByMatch[id]=data;
+      const m=arr(s.matches).find(x=>String(x.id)===String(id));
+      if(m){ m.scoreA=Number(sc.a); m.scoreB=Number(sc.b); m.status='done'; }
+    });
+    s.officialScoresSavedDays[k]=true;
+  }
+  function adminStateHTML(day){
+    const matches=dayMatches(day);
+    const bets=arr(S().bets).filter(b=>Number(b.day)===Number(day));
+    const validated=bets.filter(b=>String(b.status||'DRAFT')==='VALIDATED').length;
+    const settled=settlementForDay(day).length;
+    const scoreOk=scoresComplete(day);
+    return `<div id="bpV118AdminState" class="help">
+      <b>Journée sélectionnée : J${day}</b><br>
+      Journée ouverte aux joueurs : <b>J${openDay()}</b><br>
+      Matchs : <b>${matches.length}</b> · Mises validées : <b>${validated}</b> · Scores enregistrés : <b class="${scoreOk?'good':'warn'}">${scoreOk?'Oui':'Non'}</b> · Gains calculés : <b class="${settled?'good':'warn'}">${settled?'Oui':'Non'}</b>
+      <div class="bp-v118-admin-note">Navigation, scores et gains sont pilotés par la journée sélectionnée ci-dessus. Plus aucun workflow automatique.</div>
+    </div>`;
+  }
+
+  // Source unique pour les scores/gains admin.
+  window.scoreEntryDay = function(){ return selectedDay(); };
+
+  window.previousDay = function(){ setSelectedDay(selectedDay()-1); renderAdminSafe(); };
+  window.nextDay = function(){ setSelectedDay(selectedDay()+1); renderAdminSafe(); };
+  window.changeAdminSelectedDay = function(d){ setSelectedDay(d); renderAdminSafe(); };
+
+  window.openBets = async function(){
+    const day=selectedDay();
+    if(!confirm('Ouvrir la journée '+day+' aux joueurs ?\n\nToutes les autres journées seront fermées.')) return false;
+    const s=S(); if(!s.closedDays) s.closedDays={};
+    for(let d=1; d<=maxDay(); d++) s.closedDays[d]=Number(d)!==Number(day);
+    s.currentDay=Number(day); s.closed=false;
+    try{ if(typeof window.log==='function') window.log('SYSTEM','Journée '+day+' ouverte',0); }catch(e){}
+    await persist('ouverture J'+day); renderAllSafe(); return true;
+  };
+  window.closeBets = async function(){
+    const day=selectedDay();
+    if(isClosed(day)){ alert('Cette journée est déjà fermée.'); return false; }
+    if(!confirm('Fermer la journée '+day+' aux mises ?')) return false;
+    setClosed(day,true);
+    try{ if(typeof window.log==='function') window.log('SYSTEM','Journée '+day+' fermée - mises clôturées',0); }catch(e){}
+    await persist('fermeture J'+day); renderAllSafe(); return true;
+  };
+
+  function renderAdminSafe(){ try{ if(typeof window.renderAdmin==='function') window.renderAdmin(); }catch(e){console.error('[V118 renderAdmin]',e);} }
+  function renderAllSafe(){ try{ if(typeof window.renderAll==='function') window.renderAll(); else renderAdminSafe(); }catch(e){console.error('[V118 renderAll]',e);} }
+
+  const oldRenderAdmin = window.renderAdmin;
+  window.renderAdmin = function(){
+    try{ if(typeof oldRenderAdmin==='function') oldRenderAdmin.apply(this, arguments); }catch(e){ console.warn('[V118 oldRenderAdmin]',e); }
+    const day=selectedDay();
+    document.querySelectorAll('.workflow-card').forEach(el=>el.style.display='none');
+    const adminDay=document.getElementById('adminDay'); if(adminDay) adminDay.textContent=day;
+    const adminDayDate=document.getElementById('adminDayDate'); if(adminDayDate){ const m=dayMatches(day)[0]; adminDayDate.textContent=(m&&m.date)||'—'; }
+    const adminStatus=document.getElementById('adminStatus'); if(adminStatus) adminStatus.innerHTML=isClosed(day)?'<span class="day-status-closed">Fermée</span>':'<span class="day-status-open">Ouverte</span>';
+    const matches=dayMatches(day), bets=arr(S().bets).filter(b=>Number(b.day)===Number(day));
+    const set=(id,val)=>{const el=document.getElementById(id); if(el) el.textContent=val;};
+    set('adminBetCount',bets.length); set('adminExpectedBets',arr(S().players).length*matches.length); set('adminValidatedBets',bets.filter(b=>b.status==='VALIDATED').length); set('adminDraftBets',bets.filter(b=>String(b.status||'DRAFT')==='DRAFT').length);
+    const title=document.getElementById('scoreEntryTitle'); if(title) title.innerHTML=adminStateHTML(day);
+    const scoreInputs=document.getElementById('scoreInputs');
+    if(scoreInputs){
+      scoreInputs.innerHTML=matches.map(m=>`<div class="score-row"><div>${flagTeam(m.teamA)} vs ${flagTeam(m.teamB)} <span class="muted">(${esc(m.id)})</span></div><div class="score-selects"><select id="sa_${esc(m.id)}">${opts(m.scoreA??0)}</select><span class="score-dash">-</span><select id="sb_${esc(m.id)}">${opts(m.scoreB??0)}</select></div></div>`).join('') || '<div class="muted">Aucun match pour cette journée.</div>';
+    }
+    const calcInfo=document.getElementById('calcInfo');
+    if(calcInfo && !calcInfo.dataset.v118Touched){ calcInfo.innerHTML=''; }
+    if(document.getElementById('adminBetsDay')){
+      const select=document.getElementById('adminBetsDay');
+      const cur=Number(select.value||day);
+      if(cur!==day || !select.innerHTML){
+        if(typeof window.dayOptionsHTML==='function') select.innerHTML=window.dayOptionsHTML(day);
+        select.value=String(day);
+      }
+      if(typeof window.renderAdminBetsTable==='function') try{ window.renderAdminBetsTable(); }catch(e){}
+    }
+    const exposure=document.getElementById('reserveExposureView');
+    if(exposure && typeof window.dayReserveExposure==='function'){
+      try{ const x=window.dayReserveExposure(day); exposure.innerHTML=`<div class="help"><b>Exposition réserve — Journée ${x.day}</b><br>Mises validées : <b>${x.validatedBets}</b><br>Mises encaissables max : <b>${x.totalStaked} FID</b><br>Paiement max théorique : <b>${x.maxPayout} FID</b><br>Besoin réserve max : <b class="${x.sufficient?'good':'bad'}">${x.maxReserveNeed} FID</b><br>Réserve actuelle : <b>${x.currentReserve} FID</b> — ${x.sufficient?'<span class="good">OK</span>':'<span class="bad">ALERTE</span>'}</div>`; }catch(e){}
+    }
+  };
+
+  const oldRenderAdminBetsFilters=window.renderAdminBetsFilters;
+  window.renderAdminBetsFilters=function(){
+    if(typeof oldRenderAdminBetsFilters==='function') oldRenderAdminBetsFilters.apply(this, arguments);
+    const d=selectedDay();
+    const sel=document.getElementById('adminBetsDay');
+    if(sel){ if(typeof window.dayOptionsHTML==='function') sel.innerHTML=window.dayOptionsHTML(d); sel.value=String(d); }
+  };
+
+  window.saveOfficialScoresDay = async function(showAlert=true){
+    const day=selectedDay();
+    const bucket=readScoreInputs(day);
+    if(!bucket){ alert('Score manquant : tous les scores doivent être renseignés. Le score 0-0 est accepté.'); return false; }
+    storeScores(day,bucket);
+    try{ if(typeof window.log==='function') window.log('SYSTEM','Scores officiels J'+day+' enregistrés',0); }catch(e){}
+    try{
+      await persist('scores officiels J'+day);
+    }catch(e){
+      alert('Erreur : scores NON confirmés en BDD.\n\n'+(e.message||e));
+      return false;
+    }
+    renderAllSafe();
+    if(showAlert) alert('Scores officiels J'+day+' enregistrés et vérifiés en BDD.');
+    return true;
+  };
+  window.saveScores=window.saveOfficialScoresDay;
+
+  function rollback(day){
+    const s=S();
+    arr(s.settlementDetails).filter(d=>Number(d.day)===Number(day)&&d.player&&d.player!=='RÉSERVE').forEach(d=>{
+      const p=arr(s.players).find(x=>x.name===d.player); if(!p) return;
+      const amt=Number(d.netGain||0); p.balance=Number(p.balance||0)-amt; p.evolution=Number(p.evolution||0)-amt;
+      if(String(d.status||'').includes('GAGNÉ')) p.good=Math.max(0,Number(p.good||0)-1);
+      if(String(d.status||'').includes('SCORE EXACT')) p.exact=Math.max(0,Number(p.exact||0)-1);
+    });
+    s.settlementDetails=arr(s.settlementDetails).filter(d=>Number(d.day)!==Number(day));
+    s.logs=arr(s.logs).filter(l=>!(Number(l.day)===Number(day)&&/Gain |Perte |Recharge automatique/i.test(l.text||'')));
+  }
+  window.rollbackDaySettlement=rollback;
+
+  window.calculateGains = async function(showAlert=true, force=false){
+    const day=selectedDay();
+    const already=settlementForDay(day).length>0;
+    if(already && !force){
+      const ok=confirm('Les gains de la journée '+day+' semblent déjà calculés.\n\nUtilise Recalculer pour annuler puis refaire le calcul. Continuer quand même ?');
+      if(!ok) return false;
+      rollback(day);
+    }
+    const saved=await window.saveOfficialScoresDay(false); if(!saved) return false;
+    if(showAlert && !confirm('Calculer les gains de la journée '+day+' ?')) return false;
+    rollback(day);
+    const s=S(); if(!Array.isArray(s.settlementDetails)) s.settlementDetails=[];
+    let processed=0,totalGood=0,totalExact=0,totalNet=0;
+    dayMatches(day).forEach(m=>{
+      if(m.scoreA===null||m.scoreA===undefined||m.scoreB===null||m.scoreB===undefined) return;
+      processed++;
+      const actual=outcome(m.scoreA,m.scoreB);
+      const actualLabel=actual==='A'?m.teamA:actual==='B'?m.teamB:'Nul';
+      const bets=arr(s.bets).filter(b=>Number(b.day)===Number(day)&&String(b.matchId)===String(m.id)&&String(b.status||'DRAFT')==='VALIDATED');
+      let payoutTotal=0,lostPot=0;
+      bets.forEach(b=>{
+        const p=arr(s.players).find(x=>x.name===b.player); if(!p) return;
+        const ba=Number(b.scoreA ?? (String(b.score||'0-0').split('-')[0]||0));
+        const bb=Number(b.scoreB ?? (String(b.score||'0-0').split('-')[1]||0));
+        const pred=outcome(ba,bb);
+        const stake=Number(b.stake||0);
+        const exact=ba===Number(m.scoreA)&&bb===Number(m.scoreB);
+        const win=pred===actual;
+        let net=0,status='PERDU',baseGain=0,exactBonus=0;
+        if(win){
+          net=stake*(exact?3:2); baseGain=stake*2; exactBonus=exact?stake:0; payoutTotal+=net;
+          p.good=Number(p.good||0)+1; totalGood++;
+          if(exact){ p.exact=Number(p.exact||0)+1; totalExact++; status='GAGNÉ + SCORE EXACT (MISE ×3)'; }
+          else status='GAGNÉ (MISE ×2)';
+        }else{ net=-stake; lostPot+=stake; }
+        p.balance=Number(p.balance||0)+net; p.evolution=Number(p.evolution||0)+net; totalNet+=net;
+        try{ if(typeof window.log==='function') window.log(p.name,(win?'Gain ':'Perte ')+m.id+(exact?' + score exact':''),net); }catch(e){}
+        s.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:b.player,stake,prediction:pred==='A'?m.teamA:pred==='B'?m.teamB:'Nul',predictedScore:scoreStr(ba,bb),officialScore:scoreStr(m.scoreA,m.scoreB),result:actualLabel,status,baseGain,exactBonus,netGain:net,calculatedAt:new Date().toISOString()});
+      });
+      s.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:'RÉSERVE',stake:0,prediction:'',predictedScore:'',officialScore:scoreStr(m.scoreA,m.scoreB),result:actualLabel,status:payoutTotal>lostPot?'RÉSERVE UTILISÉE':'RÉSERVE CRÉDITÉE',baseGain:payoutTotal,exactBonus:0,netGain:lostPot-payoutTotal,calculatedAt:new Date().toISOString()});
+    });
+    s.summaries=s.summaries||{}; s.summaries.day={good:totalGood,exact:totalExact,gain:totalNet,rank:0};
+    try{ if(typeof window.log==='function') window.log('SYSTEM','Calcul gains J'+day+' terminé',0); }catch(e){}
+    await persist('calcul gains J'+day);
+    const ci=document.getElementById('calcInfo'); if(ci){ ci.dataset.v118Touched='1'; ci.innerHTML='Journée '+day+' · '+processed+' match(s) traité(s). Gains calculés et sauvegardés en BDD.'; }
+    renderAllSafe();
+    if(showAlert) alert(processed+' match(s) traité(s). Gains calculés pour J'+day+'.');
+    return true;
+  };
+  window.recalculateDay = async function(){
+    const day=selectedDay();
+    if(!confirm('Recalculer la journée '+day+' ?\n\nLes anciens mouvements de cette journée seront annulés puis recalculés.')) return false;
+    rollback(day); await persist('rollback gains J'+day); return window.calculateGains(false,true);
+  };
+  window.resetOfficialScoresDay = async function(){
+    const day=selectedDay();
+    if(!confirm('Remettre à zéro les scores officiels de la journée '+day+' ?\n\nLes gains déjà calculés sur cette journée seront aussi annulés.')) return false;
+    rollback(day);
+    const s=S();
+    dayMatches(day).forEach(m=>{m.scoreA=null;m.scoreB=null;m.status='open'; if(s.officialScoresByMatch) delete s.officialScoresByMatch[m.id];});
+    if(s.officialScores) delete s.officialScores[String(day)];
+    if(s.officialScoresByDay) delete s.officialScoresByDay[String(day)];
+    if(s.officialScoresSavedDays) delete s.officialScoresSavedDays[String(day)];
+    await persist('reset scores J'+day); renderAllSafe(); alert('Scores officiels J'+day+' remis à zéro.'); return true;
+  };
+
+  // Capture les boutons admin essentiels avant les anciens handlers éventuels.
+  document.addEventListener('click',function(e){
+    const b=e.target&&e.target.closest?e.target.closest('button'):null; if(!b) return;
+    const txt=(b.textContent||'').toLowerCase();
+    if(txt.includes('journée précédente')||txt.includes('journée suivante')||txt.includes('enregistrer les scores officiels')||txt.includes('calculer les gains')||txt.includes('recalculer cette journée')||txt.includes('remettre les scores')){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      if(txt.includes('journée précédente')) return window.previousDay();
+      if(txt.includes('journée suivante')) return window.nextDay();
+      if(txt.includes('enregistrer les scores officiels')){
+        const oldTxt=b.textContent; b.disabled=true; b.textContent='Enregistrement BDD…';
+        Promise.resolve(window.saveOfficialScoresDay(true)).finally(()=>{ b.disabled=false; b.textContent=oldTxt; });
+        return;
+      }
+      if(txt.includes('recalculer cette journée')) return window.recalculateDay();
+      if(txt.includes('remettre les scores')) return window.resetOfficialScoresDay();
+      if(txt.includes('calculer les gains')) return window.calculateGains(true,false);
+    }
+  },true);
+
+  function boot(){ setSelectedDay(S().adminSelectedDay || S().currentDay || 1); renderAdminSafe(); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(boot,300)); else setTimeout(boot,300);
+})();
+</script>
+
+
+
+<script>
+/* V120 — DEBUG ADMIN CREATE BET
+   Objectif : corriger le bouton ADMIN "Créer" + sauvegarde/vérification BDD directe dans app_state.
+   Ne dépend pas d'une table bets SQL : les mises restent dans public.app_state.data.bets. */
+(function(){
+  'use strict';
+  if(window.__BP_V120_ADMIN_CREATE_BET_DEBUG__) return;
+  window.__BP_V120_ADMIN_CREATE_BET_DEBUG__ = true;
+
+  const APP_ID = 'bp-world-cup-2026';
+  const TABLE = 'app_state';
+  const URL = window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL;
+  const KEY = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY;
+
+  function iso(){ return new Date().toISOString(); }
+  function clone(x){ try{return JSON.parse(JSON.stringify(x||{}));}catch(e){return {}; } }
+  function S(){ if(!window.state || typeof window.state !== 'object') window.state = {}; return window.state; }
+  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+  function headers(extra){ return Object.assign({apikey:KEY, authorization:'Bearer '+KEY, 'content-type':'application/json'}, extra||{}); }
+  function ensure(st){
+    st = st && typeof st === 'object' ? st : {};
+    if(!Array.isArray(st.players)) st.players = [];
+    if(!Array.isArray(st.matches)) st.matches = [];
+    if(!Array.isArray(st.bets)) st.bets = [];
+    if(!Array.isArray(st.logs)) st.logs = [];
+    if(!st.officialScoresByMatch || typeof st.officialScoresByMatch !== 'object') st.officialScoresByMatch = {};
+    if(!st.officialScoresByDay || typeof st.officialScoresByDay !== 'object') st.officialScoresByDay = {};
+    if(!st.officialScoresSavedDays || typeof st.officialScoresSavedDays !== 'object') st.officialScoresSavedDays = {};
+    st.schemaVersion = 'v120-admin-create-bet-debug';
+    st.lastSavedAt = iso();
+    return st;
+  }
+  function syncState(remote){
+    remote = ensure(remote);
+    const s = S();
+    Object.keys(s).forEach(k=>delete s[k]);
+    Object.assign(s, remote);
+    try{ localStorage.setItem('bpwc_state_v1', JSON.stringify(remote)); }catch(e){}
+    return s;
+  }
+  async function readBDD(){
+    if(!URL || !KEY) throw new Error('Supabase non configuré');
+    const u = URL.replace(/\/$/,'') + '/rest/v1/' + TABLE + '?id=eq.' + encodeURIComponent(APP_ID) + '&select=data,updated_at';
+    const r = await fetch(u,{method:'GET', headers:headers()});
+    if(!r.ok) throw new Error('Lecture BDD impossible HTTP '+r.status+' — '+await r.text());
+    const arr = await r.json();
+    const row = Array.isArray(arr) ? arr[0] : null;
+    if(!row || !row.data) throw new Error('Ligne app_state introuvable : '+APP_ID);
+    return ensure(row.data);
+  }
+  async function writeBDD(data, reason){
+    const payload = ensure(clone(data));
+    if(payload.players.length === 0) throw new Error('Blocage sécurité : 0 joueur dans le payload');
+    if(payload.matches.length === 0) throw new Error('Blocage sécurité : 0 match dans le payload');
+    payload.lastWriteReason = reason || 'admin create bet';
+    payload.lastSavedAt = iso();
+    const row = {id:APP_ID, data:payload, updated_at:iso()};
+    const u = URL.replace(/\/$/,'') + '/rest/v1/' + TABLE;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      const r = await fetch(u,{
+        method:'POST',
+        headers:headers({'prefer':'resolution=merge-duplicates,return=representation'}),
+        body:JSON.stringify(row)
+      });
+      if(!r.ok) throw new Error('Écriture BDD impossible HTTP '+r.status+' — '+await r.text());
+    } finally {
+      window.__BP_ALLOW_BDD_WRITE__ = false;
+    }
+    return payload;
+  }
+  function outcome(a,b){
+    if(typeof window.outcomeFromScore === 'function') return window.outcomeFromScore(Number(a), Number(b));
+    a=Number(a); b=Number(b); return a>b?'A':a<b?'B':'N';
+  }
+  function scoreText(a,b){
+    if(typeof window.scoreText === 'function') return window.scoreText(Number(a), Number(b));
+    return Number(a)+' - '+Number(b);
+  }
+  function safeId(v){ return String(v||'').replace(/[^a-z0-9]/gi,'_'); }
+  function adminBetId(day, matchId, playerName){
+    if(typeof window.adminBetId === 'function') return window.adminBetId(day, matchId, playerName);
+    return 'adminbet_'+day+'_'+safeId(matchId)+'_'+safeId(playerName);
+  }
+  function findBet(st, day, matchId, playerName){
+    return ensure(st).bets.find(b => Number(b.day)===Number(day) && String(b.matchId)===String(matchId) && String(b.player)===String(playerName));
+  }
+  function upsertBet(st, day, matchId, playerName, data, status){
+    st = ensure(st);
+    const d = Number(day);
+    const id = String(matchId);
+    const player = String(playerName);
+    st.bets = st.bets.filter(b => !(Number(b.day)===d && String(b.matchId)===id && String(b.player)===player));
+    const a = Number(data.scoreA ?? data.a ?? 0);
+    const b = Number(data.scoreB ?? data.b ?? 0);
+    const stat = String(status || data.status || 'DRAFT').toUpperCase();
+    st.bets.push(Object.assign({
+      day:d,
+      matchId:id,
+      player,
+      prediction:outcome(a,b),
+      predictedOutcome:outcome(a,b),
+      scoreA:a,
+      scoreB:b,
+      score:scoreText(a,b),
+      stake:Number(data.stake || 1),
+      status:stat,
+      validatedAt:stat==='VALIDATED' ? (data.validatedAt || iso()) : null,
+      updatedAt:iso(),
+      source:'admin'
+    }, data));
+    return findBet(st,d,id,player);
+  }
+  function setBusy(btn, label){
+    if(!btn) return function(){};
+    const old = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = label || 'BDD…';
+    return function(){ btn.disabled=false; btn.innerHTML=old; };
+  }
+  function renderSafe(){
+    try{ if(typeof window.renderAdminBetsTable === 'function') window.renderAdminBetsTable(); }catch(e){ console.warn('[V120 renderAdminBetsTable]',e); }
+    try{ if(typeof window.renderAdmin === 'function') window.renderAdmin(); }catch(e){ console.warn('[V120 renderAdmin]',e); }
+    try{ if(typeof window.renderAll === 'function') setTimeout(()=>window.renderAll(),80); }catch(e){}
+  }
+
+  window.adminCreateBet = async function(day, matchId, playerName){
+    const btn = (document.activeElement && document.activeElement.tagName === 'BUTTON') ? document.activeElement : null;
+    const done = setBusy(btn, 'Création BDD…');
+    try{
+      const remote = await readBDD();
+      upsertBet(remote, day, matchId, playerName, {scoreA:0, scoreB:0, stake:1}, 'DRAFT');
+      await writeBDD(remote, 'création mise admin '+playerName+' '+matchId);
+      const verified = await readBDD();
+      const rb = findBet(verified, day, matchId, playerName);
+      if(!rb) throw new Error('Vérification BDD échouée : la ligne créée est introuvable.');
+      syncState(verified);
+      renderSafe();
+      alert('Mise créée et vérifiée en BDD. Tu peux maintenant modifier le score, la mise et passer le statut en Validé.');
+      return true;
+    }catch(e){
+      console.error('[V120 adminCreateBet]', e);
+      alert('Erreur création mise : '+(e.message||e));
+      return false;
+    }finally{ done(); }
+  };
+
+  window.adminSaveBet = async function(day, matchId, playerName){
+    const btn = (document.activeElement && document.activeElement.tagName === 'BUTTON') ? document.activeElement : null;
+    const done = setBusy(btn, 'Sauvegarde BDD…');
+    try{
+      const rid = adminBetId(day, matchId, playerName);
+      const sa = document.getElementById(rid+'_sa');
+      const sb = document.getElementById(rid+'_sb');
+      const stakeEl = document.getElementById(rid+'_stake');
+      const statusEl = document.getElementById(rid+'_status');
+      if(!sa || !sb || !stakeEl || !statusEl) throw new Error('Champs introuvables pour '+playerName+' / '+matchId+' — id='+rid);
+      const a = Number(sa.value), b = Number(sb.value), stake = Number(stakeEl.value || 1), status = String(statusEl.value || 'DRAFT').toUpperCase();
+      const remote = await readBDD();
+      upsertBet(remote, day, matchId, playerName, {scoreA:a, scoreB:b, stake:stake}, status);
+      await writeBDD(remote, 'sauvegarde mise admin '+playerName+' '+matchId);
+      const verified = await readBDD();
+      const rb = findBet(verified, day, matchId, playerName);
+      if(!rb || Number(rb.scoreA)!==a || Number(rb.scoreB)!==b || Number(rb.stake)!==stake || String(rb.status)!==status){
+        throw new Error('Vérification BDD échouée : la mise relue ne correspond pas.');
+      }
+      syncState(verified);
+      renderSafe();
+      alert('Mise sauvegardée et vérifiée en BDD.');
+      return true;
+    }catch(e){
+      console.error('[V120 adminSaveBet]', e);
+      alert('Erreur sauvegarde mise : '+(e.message||e));
+      return false;
+    }finally{ done(); }
+  };
+
+  window.adminPrepareMissingBets = async function(){
+    const btn = (document.activeElement && document.activeElement.tagName === 'BUTTON') ? document.activeElement : null;
+    const done = setBusy(btn, 'Préparation BDD…');
+    try{
+      const day = Number(document.getElementById('adminBetsDay')?.value || S().selectedDay || S().currentDay || 1);
+      const selected = document.getElementById('adminBetsPlayer')?.value || '__ALL__';
+      const remote = await readBDD();
+      const players = selected === '__ALL__' ? remote.players : remote.players.filter(p => String(p.name) === String(selected));
+      const matches = remote.matches.filter(m => Number(m.day) === day);
+      let created = 0;
+      matches.forEach(m => players.forEach(p => { if(!findBet(remote, day, m.id, p.name)){ upsertBet(remote, day, m.id, p.name, {scoreA:0, scoreB:0, stake:1}, 'DRAFT'); created++; } }));
+      await writeBDD(remote, 'préparation lignes mises J'+day);
+      const verified = await readBDD();
+      syncState(verified);
+      renderSafe();
+      alert(created+' ligne(s) manquante(s) créée(s) et vérifiée(s) en BDD.');
+      return true;
+    }catch(e){
+      console.error('[V120 adminPrepareMissingBets]', e);
+      alert('Erreur préparation mises : '+(e.message||e));
+      return false;
+    }finally{ done(); }
+  };
+
+  function findPlayer(st, aliases){
+    const arr = ensure(st).players;
+    const ns = aliases.map(norm);
+    return arr.find(p => ns.includes(norm(p.name)) || ns.includes(norm(p.pseudo)) || ns.some(a=>norm(p.name).includes(a) || norm(p.pseudo).includes(a)));
+  }
+  function findMatch(st, day, homeKeys, awayKeys){
+    const hk = homeKeys.map(norm), ak = awayKeys.map(norm);
+    return ensure(st).matches.find(m => Number(m.day)===Number(day) && hk.some(k=>norm(m.teamA).includes(k)) && ak.some(k=>norm(m.teamB).includes(k)));
+  }
+  window.adminAddKnownMissingJ1Bets = async function(){
+    const btn = (document.activeElement && document.activeElement.tagName === 'BUTTON') ? document.activeElement : null;
+    const done = setBusy(btn, 'Ajout 4 mises BDD…');
+    try{
+      const remote = await readBDD();
+      const imane = findPlayer(remote, ['Imane']);
+      const fayssal = findPlayer(remote, ['Fayssal','Fayssale']);
+      const m001 = findMatch(remote, 1, ['Mexico','Mexique'], ['South Africa','Afrique du Sud','Afrique du Sad']);
+      const m002 = findMatch(remote, 1, ['Korea','Corée','South Korea','Korea Republic'], ['Czechia','Tchéquie','Tchequie']);
+      const missing = [];
+      if(!imane) missing.push('joueur Imane');
+      if(!fayssal) missing.push('joueur Fayssal/Fayssale');
+      if(!m001) missing.push('match J1 Mexico - South Africa');
+      if(!m002) missing.push('match J1 Korea - Czechia');
+      if(missing.length) throw new Error('Introuvable : '+missing.join(', '));
+      upsertBet(remote, 1, m001.id, imane.name, {scoreA:2, scoreB:1, stake:1}, 'VALIDATED');
+      upsertBet(remote, 1, m002.id, imane.name, {scoreA:2, scoreB:0, stake:1}, 'VALIDATED');
+      upsertBet(remote, 1, m001.id, fayssal.name, {scoreA:2, scoreB:1, stake:2}, 'VALIDATED');
+      upsertBet(remote, 1, m002.id, fayssal.name, {scoreA:1, scoreB:0, stake:2}, 'VALIDATED');
+      await writeBDD(remote, 'ajout 4 mises manquantes J1 Imane/Fayssal');
+      const verified = await readBDD();
+      const checks = [
+        [imane.name,m001.id,1,2,1], [imane.name,m002.id,1,2,0], [fayssal.name,m001.id,2,2,1], [fayssal.name,m002.id,2,1,0]
+      ];
+      for(const [player,mid,stake,a,b] of checks){
+        const rb = findBet(verified,1,mid,player);
+        if(!rb || String(rb.status)!=='VALIDATED' || Number(rb.stake)!==stake || Number(rb.scoreA)!==a || Number(rb.scoreB)!==b){
+          throw new Error('Vérification BDD échouée pour '+player+' / '+mid);
+        }
+      }
+      syncState(verified);
+      renderSafe();
+      alert('4 mises J1 ajoutées et vérifiées en BDD.');
+      return true;
+    }catch(e){
+      console.error('[V120 adminAddKnownMissingJ1Bets]', e);
+      alert('Erreur ajout mises J1 : '+(e.message||e));
+      return false;
+    }finally{ done(); }
+  };
+
+  function injectButton(){
+    const toolbar = document.querySelector('.admin-bets-toolbar');
+    if(!toolbar || document.getElementById('bpAddKnownMissingJ1BetsBtn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'bpAddKnownMissingJ1BetsBtn';
+    btn.className = 'action';
+    btn.type = 'button';
+    btn.textContent = 'Ajouter les 4 mises J1 manquantes';
+    btn.onclick = window.adminAddKnownMissingJ1Bets;
+    toolbar.appendChild(btn);
+  }
+  document.addEventListener('DOMContentLoaded', injectButton);
+  setTimeout(injectButton, 800);
+  const oldRenderAdmin = window.renderAdmin;
+  window.renderAdmin = function(){
+    const r = oldRenderAdmin && oldRenderAdmin.apply(this, arguments);
+    setTimeout(injectButton, 50);
+    return r;
+  };
 })();
 </script>
 
