@@ -19776,4 +19776,171 @@ window.BP_LOCAL_ONLY = true;
    - aucun bouton suppression. */
 </script>
 
+
+
+<script>
+/* V139 UNLOCK NEXT MATCH — patch UX ciblé
+   - après sauvegarde/modification, seules les cartes déjà validées restent verrouillées ;
+   - les autres matchs ouverts restent immédiatement jouables sans refresh ;
+   - aucun bouton suppression, aucun changement login/gains/calculs. */
+(function(){
+  'use strict';
+  if(window.__BP_V139_UNLOCK_NEXT_MATCH__) return;
+  window.__BP_V139_UNLOCK_NEXT_MATCH__ = true;
+
+  function S(){ return window.state || window.appState || {}; }
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function norm(v){ return String(v == null ? '' : v); }
+  function currentDay(){
+    return Number(window.currentDay || window.selectedDay || window.activeDay || (S().currentDay || S().selectedDay || 1));
+  }
+  function playerName(){
+    try{
+      if(typeof window.currentPlayer === 'function'){
+        var p = window.currentPlayer();
+        if(p && p.name) return String(p.name);
+      }
+      if(typeof window.player === 'function'){
+        var pp = window.player();
+        if(pp && pp.name) return String(pp.name);
+      }
+    }catch(e){}
+    var code = '';
+    try{ code = localStorage.getItem('bpwc_current_user_code') || ''; }catch(e){}
+    var p2 = arr(S().players).find(function(p){ return String(p.code||'') === String(code); });
+    return p2 && p2.name ? String(p2.name) : '';
+  }
+  function matchIdFromCard(card){
+    if(!card) return '';
+    if(card.dataset && card.dataset.matchId) return String(card.dataset.matchId);
+    var id = String(card.id || '');
+    if(id.indexOf('betCard_') === 0) return id.replace('betCard_','');
+    return '';
+  }
+  function validatedBet(day, mid, player){
+    return arr(S().bets).find(function(b){
+      return Number(b.day) === Number(day)
+        && String(b.matchId) === String(mid)
+        && String(b.player) === String(player)
+        && String(b.status || '').toUpperCase() === 'VALIDATED';
+    });
+  }
+  function actions(card){ return card && (card.querySelector('.bet-actions') || card); }
+  function mainButton(card){
+    var a = actions(card); if(!a) return null;
+    a.querySelectorAll('button').forEach(function(b){
+      var t = (b.textContent || '').toLowerCase();
+      if(t.indexOf('supprimer') >= 0) b.remove();
+    });
+    var buttons = Array.from(a.querySelectorAll('button'));
+    if(buttons.length > 1) buttons.slice(1).forEach(function(b){ b.remove(); });
+    var btn = a.querySelector('button');
+    if(!btn){ btn = document.createElement('button'); btn.className='action'; a.appendChild(btn); }
+    btn.disabled = false;
+    btn.style.pointerEvents = 'auto';
+    return btn;
+  }
+  function setInputs(card, disabled){
+    if(!card) return;
+    card.querySelectorAll('input,select,textarea').forEach(function(i){
+      if(i.type === 'hidden') return;
+      i.disabled = !!disabled;
+      i.readOnly = false;
+      i.style.pointerEvents = 'auto';
+    });
+  }
+  function setBadge(card, validated){
+    var badge = card && card.querySelector('.bet-title .badge');
+    if(!badge) return;
+    if(validated){ badge.className='badge ok'; badge.textContent='✅ Validée'; }
+    else { badge.className='badge'; badge.textContent='Brouillon'; }
+  }
+  function setStatus(card, txt, cls){
+    var st = card && card.querySelector('.bet-status');
+    if(st){ st.className = 'bet-status ' + (cls || ''); st.textContent = txt || ''; }
+  }
+  function makeDraft(card){
+    if(!card) return;
+    card.classList.remove('lockedCard','bp-bet-validated-v132','bp-bet-validated-v137');
+    setInputs(card, false);
+    setBadge(card, false);
+    var btn = mainButton(card);
+    if(btn){
+      btn.className='action';
+      btn.textContent='Sauvegarder la mise';
+      btn.onclick = function(ev){ if(ev) ev.preventDefault(); return window.validateSingleBet && window.validateSingleBet(matchIdFromCard(card)); };
+    }
+  }
+  function makeValidated(card, bet){
+    if(!card) return;
+    card.classList.add('lockedCard','bp-bet-validated-v137');
+    setInputs(card, true);
+    setBadge(card, true);
+    if(bet && bet.validatedAt){
+      try{ setStatus(card, 'Validée le ' + new Date(bet.validatedAt).toLocaleString('fr-FR'), 'good'); }catch(e){ setStatus(card, 'Mise validée.', 'good'); }
+    }else{
+      setStatus(card, 'Mise validée.', 'good');
+    }
+    var btn = mainButton(card);
+    if(btn){
+      btn.className='action editBtn';
+      btn.textContent='✏️ Modifier la mise';
+      btn.onclick = function(ev){ if(ev) ev.preventDefault(); return window.editBet && window.editBet(matchIdFromCard(card)); };
+    }
+  }
+  function refreshCards(){
+    var name = playerName();
+    var day = currentDay();
+    if(!name) return;
+    document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(function(card){
+      var mid = matchIdFromCard(card);
+      if(!mid) return;
+      var b = validatedBet(day, mid, name);
+      if(b) makeValidated(card, b);
+      else makeDraft(card);
+    });
+  }
+  window.bpV139RefreshCards = refreshCards;
+
+  var oldValidate = window.validateSingleBet;
+  if(typeof oldValidate === 'function' && !oldValidate.__bpV139Wrapped){
+    var wrappedValidate = async function(matchId){
+      var res = await oldValidate.apply(this, arguments);
+      setTimeout(refreshCards, 120);
+      setTimeout(refreshCards, 450);
+      return res;
+    };
+    wrappedValidate.__bpV139Wrapped = true;
+    window.validateSingleBet = wrappedValidate;
+    try{ validateSingleBet = wrappedValidate; }catch(e){}
+  }
+
+  var oldEdit = window.editBet;
+  if(typeof oldEdit === 'function' && !oldEdit.__bpV139Wrapped){
+    var wrappedEdit = async function(matchId){
+      var res = await oldEdit.apply(this, arguments);
+      setTimeout(function(){
+        var card = document.getElementById('betCard_' + matchId);
+        if(card){ makeDraft(card); setStatus(card, 'Modification en cours — valide à nouveau pour sauvegarder.', 'warn'); }
+      }, 80);
+      return res;
+    };
+    wrappedEdit.__bpV139Wrapped = true;
+    window.editBet = wrappedEdit;
+    try{ editBet = wrappedEdit; }catch(e){}
+  }
+
+  document.addEventListener('change', function(e){
+    var card = e.target && e.target.closest ? e.target.closest('#betRows .bet-card') : null;
+    if(card && e.target.matches('input,select,textarea')) makeDraft(card);
+  }, true);
+
+  var t=null;
+  function schedule(){ clearTimeout(t); t=setTimeout(function(){ if(!window.__BP_V138_CONFIRM_OPEN__) refreshCards(); }, 100); }
+  try{ new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true}); }catch(e){}
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(refreshCards, 300); });
+  setTimeout(refreshCards, 500);
+  setTimeout(refreshCards, 1200);
+})();
+</script>
 </body></html>
