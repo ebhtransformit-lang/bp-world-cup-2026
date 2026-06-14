@@ -18259,4 +18259,227 @@ button.bp-btn-loading::before{
 })();
 </script>
 
+
+
+<style>
+/* V127 — groupes lisibles avec toutes les colonnes visibles */
+.worldcup-groups-board{overflow-x:auto!important;padding:24px!important;}
+.worldcup-groups-grid{grid-template-columns:repeat(2,minmax(520px,1fr))!important;gap:18px!important;align-items:start!important;}
+.worldcup-group-card{min-width:520px!important;max-width:none!important;}
+.worldcup-team-row,.worldcup-team-row.head{
+  display:grid!important;
+  grid-template-columns:30px minmax(145px,1fr) 38px 38px 38px 38px 42px 42px 48px!important;
+  gap:6px!important;align-items:center!important;padding:8px 10px!important;width:100%!important;
+}
+.worldcup-team-row.head{grid-template-columns:30px minmax(145px,1fr) 38px 38px 38px 38px 42px 42px 48px!important;}
+.worldcup-team-row.head>div:first-child{grid-column:1 / 3!important;text-align:center!important;justify-content:center!important;}
+.worldcup-team-row.head>div:nth-child(2){grid-column:3!important;}
+.worldcup-team-row.head>div:nth-child(3){grid-column:4!important;}
+.worldcup-team-row.head>div:nth-child(4){grid-column:5!important;}
+.worldcup-team-row.head>div:nth-child(5){grid-column:6!important;}
+.worldcup-team-row.head>div:nth-child(6){grid-column:7!important;}
+.worldcup-team-row.head>div:nth-child(7){grid-column:8!important;}
+.worldcup-team-row.head>div:nth-child(8){grid-column:9!important;}
+.worldcup-team-row>div:nth-child(1){justify-content:center!important;display:flex!important;}
+.worldcup-team-row>div:nth-child(2){text-align:left!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+.worldcup-stat,.worldcup-pts{font-variant-numeric:tabular-nums!important;text-align:center!important;font-weight:900!important;}
+@media(max-width:1150px){.worldcup-groups-grid{grid-template-columns:minmax(520px,1fr)!important;}}
+@media(max-width:650px){.worldcup-group-card{min-width:500px!important}.worldcup-team-row,.worldcup-team-row.head{grid-template-columns:28px minmax(130px,1fr) 34px 34px 34px 34px 38px 38px 44px!important;font-size:12px!important;}}
+
+/* V127 — statut visuel des pronos calculés */
+#bets .bet-card.bp-bet-win{border-color:rgba(74,222,128,.85)!important;box-shadow:0 0 0 1px rgba(74,222,128,.25),0 12px 30px rgba(74,222,128,.08)!important;}
+#bets .bet-card.bp-bet-loss{border-color:rgba(251,113,133,.9)!important;box-shadow:0 0 0 1px rgba(251,113,133,.20),0 12px 30px rgba(251,113,133,.08)!important;}
+#bets .bet-card.bp-bet-exact{border-color:rgba(74,222,128,1)!important;box-shadow:0 0 0 2px rgba(74,222,128,.35),0 12px 34px rgba(74,222,128,.12)!important;}
+#bets .bet-card.bp-bet-exact .bet-title h3::before{content:'⭐ ';}
+#bets .bet-card.bp-bet-win .bet-title{background:linear-gradient(90deg,rgba(22,101,52,.96),rgba(20,20,20,.95))!important;}
+#bets .bet-card.bp-bet-loss .bet-title{background:linear-gradient(90deg,rgba(127,29,29,.96),rgba(20,20,20,.95))!important;}
+#bets .bet-card.bp-bet-exact .bet-title{background:linear-gradient(90deg,rgba(22,101,52,1),rgba(20,20,20,.95))!important;}
+</style>
+
+<script>
+/* V127 — session persistante, login nettoyé, bilan user recalculé, groupes complets */
+(function(){
+  const SESSION_KEY='bpwc_current_user_code';
+  const SPINNER_TEXTS=['Synchronisation','Sauvegarde','Calcul','Chargement','Validation','BDD','Traitement'];
+
+  function st(){return window.state || state || {};}
+  function players(){return Array.isArray(st().players)?st().players:[];}
+  function codeOfCurrent(){
+    if(window.currentRole==='admin') return '1573';
+    const idx=Number(window.currentUserIndex);
+    const p=players()[idx];
+    return p && p.code ? String(p.code) : '';
+  }
+  function hideLoginBDDAdmin(){
+    const login=document.getElementById('loginScreen');
+    if(!login) return;
+    [...login.querySelectorAll('*')].forEach(el=>{
+      const t=(el.textContent||'').trim();
+      if(/^BDD\s*ADMIN$/i.test(t) || /BDD\s*ADMIN/i.test(t)) el.style.display='none';
+    });
+  }
+  function unlockDom(role){
+    window.bpIsAuthenticated=true;
+    window.currentRole=role;
+    document.body.classList.remove('bp-locked');
+    document.body.classList.toggle('bp-admin',role==='admin');
+    document.body.classList.toggle('bp-user',role==='user');
+    const login=document.getElementById('loginScreen'); if(login) login.style.display='none';
+    if(typeof applyRoleUI==='function') try{applyRoleUI();}catch(e){}
+  }
+  function persistSession(){
+    const c=codeOfCurrent();
+    try{ if(c) localStorage.setItem(SESSION_KEY,c); }catch(e){}
+  }
+  function clearSession(){try{localStorage.removeItem(SESSION_KEY);}catch(e){}}
+
+  function restoreSession(){
+    hideLoginBDDAdmin();
+    let saved='';
+    try{saved=String(localStorage.getItem(SESSION_KEY)||'').trim();}catch(e){}
+    if(!saved) return false;
+    if(!players().length) return false;
+    if(saved==='1573'){
+      window.currentRole='admin'; window.currentUserIndex=0;
+      try{ currentRole='admin'; currentUserIndex=0; }catch(e){}
+      unlockDom('admin');
+      const panel=document.getElementById('adminPanel'); if(panel) panel.style.display='block';
+      const lock=document.getElementById('adminLock'); if(lock) lock.style.display='none';
+      if(typeof tab==='function') try{tab('admin',document.getElementById('navAdmin'));}catch(e){}
+      if(typeof renderAll==='function') try{renderAll();}catch(e){}
+      return true;
+    }
+    const idx=players().findIndex(p=>String(p.code)===saved);
+    if(idx>=0){
+      window.currentRole='user'; window.currentUserIndex=idx;
+      try{ currentRole='user'; currentUserIndex=idx; }catch(e){}
+      const sel=document.getElementById('activePlayer'); if(sel) sel.value=String(idx);
+      unlockDom('user');
+      if(typeof tab==='function') try{tab('calendar',document.getElementById('navCalendar'));}catch(e){}
+      if(typeof renderAll==='function') try{renderAll();}catch(e){}
+      return true;
+    }
+    clearSession(); return false;
+  }
+
+  function statusIsWin(d){return /GAGNÉ/i.test(String(d?.status||'')) || Number(d?.netGain||0)>0;}
+  function statusIsExact(d){return /SCORE EXACT/i.test(String(d?.status||'')) || Number(d?.exactBonus||0)>0;}
+  function statusIsLoss(d){return /PERDU/i.test(String(d?.status||'')) || Number(d?.netGain||0)<0;}
+  function detailsForPlayer(p){return (st().settlementDetails||[]).filter(d=>d.player===p.name && d.player!=='RÉSERVE' && !String(d.matchId||'').startsWith('EVENT_') && String(d.status||'')!=='RECHARGE À 1 FID');}
+  function latestSettlementDay(p){
+    const ds=detailsForPlayer(p).map(d=>Number(d.day||0)).filter(Boolean);
+    return ds.length?Math.max(...ds):Number(st().currentDay||1);
+  }
+  function computeBilan(p){
+    const all=detailsForPlayer(p);
+    const day=latestSettlementDay(p);
+    const one=all.filter(d=>Number(d.day)===Number(day));
+    const agg=(arr)=>({
+      good:arr.filter(statusIsWin).length,
+      exact:arr.filter(statusIsExact).length,
+      gain:arr.reduce((s,d)=>s+Number(d.netGain||0),0)
+    });
+    const d=agg(one), c=agg(all);
+    return {day,d,c};
+  }
+  function currentPlayer(){
+    if(window.currentRole==='user' && window.currentUserIndex!==null && players()[Number(window.currentUserIndex)]) return players()[Number(window.currentUserIndex)];
+    if(typeof player==='function') try{return player();}catch(e){}
+    return players()[0]||{};
+  }
+  function updatePlayerFieldsFromSettlements(){
+    players().forEach(p=>{
+      const b=computeBilan(p).c;
+      p.good=b.good; p.exact=b.exact; p.evolution=Number(p.balance||0)-Number(p.startFid||50);
+    });
+  }
+  function renderBilanUser(){
+    const p=currentPlayer(); if(!p) return;
+    updatePlayerFieldsFromSettlements();
+    const b=computeBilan(p);
+    const set=(id,val)=>{const el=document.getElementById(id); if(el) el.textContent=val;};
+    set('dayGood',b.d.good); set('dayExact',b.d.exact); set('dayGain',(b.d.gain>=0?'+':'')+b.d.gain+' FID'); set('dayRank','—');
+    set('compGood',b.c.good); set('compExact',b.c.exact); set('compGain',(b.c.gain>=0?'+':'')+b.c.gain+' FID'); set('compRank',(Number(p.evolution||0)>=0?'+':'')+Number(p.evolution||0)+' FID');
+  }
+
+  function settlementForCard(matchId,p){
+    return (st().settlementDetails||[]).find(d=>String(d.matchId)===String(matchId) && d.player===p.name);
+  }
+  window.bpApplyBetResultClasses=function(){
+    const p=currentPlayer(); if(!p) return;
+    document.querySelectorAll('#bets .bet-card').forEach(card=>{
+      const id=String(card.id||'').replace('betCard_','');
+      const d=settlementForCard(id,p);
+      card.classList.remove('bp-bet-win','bp-bet-loss','bp-bet-exact');
+      if(!d) return;
+      if(statusIsExact(d)) card.classList.add('bp-bet-exact','bp-bet-win');
+      else if(statusIsWin(d)) card.classList.add('bp-bet-win');
+      else if(statusIsLoss(d)) card.classList.add('bp-bet-loss');
+    });
+  };
+
+  function resetSpinners(){
+    document.querySelectorAll('button').forEach(btn=>{
+      const txt=(btn.textContent||'').trim();
+      if(btn.dataset.bpOriginalText){btn.innerHTML=btn.dataset.bpOriginalText; delete btn.dataset.bpOriginalText;}
+      if(SPINNER_TEXTS.some(x=>txt.includes(x)) || /⏳|spinner/i.test(btn.innerHTML||'')) btn.disabled=false;
+      btn.classList.remove('bp-busy','is-loading','loading');
+    });
+  }
+
+  const oldLogin=window.loginWithCode;
+  window.loginWithCode=function(){
+    const r=oldLogin?oldLogin.apply(this,arguments):undefined;
+    setTimeout(()=>{persistSession(); hideLoginBDDAdmin(); renderBilanUser();},50);
+    return r;
+  };
+  const oldLogout=window.logout;
+  window.logout=function(){ clearSession(); resetSpinners(); return oldLogout?oldLogout.apply(this,arguments):false; };
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function' && !oldRenderAll.__bpV127){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      setTimeout(()=>{hideLoginBDDAdmin(); renderBilanUser(); window.bpApplyBetResultClasses(); resetSpinners();},0);
+      return r;
+    };
+    window.renderAll.__bpV127=true;
+  }
+  const oldRenderSummaries=window.renderSummaries;
+  window.renderSummaries=function(){
+    try{renderBilanUser();}catch(e){ if(oldRenderSummaries) oldRenderSummaries.apply(this,arguments); }
+  };
+  const oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function' && !oldRenderBets.__bpV127){
+    window.renderBets=function(){const r=oldRenderBets.apply(this,arguments); setTimeout(window.bpApplyBetResultClasses,0); return r;};
+    window.renderBets.__bpV127=true;
+  }
+  const oldCalc=window.calculateGains;
+  if(typeof oldCalc==='function' && !oldCalc.__bpV127){
+    window.calculateGains=async function(){
+      const r=await oldCalc.apply(this,arguments);
+      updatePlayerFieldsFromSettlements();
+      try{ if(typeof save==='function') save(); }catch(e){}
+      setTimeout(()=>{renderBilanUser(); window.bpApplyBetResultClasses(); resetSpinners();},0);
+      return r;
+    };
+    window.calculateGains.__bpV127=true;
+  }
+  const oldTab=window.tab;
+  if(typeof oldTab==='function' && !oldTab.__bpV127){
+    window.tab=function(){resetSpinners(); const r=oldTab.apply(this,arguments); setTimeout(resetSpinners,250); return r;};
+    window.tab.__bpV127=true;
+  }
+
+  const mo=new MutationObserver(()=>{hideLoginBDDAdmin();});
+  document.addEventListener('DOMContentLoaded',()=>{
+    hideLoginBDDAdmin();
+    try{mo.observe(document.body,{childList:true,subtree:true,characterData:true});}catch(e){}
+    setTimeout(restoreSession,150);
+    setTimeout(restoreSession,900);
+    setInterval(()=>{hideLoginBDDAdmin(); renderBilanUser(); window.bpApplyBetResultClasses(); resetSpinners();},2500);
+  });
+})();
+</script>
+
 </body></html>
