@@ -2629,10 +2629,6 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
       <div class="tile">💰 Gain cumulé<strong id="compGain">+0 FID</strong></div>
       <div class="tile">📈 Évolution<strong id="compRank">+0 place</strong></div>
     </div>
-
-    <div class="help">
-      Les résultats sont saisis dans Admin. Les exports CSV peuvent être ouverts dans Excel.
-    </div>
   </div>
 
   <div class="card scores-block">
@@ -17775,6 +17771,281 @@ window.BP_LOCAL_ONLY = true;
   }
   document.addEventListener('DOMContentLoaded',()=>setTimeout(renderDynamicAwards,500));
   setTimeout(renderDynamicAwards,900);
+})();
+</script>
+
+
+<script>
+/* V125 — Correctifs Hassan 7 points + session persistante + leader journée */
+(function(){
+  'use strict';
+  if(window.__BP_V125_HASSAN_FIXES__) return;
+  window.__BP_V125_HASSAN_FIXES__ = true;
+
+  const SESSION_KEY = 'bpwc_current_user_code';
+
+  function S(){ return window.state || {}; }
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function n(v,d=0){ const x=Number(v); return Number.isFinite(x) ? x : d; }
+  function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function playerDisplayByName(name){
+    const p = arr(S().players).find(x=>String(x.name)===String(name));
+    return p ? (p.pseudo || p.name || name) : name;
+  }
+  function knownNames(){
+    return new Set(arr(S().players).map(p=>String(p.name||'').trim()).filter(Boolean));
+  }
+  function setSession(code){
+    try{
+      if(code) localStorage.setItem(SESSION_KEY, String(code));
+      else localStorage.removeItem(SESSION_KEY);
+    }catch(e){}
+  }
+  function getSession(){
+    try{ return String(localStorage.getItem(SESSION_KEY)||'').trim(); }catch(e){ return ''; }
+  }
+  function setRoleSafe(role,idx){
+    try{ window.currentRole = role; }catch(e){}
+    try{ window.currentUserIndex = idx; }catch(e){}
+  }
+  function hideLogin(){ const el=document.getElementById('loginScreen'); if(el) el.style.display='none'; }
+  function showLogin(){ const el=document.getElementById('loginScreen'); if(el) el.style.display='flex'; }
+  function activateAdmin(){
+    setRoleSafe('admin',0);
+    hideLogin();
+    try{ if(typeof applyRoleUI==='function') applyRoleUI(); }catch(e){}
+    const lock=document.getElementById('adminLock'); if(lock) lock.style.display='none';
+    const panel=document.getElementById('adminPanel'); if(panel) panel.style.display='block';
+    try{ if(typeof tab==='function') tab('admin', document.getElementById('navAdmin')); }catch(e){}
+    try{ if(typeof renderAll==='function') renderAll(); }catch(e){}
+  }
+  function activateUser(idx){
+    if(idx < 0) return false;
+    setRoleSafe('user',idx);
+    hideLogin();
+    try{ if(typeof applyRoleUI==='function') applyRoleUI(); }catch(e){}
+    try{ if(typeof tab==='function') tab('calendar', document.getElementById('navCalendar')); }catch(e){}
+    try{ if(typeof renderAll==='function') renderAll(); }catch(e){}
+    return true;
+  }
+  function restoreSession(){
+    const code = getSession();
+    if(!code) return false;
+    if(code === '1573'){ activateAdmin(); return true; }
+    const idx = arr(S().players).findIndex(p=>String(p.code)===code);
+    if(idx >= 0) return activateUser(idx);
+    return false;
+  }
+  function patchLogin(){
+    const oldLogin = window.loginWithCode;
+    window.loginWithCode = async function(){
+      const code = String(document.getElementById('loginCode')?.value || '').trim();
+      const r = oldLogin ? await oldLogin.apply(this, arguments) : undefined;
+      if(code === '1573' || arr(S().players).some(p=>String(p.code)===code)){
+        setSession(code);
+      }
+      return r;
+    };
+    const oldLogout = window.logout;
+    window.logout = function(){
+      setSession('');
+      if(oldLogout) return oldLogout.apply(this, arguments);
+      setRoleSafe(null,null); showLogin();
+    };
+  }
+
+  function cleanGhostDisplays(){
+    const names=knownNames();
+    if(!names.size) return;
+    // Ne supprime pas les données BDD ici. On masque seulement les joueurs fantômes dans les vues calculées.
+    arr(S().settlementDetails).forEach(d=>{
+      if(d && d.player && d.player!=='RÉSERVE' && !names.has(String(d.player))) d.__ghostPlayer = true;
+    });
+    arr(S().bets).forEach(b=>{
+      if(b && b.player && !names.has(String(b.player))) b.__ghostPlayer = true;
+    });
+  }
+
+  function dayLeaderHTML(day){
+    const names=knownNames();
+    const totals = new Map();
+    arr(S().settlementDetails)
+      .filter(d=>Number(d.day)===Number(day) && d.player && d.player!=='RÉSERVE' && names.has(String(d.player)))
+      .forEach(d=>totals.set(d.player, (totals.get(d.player)||0)+n(d.netGain,0)));
+    const rows=[...totals.entries()].map(([name,gain])=>({name,gain})).sort((a,b)=>b.gain-a.gain || playerDisplayByName(a.name).localeCompare(playerDisplayByName(b.name)));
+    if(!rows.length) return 'Leader journée : —';
+    const top=rows[0].gain;
+    const leaders=rows.filter(r=>r.gain===top);
+    return `Leader(s) journée ${day} : <b>${leaders.map(r=>esc(playerDisplayByName(r.name))).join(', ')}</b> <span class="${top>=0?'good':'bad'}">(${top>=0?'+':''}${top} FID)</span>`;
+  }
+
+  function patchCalculate(){
+    const oldCalc = window.calculateGains;
+    if(typeof oldCalc !== 'function') return;
+    window.calculateGains = async function(showAlert=true){
+      const day = (typeof scoreEntryDay==='function') ? scoreEntryDay() : n(S().currentDay,1);
+      const r = await oldCalc.apply(this, arguments);
+
+      // Stocke le résultat calculé directement sur chaque mise validée, pour affichage user/admin et export/BDD.
+      const details = arr(S().settlementDetails).filter(d=>Number(d.day)===Number(day) && d.player && d.player!=='RÉSERVE');
+      arr(S().bets).forEach(b=>{
+        if(Number(b.day)!==Number(day) || (b.status||'DRAFT')!=='VALIDATED') return;
+        const d = details.find(x=>x.player===b.player && x.matchId===b.matchId);
+        if(!d) return;
+        b.calculated = true;
+        b.calculatedAt = new Date().toISOString();
+        b.resultStatus = d.status;
+        b.officialScore = d.officialScore;
+        b.netGain = n(d.netGain,0);
+        b.baseGain = n(d.baseGain,0);
+        b.exactBonus = n(d.exactBonus,0);
+      });
+
+      try{ if(typeof save==='function') save(); }catch(e){}
+      const info=document.getElementById('calcInfo');
+      if(info){
+        const block = `<div class="help" id="bpDayLeaderInfo">${dayLeaderHTML(day)}</div>`;
+        const old=document.getElementById('bpDayLeaderInfo');
+        if(old) old.outerHTML = block;
+        else info.insertAdjacentHTML('beforeend', block);
+      }
+      try{ renderAdminBetsTable && renderAdminBetsTable(); }catch(e){}
+      return r;
+    };
+  }
+
+  function renderAwardsKnownPlayers(){
+    const el=document.getElementById('awards');
+    if(!el) return;
+    const names=[...knownNames()];
+    function calcRows(metric){
+      return names.map(name=>({name,value:metric(name)}))
+        .sort((a,b)=>n(b.value)-n(a.value) || playerDisplayByName(a.name).localeCompare(playerDisplayByName(b.name)));
+    }
+    function playerDetails(name){
+      return arr(S().settlementDetails).filter(d=>d.player===name && !d.__ghostPlayer);
+    }
+    function isWin(d){ return /^GAGN[ÉE]/i.test(String(d.status||'')); }
+    function longest(name,win){
+      let best=0,cur=0;
+      playerDetails(name).sort((a,b)=>n(a.day)-n(b.day)||String(a.matchId).localeCompare(String(b.matchId))).forEach(d=>{
+        const ok=win ? isWin(d) : (!isWin(d) && String(d.status||'').includes('PERDU'));
+        if(ok){ cur++; best=Math.max(best,cur); } else cur=0;
+      });
+      return best;
+    }
+    function exact(name){ return playerDetails(name).filter(d=>String(d.status||'').includes('SCORE EXACT')).length; }
+    function cannibale(name){ return Math.round(playerDetails(name).reduce((s,d)=>s+Math.max(0,n(d.netGain)),0)*100)/100; }
+    function groups(rows){
+      const out=[];
+      rows.filter(r=>n(r.value)>0).forEach(r=>{
+        const last=out[out.length-1];
+        if(last && Number(last.value)===Number(r.value)) last.names.push(r.name);
+        else out.push({value:r.value,names:[r.name]});
+      });
+      return out.slice(0,3);
+    }
+    function fmt(v,unit){ const x=n(v); const s=Number.isInteger(x)?String(x):String(x).replace('.',','); return unit==='FID' ? s+' FID' : s; }
+    function card(icon,title,desc,prize,unit,label,metric){
+      const gs=groups(calcRows(metric));
+      const leader=gs[0];
+      const top=gs.length ? gs.map((g,i)=>`<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${['🥇','🥈','🥉'][i]||i+1}</div><div class="hof-name">${g.names.map(playerDisplayByName).map(esc).join(', ')}</div><div class="hof-score">${fmt(g.value,unit)}</div></div>`).join('') : '<div class="muted">Les leaders apparaîtront après calcul d’une journée.</div>';
+      const leaderTxt=leader ? `${leader.names.map(playerDisplayByName).map(esc).join(', ')} (${fmt(leader.value,unit)}${label?' '+label:''})` : 'Aucun calcul validé';
+      return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start">
+        <div class="award-icon">${icon}</div><div><div class="award-title">${title}</div><div class="award-desc">${desc}</div>
+        <div class="muted" style="margin:8px 0">Leader(s) actuel(s) : <b>${leaderTxt}</b></div><div class="hof-list">${top}</div></div>
+        <div class="award-prize">${prize} FID</div></div>`;
+    }
+    el.innerHTML = [
+      card('⚽','Striker','Plus longue série de pronostics gagnants consécutifs',50,'','victoire(s)',name=>longest(name,true)),
+      card('🪦','Loser','Plus longue série de pronostics perdants consécutifs',25,'','défaite(s)',name=>longest(name,false)),
+      card('🎯','Sniper','Nombre de scores exacts validés',100,'','score(s) exact(s)',exact),
+      card('🦁','Cannibale','FID nets positifs cumulés sur les journées calculées',25,'FID','',cannibale)
+    ].join('') + '<div class="help">Les joueurs absents de la table Joueurs sont ignorés dans les trophées/classements dynamiques. Les ex-aequo sont affichés ensemble.</div>';
+  }
+
+  function patchRenderGroupStandings(){
+    if(typeof window.computeGroupStandings !== 'function') return;
+    window.renderGroupStandings = function(){
+      const el=document.getElementById('groupStandings');
+      if(!el) return;
+      const standings=window.computeGroupStandings();
+      const groupOrder=Object.keys(standings).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
+      el.innerHTML = `<div class="worldcup-groups-grid">` + groupOrder.map(group=>{
+        const rows=standings[group].map(r=>`<div class="worldcup-team-row">
+          <div>${typeof flagOnly==='function' ? flagOnly(r.team) : ''}</div>
+          <div class="worldcup-team-name" title="${esc(r.team)}">${esc(r.team)}</div>
+          <div class="worldcup-stat">${n(r.played)}</div>
+          <div class="worldcup-stat">${n(r.won)}</div>
+          <div class="worldcup-stat">${n(r.drawn)}</div>
+          <div class="worldcup-stat">${n(r.lost)}</div>
+          <div class="worldcup-stat">${n(r.gf)}</div>
+          <div class="worldcup-stat">${n(r.ga)}</div>
+          <div class="worldcup-stat worldcup-pts">${n(r.pts)}</div>
+        </div>`).join('');
+        return `<div class="worldcup-group-card">
+          <div class="worldcup-group-title">${esc(group)}</div>
+          <div class="worldcup-team-row head"><div></div><div>Pays</div><div>MJ</div><div>G</div><div>N</div><div>P</div><div>BM</div><div>BE</div><div>Pts</div></div>
+          ${rows}
+        </div>`;
+      }).join('') + `</div>`;
+    };
+  }
+
+  function cleanStaticMessages(){
+    document.querySelectorAll('.help').forEach(el=>{
+      const t=(el.textContent||'').trim();
+      if(t.includes('Les résultats sont saisis dans Admin. Les exports CSV peuvent être ouverts dans Excel.')) el.remove();
+      if(t.includes('Chargement au démarrage et sauvegarde après action critique')) el.remove();
+    });
+  }
+
+  const css=document.createElement('style');
+  css.textContent = `
+    #rankingBody td, #rankingBody th, .daily-recap-table td, .daily-recap-table th{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #rankingBody td:nth-child(2){max-width:260px}
+    .worldcup-groups-board{padding:30px!important;overflow-x:auto!important}
+    .worldcup-groups-grid{grid-template-columns:repeat(3,minmax(390px,1fr))!important;gap:18px!important}
+    .worldcup-group-card{min-width:390px!important}
+    .worldcup-team-row,.worldcup-team-row.head{grid-template-columns:36px minmax(150px,1.8fr) repeat(7,40px)!important;column-gap:7px!important}
+    .worldcup-team-row.head{grid-template-columns:36px minmax(150px,1.8fr) repeat(7,40px)!important}
+    .worldcup-team-name{overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+    @media(max-width:900px){.worldcup-groups-grid{grid-template-columns:minmax(390px,1fr)!important}}
+  `;
+  document.head.appendChild(css);
+
+  function afterRender(){
+    cleanGhostDisplays();
+    cleanStaticMessages();
+    setTimeout(renderAwardsKnownPlayers,0);
+  }
+
+  patchLogin();
+  patchCalculate();
+  patchRenderGroupStandings();
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function'){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      afterRender();
+      return r;
+    };
+  }
+  const oldManualLoad=window.bpManualLoadBDD;
+  if(typeof oldManualLoad==='function'){
+    window.bpManualLoadBDD=async function(){
+      const r=await oldManualLoad.apply(this,arguments);
+      setTimeout(()=>{ restoreSession(); afterRender(); },100);
+      return r;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    // Laisse le chargement BDD éventuel terminer, puis restaure ADMIN/user au lieu de revenir à l’accueil code.
+    [50,300,800,1500,3000].forEach(ms=>setTimeout(()=>{ restoreSession(); afterRender(); },ms));
+  });
+  setInterval(()=>{ cleanStaticMessages(); },1500);
 })();
 </script>
 
