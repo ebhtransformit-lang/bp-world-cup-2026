@@ -112,6 +112,244 @@
 @media(max-width:1000px){.bp-v208-grid{grid-template-columns:1fr 1fr!important}}
 @media(max-width:650px){.bp-v208-grid{grid-template-columns:1fr!important}}
 
+
+
+/* V217 — WORLD CUP PREMIUM : Groupes + Tableau final — UX only */
+#calendar .worldcup-hero-board{
+  max-width:100%!important;
+  overflow:hidden!important;
+  padding:22px 24px 28px!important;
+  border-radius:24px!important;
+  border:1px solid rgba(122,0,25,.55)!important;
+  background:
+    radial-gradient(circle at 50% 66%, rgba(122,0,25,.28), transparent 36%),
+    radial-gradient(circle at 18% 8%, rgba(255,255,255,.06), transparent 26%),
+    linear-gradient(180deg,#080808 0%,#14070a 44%,#090909 100%)!important;
+  box-shadow:0 24px 80px rgba(0,0,0,.52)!important;
+}
+#calendar .final-board-header{
+  padding-bottom:16px!important;
+  margin-bottom:18px!important;
+  border-bottom:1px solid rgba(255,255,255,.08)!important;
+}
+#calendar .final-board-title{
+  font-size:28px!important;
+  letter-spacing:.2px!important;
+}
+#calendar h2{
+  margin:18px 0 12px!important;
+  font-size:24px!important;
+  font-weight:1000!important;
+  letter-spacing:.2px!important;
+  text-transform:uppercase!important;
+}
+#groupStandings.worldcup-groups-board{
+  margin-top:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#groupStandings .worldcup-groups-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(245px,1fr))!important;
+  gap:14px!important;
+  width:100%!important;
+}
+#groupStandings .worldcup-group-card{
+  min-width:0!important;
+  overflow:hidden!important;
+  border-radius:13px!important;
+  background:linear-gradient(180deg,rgba(18,18,18,.98),rgba(10,10,10,.98))!important;
+  color:#fff!important;
+  border:1px solid rgba(122,0,25,.58)!important;
+  box-shadow:0 12px 34px rgba(0,0,0,.36)!important;
+}
+#groupStandings .worldcup-group-title{
+  padding:10px 12px!important;
+  background:linear-gradient(90deg,#7A0019,#4b0714)!important;
+  color:#fff!important;
+  text-align:center!important;
+  font-size:14px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+  letter-spacing:.6px!important;
+  text-transform:uppercase!important;
+}
+#groupStandings .worldcup-team-row,
+#groupStandings .worldcup-team-row.head{
+  display:grid!important;
+  grid-template-columns:24px minmax(82px,1fr) 30px 30px 28px 28px 28px 32px 32px!important;
+  gap:0!important;
+  min-height:31px!important;
+  padding:0 8px!important;
+  align-items:center!important;
+  border-bottom:1px solid rgba(255,255,255,.075)!important;
+  background:rgba(255,255,255,.018)!important;
+  font-size:12px!important;
+}
+#groupStandings .worldcup-team-row.head{
+  min-height:28px!important;
+  color:#d8d8d8!important;
+  background:rgba(255,255,255,.045)!important;
+  font-size:10px!important;
+  font-weight:1000!important;
+  text-transform:uppercase!important;
+}
+#groupStandings .worldcup-team-row:last-child{border-bottom:0!important}
+#groupStandings .worldcup-rank{
+  font-weight:1000!important;
+  text-align:center!important;
+  color:#eee!important;
+  font-variant-numeric:tabular-nums!important;
+}
+#groupStandings .worldcup-team-row:nth-child(3) .worldcup-rank,
+#groupStandings .worldcup-team-row:nth-child(4) .worldcup-rank{color:#00d084!important}
+#groupStandings .worldcup-team-name{
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+  min-width:0!important;
+  overflow:hidden!important;
+  white-space:nowrap!important;
+  text-overflow:ellipsis!important;
+  font-size:12px!important;
+  font-weight:900!important;
+}
+#groupStandings .worldcup-team-name .flag,
+#groupStandings .worldcup-team-name img.flag{
+  width:20px!important;
+  height:14px!important;
+  flex:0 0 20px!important;
+  border-radius:3px!important;
+  margin:0!important;
+  object-fit:cover!important;
+}
+#groupStandings .worldcup-stat,
+#groupStandings .worldcup-pts{
+  text-align:center!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  font-variant-numeric:tabular-nums!important;
+}
+#groupStandings .worldcup-pts{color:#facc15!important;font-weight:1000!important}
+#groupStandings .worldcup-team-row.head .worldcup-pts{color:#d8d8d8!important}
+#groupStandings .worldcup-team-row.qualified{
+  background:linear-gradient(90deg,rgba(0,208,132,.13),rgba(255,255,255,.015))!important;
+}
+#groupStandings .worldcup-team-row.possible{
+  background:linear-gradient(90deg,rgba(250,204,21,.10),rgba(255,255,255,.015))!important;
+}
+.bp-wc-legend{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  margin:14px 0 4px!important;
+  color:#b7b7b7!important;
+  font-size:12px!important;
+}
+.bp-wc-legend-left,.bp-wc-legend-right{display:flex!important;flex-wrap:wrap!important;gap:14px!important;align-items:center!important}
+.bp-wc-dot{width:14px;height:14px;border-radius:4px;display:inline-block;margin-right:6px;vertical-align:-2px}
+.bp-wc-dot.q{background:#00d084}.bp-wc-dot.p{background:#b79300}
+#finalBracket.knockout-board{
+  display:grid!important;
+  grid-template-columns:1.1fr .9fr .9fr .8fr minmax(190px,.9fr) .8fr .9fr .9fr 1.1fr!important;
+  gap:12px!important;
+  align-items:center!important;
+  margin-top:8px!important;
+  padding:20px 8px 10px!important;
+  overflow:visible!important;
+  background:
+    radial-gradient(circle at center,rgba(122,0,25,.22),transparent 35%),
+    linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.00))!important;
+  border-top:1px solid rgba(255,255,255,.08)!important;
+}
+.knockout-round{display:flex!important;flex-direction:column!important;gap:11px!important;justify-content:center!important}
+.knockout-round h3{
+  min-height:28px!important;
+  margin:0 0 4px!important;
+  text-align:center!important;
+  font-size:11px!important;
+  font-weight:1000!important;
+  color:#ddd!important;
+  text-transform:uppercase!important;
+  letter-spacing:.45px!important;
+}
+.knockout-match{
+  position:relative!important;
+  min-height:54px!important;
+  padding:7px 9px!important;
+  border-radius:10px!important;
+  background:linear-gradient(180deg,rgba(20,20,20,.96),rgba(8,8,8,.96))!important;
+  border:1px solid rgba(122,0,25,.62)!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.32)!important;
+}
+.knockout-match.played{
+  background:linear-gradient(90deg,rgba(122,0,25,.46),rgba(15,15,15,.96))!important;
+  border-color:rgba(255,0,58,.55)!important;
+}
+.knockout-team{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+  min-height:20px!important;
+  font-size:12px!important;
+  line-height:1.2!important;
+  color:#fff!important;
+  overflow:hidden!important;
+}
+.knockout-team span:first-child{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  font-weight:850!important;
+}
+.knockout-team b{font-size:12px!important;color:#fff!important;font-weight:1000!important;white-space:nowrap!important}
+.knockout-placeholder{color:#c9c9c9!important;font-weight:850!important}
+.knockout-team .flag,img.flag{vertical-align:-3px}
+.bp-final-center{
+  align-self:stretch!important;
+  min-height:260px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:10px!important;
+  text-align:center!important;
+  border-radius:22px!important;
+  border:1px solid rgba(122,0,25,.55)!important;
+  background:
+    radial-gradient(circle at center,rgba(122,0,25,.38),transparent 55%),
+    linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.01))!important;
+  box-shadow:0 0 42px rgba(122,0,25,.20)!important;
+}
+.bp-final-cup{font-size:48px!important;filter:drop-shadow(0 0 18px rgba(250,204,21,.28))}
+.bp-final-title{font-weight:1000!important;font-size:15px!important;letter-spacing:.3px!important;color:#fff!important;text-transform:uppercase!important}
+.bp-final-sub{font-weight:1000!important;font-size:12px!important;color:#facc15!important;text-transform:uppercase!important;letter-spacing:.4px!important}
+.bp-final-crown{margin-top:8px!important;width:120px!important;height:48px!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:14px!important;border:1px solid rgba(255,0,58,.7)!important;background:rgba(122,0,25,.32)!important;box-shadow:0 0 28px rgba(255,0,58,.28)!important;font-size:24px!important}
+.bp-bracket-legend{grid-column:1/-1!important;display:flex!important;justify-content:center!important;gap:28px!important;color:#ddd!important;font-size:12px!important;margin-top:8px!important}
+.bp-bracket-pill{display:inline-flex;align-items:center;gap:7px}.bp-bracket-pill:before{content:"";display:inline-block;width:16px;height:16px;border-radius:50%;background:#191919;border:1px solid rgba(255,255,255,.24)}.bp-bracket-pill.played:before{background:#7A0019}.bp-bracket-pill.qualified:before{background:#d4af37}
+@media(max-width:1180px){
+  #groupStandings .worldcup-groups-grid{grid-template-columns:repeat(3,minmax(245px,1fr))!important}
+  #finalBracket.knockout-board{grid-template-columns:repeat(4,minmax(170px,1fr))!important;overflow:auto!important}
+  .bp-final-center{grid-column:1/-1!important;min-height:180px!important;order:-1!important}
+}
+@media(max-width:860px){
+  #groupStandings .worldcup-groups-grid{grid-template-columns:repeat(2,minmax(245px,1fr))!important}
+}
+@media(max-width:620px){
+  #calendar .worldcup-hero-board{padding:16px 12px!important}
+  #groupStandings .worldcup-groups-grid{grid-template-columns:1fr!important}
+  #groupStandings .worldcup-team-row,#groupStandings .worldcup-team-row.head{grid-template-columns:22px minmax(78px,1fr) 28px 28px 26px 26px 26px 30px 30px!important;font-size:11px!important;padding:0 6px!important}
+  #groupStandings .worldcup-team-name{font-size:11px!important}
+  #finalBracket.knockout-board{grid-template-columns:1fr!important;overflow:visible!important;padding-left:0!important;padding-right:0!important}
+}
+
 </style>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
@@ -2371,18 +2609,159 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 }
 </style>
 
+
+<style id="bp-v216-login-premium-safe">
+/* V216 — Login Premium SAFE : uniquement UI login, aucun impact BDD/calcul */
+#loginScreen.login-screen{
+  background:
+    radial-gradient(circle at 50% 100%, rgba(122,0,25,.22), transparent 34%),
+    radial-gradient(circle at 5% 60%, rgba(122,0,25,.38), transparent 28%),
+    radial-gradient(circle at 95% 60%, rgba(122,0,25,.34), transparent 28%),
+    linear-gradient(135deg,#060606 0%,#0b0204 42%,#000 100%)!important;
+  overflow:hidden!important;
+}
+#loginScreen.login-screen:before{
+  content:"";
+  position:absolute;
+  left:-10%; right:-10%; bottom:0; height:42%;
+  background:
+    linear-gradient(180deg,transparent,rgba(122,0,25,.10)),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 42px);
+  opacity:.55;
+  transform:perspective(800px) rotateX(58deg);
+  transform-origin:bottom center;
+  pointer-events:none;
+}
+#loginScreen .login-card{
+  position:relative!important;
+  width:min(620px,94vw)!important;
+  padding:34px 36px 30px!important;
+  text-align:center!important;
+  border-radius:34px!important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(122,0,25,.26), transparent 38%),
+    linear-gradient(180deg,rgba(25,25,25,.96),rgba(8,8,8,.98))!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  box-shadow:0 38px 110px rgba(0,0,0,.68), 0 0 0 1px rgba(122,0,25,.18), 0 0 46px rgba(122,0,25,.22)!important;
+}
+#loginScreen .bp-login-trophy{
+  width:98px;height:98px;margin:0 auto 16px;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(250,204,21,.22),rgba(122,0,25,.18) 58%,rgba(0,0,0,.25));
+  border:1px solid rgba(250,204,21,.48);
+  box-shadow:0 0 34px rgba(122,0,25,.48);
+  font-size:52px;
+}
+#loginScreen .bp-login-brand{
+  margin:0!important;
+  font-size:42px!important;
+  line-height:1!important;
+  letter-spacing:5px!important;
+  font-weight:1000!important;
+}
+#loginScreen .bp-login-subtitle{
+  margin:10px 0 26px!important;
+  color:#f3c96b!important;
+  font-size:22px!important;
+  letter-spacing:7px!important;
+  font-weight:900!important;
+}
+#loginScreen .bp-login-help{
+  max-width:430px;
+  margin:0 auto 24px!important;
+  color:#d4d4d4!important;
+  font-size:18px!important;
+  line-height:1.45!important;
+}
+#loginCode{
+  position:absolute!important;
+  width:1px!important;height:1px!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+.bp-login-digits{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:18px;
+  max-width:420px;
+  margin:0 auto 26px;
+}
+.bp-login-digit{
+  height:86px!important;
+  border-radius:18px!important;
+  text-align:center!important;
+  font-size:34px!important;
+  font-weight:1000!important;
+  background:linear-gradient(180deg,#131313,#090909)!important;
+  border:1px solid rgba(122,0,25,.72)!important;
+  color:#fff!important;
+  box-shadow:inset 0 0 18px rgba(255,255,255,.035),0 0 22px rgba(122,0,25,.14)!important;
+}
+.bp-login-digit:focus{
+  outline:none!important;
+  border-color:#7A0019!important;
+  box-shadow:0 0 0 3px rgba(122,0,25,.26),0 0 32px rgba(122,0,25,.35)!important;
+}
+#loginScreen .bp-login-submit{
+  width:min(430px,100%)!important;
+  height:70px!important;
+  margin:0 auto 22px!important;
+  border-radius:18px!important;
+  font-size:24px!important;
+  font-weight:1000!important;
+  background:linear-gradient(135deg,#7A0019,#a20b2b)!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+  box-shadow:0 18px 42px rgba(122,0,25,.34)!important;
+}
+#loginScreen .bp-login-submit:hover{filter:brightness(1.08)}
+#loginScreen .bp-login-secure{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  color:#d7d7d7;
+  font-size:16px;
+  font-weight:800;
+}
+#loginScreen #loginError{
+  margin:14px auto 0!important;
+  max-width:420px;
+  padding:12px 14px;
+  border-radius:14px;
+  background:rgba(251,113,133,.10);
+  border:1px solid rgba(251,113,133,.25);
+}
+@media(max-width:620px){
+  #loginScreen .login-card{padding:28px 20px!important;border-radius:26px!important}
+  #loginScreen .bp-login-brand{font-size:30px!important;letter-spacing:3px!important}
+  #loginScreen .bp-login-subtitle{font-size:16px!important;letter-spacing:4px!important}
+  #loginScreen .bp-login-help{font-size:15px!important}
+  .bp-login-digits{gap:10px}
+  .bp-login-digit{height:68px!important;font-size:28px!important}
+  #loginScreen .bp-login-submit{height:60px!important;font-size:20px!important}
+}
+</style>
+
 </head>
 <body>
 
 <div id="loginScreen" class="login-screen" style="display: flex;">
   <div class="login-card">
-    <h2>🏆 B Partner FIFA World Cup 2026</h2>
-    <p class="muted">Saisis ton code personnel à 4 chiffres pour accéder à ton espace.</p>
-    <input id="loginCode" class="code-input" type="password" maxlength="10" inputmode="text" autocomplete="one-time-code" placeholder="ADMIN ou code" onkeydown="if(event.key===&#39;Enter&#39;) loginWithCode()">
-    <button class="action" style="width:100%;margin-top:12px" onclick="loginWithCode()">Entrer</button>
-    <button class="action secondary" style="width:100%;margin-top:8px" onclick="if(confirm(&#39;Réinitialiser uniquement l’écran de connexion ? Les données sont conservées.&#39;)){document.getElementById(&#39;loginCode&#39;).value=&#39;&#39;;location.reload();}">Réparer l’accès</button>
+    <div class="bp-login-trophy">🏆</div>
+    <h2 class="bp-login-brand">B PARTNER</h2>
+    <div class="bp-login-subtitle">FIFA WORLD CUP 2026</div>
+    <p class="bp-login-help">Saisis ton code personnel à 4 chiffres pour accéder à ton espace.</p>
+
+    <input id="loginCode" class="code-input" type="password" maxlength="10" inputmode="text" autocomplete="one-time-code" aria-label="Code d’accès" onkeydown="if(event.key===&#39;Enter&#39;) loginWithCode()">
+
+    <div class="bp-login-digits" aria-label="Code d’accès à 4 chiffres">
+      <input class="bp-login-digit" type="password" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Chiffre 1">
+      <input class="bp-login-digit" type="password" inputmode="numeric" maxlength="1" aria-label="Chiffre 2">
+      <input class="bp-login-digit" type="password" inputmode="numeric" maxlength="1" aria-label="Chiffre 3">
+      <input class="bp-login-digit" type="password" inputmode="numeric" maxlength="1" aria-label="Chiffre 4">
+    </div>
+
+    <button class="action bp-login-submit" onclick="loginWithCode()">Entrer →</button>
+    <div class="bp-login-secure">🔒 Accès sécurisé</div>
     <p id="loginError" class="bad" style="display:none">Code incorrect.</p>
-    
   </div>
 </div>
 
@@ -5091,61 +5470,92 @@ function renderGroupStandings(){
   const groupOrder=Object.keys(standings).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
 
   el.innerHTML = `<div class="worldcup-groups-grid">` + groupOrder.map(group=>{
-    const rows=standings[group].map((r,i)=>`<div class="worldcup-team-row">
-      <div>${f(r.team).split('</img>').length>1 ? '' : ''}${flagOnly(r.team)}</div>
-      <div class="worldcup-team-name">${r.team}</div>
+    const rows=standings[group].map((r,i)=>`<div class="worldcup-team-row ${i<2?'qualified':(i===2?'possible':'')}">
+      <div class="worldcup-rank">${i+1}</div>
+      <div class="worldcup-team-name">${flagOnly(r.team)}<span>${r.team}</span></div>
+      <div class="worldcup-stat worldcup-pts">${r.pts}</div>
       <div class="worldcup-stat">${r.played}</div>
       <div class="worldcup-stat">${r.won}</div>
       <div class="worldcup-stat">${r.drawn}</div>
       <div class="worldcup-stat">${r.lost}</div>
       <div class="worldcup-stat">${r.gf}</div>
       <div class="worldcup-stat">${r.ga}</div>
-      <div class="worldcup-stat worldcup-pts">${r.pts}</div>
     </div>`).join("");
 
     return `<div class="worldcup-group-card">
       <div class="worldcup-group-title">${group.replace("Groupe ","Groupe ")}</div>
       <div class="worldcup-team-row head">
-        <div></div>
+        <div>#</div>
         <div>Pays</div>
+        <div class="worldcup-pts">NP</div>
         <div>MJ</div>
         <div>G</div>
         <div>N</div>
         <div>P</div>
         <div>BM</div>
         <div>BE</div>
-        <div>Pts</div>
       </div>
       ${rows}
     </div>`;
-  }).join("") + `</div>`;
+  }).join("") + `</div>
+  <div class="bp-wc-legend">
+    <div class="bp-wc-legend-left"><span><i class="bp-wc-dot q"></i>Qualifié direct</span><span><i class="bp-wc-dot p"></i>Possible qualification</span></div>
+    <div class="bp-wc-legend-right"><span>NP : Points</span><span>MJ : Matchs joués</span><span>BM : Buts marqués</span><span>BE : Buts encaissés</span></div>
+  </div>`;
 }
 
 
 function renderKnockoutBoard(){
   const el=document.getElementById("finalBracket");
   if(!el) return;
-  const rounds=[
-    {title:"1/16", count:8},
-    {title:"1/8", count:4},
-    {title:"1/4", count:2},
-    {title:"1/2", count:2},
-    {title:"Finale", count:1}
-  ];
   const knockout=state.matches.filter(m=>!isRealGroupName(m.group));
-  el.innerHTML=rounds.map(round=>{
-    const ms=knockout.filter(m=>String(m.phase||m.group||"").toLowerCase().includes(round.title.toLowerCase()) || String(m.group||"").toLowerCase().includes(round.title.toLowerCase())).slice(0, round.count);
-    const cards=[];
-    for(let i=0;i<round.count;i++){
-      const m=ms[i];
-      const a=m ? f(m.teamA) : `<span class="knockout-placeholder">${round.title} · ${i+1}</span>`;
-      const b=m ? f(m.teamB) : `<span class="knockout-placeholder">À déterminer</span>`;
-      const score=(m && m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined) ? `${m.scoreA} - ${m.scoreB}` : "";
-      cards.push(`<div class="knockout-match"><div class="knockout-team"><span>${a}</span><b>${score}</b></div><div class="knockout-team"><span>${b}</span></div></div>`);
+  const roundDefs=[
+    {key:"1/16", title:"1/16 de finale", count:8},
+    {key:"1/8", title:"1/8 de finale", count:4},
+    {key:"1/4", title:"1/4 de finale", count:2},
+    {key:"1/2", title:"1/2 finale", count:1}
+  ];
+  function matchPhase(m){ return String(m.phase||m.group||"").toLowerCase(); }
+  function matchesFor(key,count,side){
+    let ms=knockout.filter(m=>matchPhase(m).includes(key.toLowerCase()));
+    if(!ms.length){
+      const offset={"1/16":0,"1/8":16,"1/4":24,"1/2":28}[key]||0;
+      ms=knockout.slice(offset, offset+(count*2));
     }
-    return `<div class="knockout-round"><h3>${round.title}</h3>${cards.join("")}</div>`;
-  }).join("");
+    const half=Math.ceil(ms.length/2);
+    const picked=(side==="left"?ms.slice(0,half):ms.slice(half));
+    return picked.slice(0,count);
+  }
+  function card(m,key,i){
+    const hasScore=(m && m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined);
+    const a=m ? f(m.teamA) : `<span class="knockout-placeholder">${key} · ${i+1}</span>`;
+    const b=m ? f(m.teamB) : `<span class="knockout-placeholder">À déterminer</span>`;
+    const scoreA=hasScore ? m.scoreA : "";
+    const scoreB=hasScore ? m.scoreB : "";
+    return `<div class="knockout-match ${hasScore?'played':''}">
+      <div class="knockout-team"><span>${a}</span><b>${scoreA}</b></div>
+      <div class="knockout-team"><span>${b}</span><b>${scoreB}</b></div>
+    </div>`;
+  }
+  function roundHtml(def,side){
+    const ms=matchesFor(def.key,def.count,side);
+    const cards=[];
+    for(let i=0;i<def.count;i++) cards.push(card(ms[i],def.key,i));
+    return `<div class="knockout-round ${side}"><h3>${def.title}</h3>${cards.join("")}</div>`;
+  }
+  const left=roundDefs.map(d=>roundHtml(d,"left")).join("");
+  const right=[...roundDefs].reverse().map(d=>roundHtml(d,"right")).join("");
+  el.innerHTML=`${left}
+    <div class="bp-final-center">
+      <div class="bp-final-cup">🏆</div>
+      <div class="bp-final-title">B Partner<br>World Cup 2026</div>
+      <div class="bp-final-sub">Champion du monde</div>
+      <div class="bp-final-crown">👑</div>
+    </div>
+    ${right}
+    <div class="bp-bracket-legend"><span class="bp-bracket-pill">Non joué</span><span class="bp-bracket-pill played">Match joué</span><span class="bp-bracket-pill qualified">Qualifié</span></div>`;
 }
+
 
 function renderCalendar(){
   const day=currentCalendarDay();
@@ -23026,6 +23436,294 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
 }
 </style>
 
+
+
+<!-- V213 — Widget pronostic premium : drapeaux XL, noms pays intégrés, mise XXL, rouge B Partner -->
+<style id="bp-v213-prono-widget-red-css">
+:root{--bp-red-v213:#7A0019;--bp-red-v213-soft:rgba(122,0,25,.42);--bp-red-v213-line:rgba(122,0,25,.72)}
+
+#bets .bp-v213-prono-card{
+  background:linear-gradient(180deg,#101114 0%,#08090b 100%)!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  border-radius:24px!important;
+  overflow:hidden!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.45)!important;
+}
+#bets .bp-v213-prono-card .bet-title{
+  background:linear-gradient(90deg,rgba(122,0,25,.82),rgba(12,12,14,.96) 54%,rgba(122,0,25,.38))!important;
+  padding:18px 24px!important;
+}
+#bets .bp-v213-prono-card .bet-title h3{
+  font-size:19px!important;
+  letter-spacing:.2px!important;
+}
+#bets .bp-v213-prono-card .bet-form.score-only{
+  padding:34px 26px 20px!important;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(122,0,25,.30),transparent 34%),
+    radial-gradient(circle at 50% 58%,rgba(122,0,25,.16),transparent 48%)!important;
+}
+#bets .bp-v213-prono-card .score-main-label{
+  position:relative!important;
+  margin:0 0 28px!important;
+  color:#fff!important;
+  font-size:22px!important;
+  font-weight:1000!important;
+  letter-spacing:7px!important;
+  text-transform:uppercase!important;
+  text-shadow:0 0 18px rgba(255,255,255,.14)!important;
+}
+#bets .bp-v213-prono-card .score-main-label:before,
+#bets .bp-v213-prono-card .score-main-label:after{
+  content:"";display:inline-block;width:130px;height:2px;margin:0 24px 7px 0;
+  background:linear-gradient(90deg,transparent,var(--bp-red-v213),transparent);
+  box-shadow:0 0 16px var(--bp-red-v213-soft);
+}
+#bets .bp-v213-prono-card .score-main-label:after{margin:0 0 7px 24px;}
+
+#bets .bp-v213-prono-card .bet-inline-row{
+  display:grid!important;
+  grid-template-columns:minmax(260px,1.25fr) 158px 46px 158px minmax(260px,1.25fr)!important;
+  gap:18px!important;
+  align-items:center!important;
+  width:100%!important;
+  max-width:1220px!important;
+  margin:0 auto!important;
+}
+#bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card{
+  min-height:138px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:22px!important;
+  padding:20px 28px!important;
+  border-radius:24px!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018))!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  box-shadow:inset 0 0 0 1px rgba(122,0,25,.12),0 14px 35px rgba(0,0,0,.26)!important;
+  cursor:pointer!important;
+}
+#bets .bp-v213-prono-card .flag-wrap.bp-v213-away{flex-direction:row-reverse!important;}
+#bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card .flag{
+  width:96px!important;
+  height:64px!important;
+  flex:0 0 96px!important;
+  margin:0!important;
+  border-radius:12px!important;
+  object-fit:cover!important;
+  box-shadow:0 0 0 1px rgba(255,255,255,.20),0 16px 34px rgba(0,0,0,.34)!important;
+}
+#bets .bp-v213-team-name{
+  display:block!important;
+  min-width:0!important;
+  color:#fff!important;
+  font-size:36px!important;
+  line-height:1.05!important;
+  font-weight:1000!important;
+  letter-spacing:-.8px!important;
+  text-shadow:0 10px 24px rgba(0,0,0,.48)!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+#bets .bp-v213-prono-card .scoreA,
+#bets .bp-v213-prono-card .scoreB{
+  width:158px!important;
+  height:118px!important;
+  border-radius:24px!important;
+  background:linear-gradient(180deg,#09090a,#030304)!important;
+  border:1px solid var(--bp-red-v213-line)!important;
+  color:#fff!important;
+  font-size:74px!important;
+  font-weight:1000!important;
+  text-align:center!important;
+  box-shadow:0 0 0 1px rgba(122,0,25,.18) inset,0 0 34px rgba(122,0,25,.28),0 18px 45px rgba(0,0,0,.42)!important;
+}
+#bets .bp-v213-prono-card .score-dash{
+  color:#fff!important;
+  font-size:48px!important;
+  font-weight:1000!important;
+  text-shadow:0 0 18px rgba(255,255,255,.16)!important;
+}
+#bets .bp-v213-prono-card .bp-v213-stake-wrap{
+  margin:30px auto 8px!important;
+  width:min(100%,520px)!important;
+  display:flex!important;
+  flex-direction:column!important;
+  gap:12px!important;
+  align-items:center!important;
+}
+#bets .bp-v213-prono-card .bp-v213-stake-label{
+  color:#fff!important;
+  font-size:20px!important;
+  font-weight:1000!important;
+  letter-spacing:5px!important;
+  text-transform:uppercase!important;
+}
+#bets .bp-v213-prono-card .bp-v213-stake-wrap .stake{
+  width:100%!important;
+  height:82px!important;
+  border-radius:22px!important;
+  background:linear-gradient(180deg,rgba(122,0,25,.22),#080809)!important;
+  border:1px solid var(--bp-red-v213-line)!important;
+  color:#fff!important;
+  font-size:34px!important;
+  font-weight:1000!important;
+  text-align:center!important;
+  box-shadow:0 0 0 1px rgba(122,0,25,.18) inset,0 0 32px rgba(122,0,25,.26)!important;
+}
+#bets .bp-v213-prono-card .score-helper{
+  margin-top:18px!important;
+  text-align:center!important;
+  color:#aeb4bd!important;
+  font-size:16px!important;
+}
+#bets .bp-v213-prono-card .prediction-derived{
+  margin:8px 26px 22px!important;
+  padding:16px 18px!important;
+  border-radius:18px!important;
+  background:rgba(122,0,25,.10)!important;
+  border:1px solid rgba(122,0,25,.35)!important;
+  text-align:center!important;
+}
+#bets .bp-v213-prono-card .bet-actions{
+  padding:20px 26px 24px!important;
+  grid-template-columns:1fr minmax(260px,360px)!important;
+}
+#bets .bp-v213-prono-card .bet-actions .action{
+  min-height:58px!important;
+  border-radius:16px!important;
+  background:var(--bp-red-v213)!important;
+}
+#bets .bp-v213-prono-card .bet-form.score-only label > div[style*="justify-content:space-between"]{display:none!important;}
+
+@media(max-width:1050px){
+  #bets .bp-v213-prono-card .bet-inline-row{grid-template-columns:1fr 120px 34px 120px 1fr!important;gap:12px!important;}
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card{min-height:118px!important;padding:16px!important;gap:14px!important;}
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card .flag{width:72px!important;height:48px!important;flex-basis:72px!important;}
+  #bets .bp-v213-team-name{font-size:26px!important;}
+  #bets .bp-v213-prono-card .scoreA,#bets .bp-v213-prono-card .scoreB{width:120px!important;height:94px!important;font-size:54px!important;}
+}
+@media(max-width:720px){
+  #bets .bp-v213-prono-card .score-main-label{font-size:16px!important;letter-spacing:4px!important;}
+  #bets .bp-v213-prono-card .score-main-label:before,#bets .bp-v213-prono-card .score-main-label:after{width:42px!important;margin-left:10px!important;margin-right:10px!important;}
+  #bets .bp-v213-prono-card .bet-inline-row{grid-template-columns:1fr 86px 22px 86px 1fr!important;gap:8px!important;}
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card{min-height:92px!important;padding:10px 8px!important;flex-direction:column!important;gap:7px!important;}
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-away{flex-direction:column!important;}
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card .flag{width:50px!important;height:34px!important;flex-basis:50px!important;}
+  #bets .bp-v213-team-name{font-size:13px!important;letter-spacing:0!important;text-align:center!important;max-width:86px!important;}
+  #bets .bp-v213-prono-card .scoreA,#bets .bp-v213-prono-card .scoreB{width:86px!important;height:72px!important;font-size:38px!important;border-radius:16px!important;}
+  #bets .bp-v213-prono-card .score-dash{font-size:26px!important;}
+  #bets .bp-v213-prono-card .bp-v213-stake-wrap{width:min(100%,340px)!important;}
+  #bets .bp-v213-prono-card .bp-v213-stake-wrap .stake{height:68px!important;font-size:28px!important;}
+  #bets .bp-v213-prono-card .bet-actions{grid-template-columns:1fr!important;}
+}
+</style>
+<script id="bp-v213-prono-widget-red-js">
+(function(){
+  'use strict';
+  if(window.__BP_V213_PRONO_WIDGET_RED__) return;
+  window.__BP_V213_PRONO_WIDGET_RED__=true;
+  function teamNames(card,row){
+    let names=[];
+    const helper=row && row.nextElementSibling;
+    if(helper){ names=[...helper.querySelectorAll('span')].map(s=>(s.textContent||'').trim()).filter(Boolean); }
+    if(names.length<2){ names=[...row.querySelectorAll('.flag-wrap img.flag')].map(img=>(img.getAttribute('alt')||'').trim()).filter(Boolean); }
+    if(names.length<2){
+      const h=card.querySelector('.bet-title h3');
+      const txt=(h&&h.textContent||'').replace(/\s+/g,' ').trim();
+      if(txt.includes(' vs ')) names=txt.split(' vs ').map(x=>x.trim());
+    }
+    return [names[0]||'Équipe A', names[1]||'Équipe B'];
+  }
+  function enhanceCard(card){
+    if(!card || card.dataset.v213Ready==='1') return;
+    const row=card.querySelector('.bet-inline-row');
+    if(!row) return;
+    const wraps=[...row.querySelectorAll('.flag-wrap')];
+    const stake=row.querySelector('select.stake');
+    const [a,b]=teamNames(card,row);
+    card.classList.add('bp-v213-prono-card');
+    wraps.forEach((w,i)=>{
+      w.classList.add('bp-v213-team-card', i===0?'bp-v213-home':'bp-v213-away');
+      if(!w.querySelector('.bp-v213-team-name')){
+        const span=document.createElement('span');
+        span.className='bp-v213-team-name';
+        span.textContent=i===0?a:b;
+        w.appendChild(span);
+      }
+      const img=w.querySelector('img.flag');
+      if(img){ img.loading='lazy'; img.decoding='async'; }
+    });
+    const mainLabel=card.querySelector('.bet-form.score-only > label > span');
+    if(mainLabel){ mainLabel.classList.add('score-main-label'); mainLabel.textContent='Score : pronostique'; }
+    if(stake && !stake.closest('.bp-v213-stake-wrap')){
+      const wrap=document.createElement('div');
+      wrap.className='bp-v213-stake-wrap';
+      const lab=document.createElement('div');
+      lab.className='bp-v213-stake-label';
+      lab.textContent='Mise';
+      stake.parentNode.insertBefore(wrap, stake.nextSibling);
+      wrap.appendChild(lab);
+      wrap.appendChild(stake);
+      row.insertAdjacentElement('afterend', wrap);
+    }
+    card.dataset.v213Ready='1';
+  }
+  function enhanceAll(){ document.querySelectorAll('#bets .bet-card').forEach(enhanceCard); }
+  const oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function'){
+    window.renderBets=function(){ const r=oldRenderBets.apply(this,arguments); setTimeout(enhanceAll,0); setTimeout(enhanceAll,120); return r; };
+    try{ renderBets=window.renderBets; }catch(e){}
+  }
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function'){
+    window.renderAll=function(){ const r=oldRenderAll.apply(this,arguments); setTimeout(enhanceAll,0); setTimeout(enhanceAll,250); return r; };
+    try{ renderAll=window.renderAll; }catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded',()=>{ [0,150,600,1400,2800].forEach(ms=>setTimeout(enhanceAll,ms)); });
+  setInterval(enhanceAll,1800);
+})();
+</script>
+
+
+<script id="bp-v216-login-premium-safe-js">
+(function(){
+  function syncLoginDigits(){
+    const hidden=document.getElementById('loginCode');
+    const digits=[...document.querySelectorAll('#loginScreen .bp-login-digit')];
+    if(!hidden || !digits.length || hidden.__bpV216DigitsReady) return;
+    hidden.__bpV216DigitsReady=true;
+    function sync(){ hidden.value = digits.map(d=>String(d.value||'').replace(/\D/g,'').slice(-1)).join(''); }
+    digits.forEach((d,i)=>{
+      d.addEventListener('input', function(){
+        this.value=String(this.value||'').replace(/\D/g,'').slice(-1);
+        sync();
+        if(this.value && i<digits.length-1) digits[i+1].focus();
+      });
+      d.addEventListener('keydown', function(e){
+        if(e.key==='Enter'){ e.preventDefault(); sync(); if(typeof window.loginWithCode==='function') window.loginWithCode(); }
+        if(e.key==='Backspace' && !this.value && i>0){ digits[i-1].focus(); }
+      });
+      d.addEventListener('paste', function(e){
+        const txt=(e.clipboardData||window.clipboardData).getData('text')||'';
+        const nums=txt.replace(/\D/g,'').slice(0,4).split('');
+        if(nums.length){
+          e.preventDefault();
+          digits.forEach((x,j)=>x.value=nums[j]||'');
+          sync();
+          (digits[Math.min(nums.length,4)-1]||digits[0]).focus();
+        }
+      });
+    });
+    setTimeout(()=>{ try{digits[0].focus();}catch(e){} },150);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', syncLoginDigits);
+  else syncLoginDigits();
+  window.addEventListener('load', syncLoginDigits);
+})();
+</script>
+
 </body></html>
 
 
@@ -23578,7 +24276,11 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
     return [
       {id:'striker',icon:'⚽',title:'Striker',prize:30,desc:'Plus longue série gagnante consécutive',rule:'Série continue sur tout le tournoi. Tie-break : scores exacts dans la série, FID gagnés, mise plus faible.',rows:strikerRows(ps),unit:'victoire(s)',detail:(r)=>`${r.d.exact} exact · ${fmt(r.d.gross)} FID gagnés · ${fmt(r.d.stake)} FID misés`},
       {id:'loser',icon:'🪦',title:'Loser',prize:10,desc:'Plus longue série perdante consécutive',rule:'Série continue sur tout le tournoi. Tie-break : perte FID, FID misés, série la plus récente.',rows:loserRows(ps),unit:'défaite(s)',detail:(r)=>`${fmt(r.d.loss)} FID perdus · ${fmt(r.d.stake)} FID misés`},
-      {id:'sniper',icon:'🎯',title:'Sniper',prize:60,desc:'Plus grand nombre de scores exacts',rule:'Total des scores exacts sur matchs officiellement calculés.',rows:simpleRows(ps,p=>p.exact),unit:'score(s)',detail:()=>''},
+      /* V215 SAFE — Sniper aligné sur la même métrique que le classement complet.
+         Avant, le trophée relisait les mises recalculées via byPlayer()/evaluatedBets(), ce qui pouvait diverger
+         du classement affiché lorsque les scores exacts avaient déjà été consolidés/stocker sur les joueurs.
+         On prend donc la source visible du Hall of Fame : player.exact, identique à la colonne SCORES EXACTS. */
+      {id:'sniper',icon:'🎯',title:'Sniper',prize:60,desc:'Plus grand nombre de scores exacts',rule:'Total des scores exacts consolidés dans le classement complet.',rows:rankingRows().map(r=>({name:(r.p&&r.p.name)||r.name,value:n(r.exact,0),extra:r})).filter(r=>n(r.value)>0).sort((a,b)=>n(b.value)-n(a.value)||playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr')).slice(0,10),unit:'score(s)',detail:()=>''},
       {id:'cannibale',icon:'🐯',title:'Cannibale',prize:25,desc:'Volume brut de gains encaissés',rule:'Somme des gains nets positifs sur les matchs officiellement calculés. Le rendement n’est pas pris en compte.',rows:simpleRows(ps,p=>p.netPositive),unit:'FID',detail:(r)=>`${fmt(r.extra.gross)} FID gagnés · ${fmt(r.extra.staked)} FID misés`},
       {id:'fourmi',icon:'🐜',title:'Fourmi',prize:30,desc:'Meilleur rendement',rule:'Ratio FID gagnés / FID misés. Minimum 5 FID misés.',rows:ratioRows(ps,false),unit:'ratio',detail:(r)=>`${fmt(r.extra.gross)} FID gagnés / ${fmt(r.extra.staked)} FID misés`},
       {id:'cigale',icon:'🦗',title:'Cigale',prize:10,desc:'Plus mauvais rendement',rule:'Ratio FID gagnés / FID misés le plus faible. Minimum 5 FID misés.',rows:ratioRows(ps,true),unit:'ratio',detail:(r)=>`${fmt(r.extra.gross)} FID gagnés / ${fmt(r.extra.staked)} FID misés`},
