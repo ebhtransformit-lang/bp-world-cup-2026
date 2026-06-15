@@ -95,7 +95,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V157 ADMIN GAINS PERSIST BASELINE</title>
+<title>B Partner FIFA World Cup 2026 - V182 GOLDEN ANTI ZOMBIE MINIMAL</title>
 <!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
@@ -14533,7 +14533,7 @@ window.BP_LOCAL_ONLY = true;
     delete s.settlementDetails;
     delete s.simulation;
     delete s.gainsCalculatedDays;
-    delete s.deletedPlayerKeys;
+    // V182: conserver deletedPlayerKeys pour empêcher le retour des joueurs zombies
     delete s.cloudUpdatedAt;
     return s;
   }
@@ -20686,6 +20686,172 @@ window.BP_LOCAL_ONLY = true;
   }
   setTimeout(patchButtons,300);
   document.addEventListener('DOMContentLoaded',()=>setTimeout(patchButtons,300));
+})();
+</script>
+
+
+
+<script>
+/* V182 MINIMAL ANTI-ZOMBIE — base GOLDEN STATE
+   Objectif: empêcher la réapparition physique des users seed 2401-2415 dans app_state,
+   sans toucher au login, aux mises, au profil, au classement ni au design.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V182_MINIMAL_ANTI_ZOMBIE__) return;
+  window.__BP_V182_MINIMAL_ANTI_ZOMBIE__ = true;
+
+  var ZOMBIE_CODES = ['2401','2402','2403','2404','2405','2406','2407','2408','2409','2410','2411','2412','2413','2414','2415'];
+  var ZOMBIE_SET = new Set(ZOMBIE_CODES);
+
+  function codeOf(p){
+    return String((p && (p.code || p.playerCode || p.userCode || p.id)) || '').trim();
+  }
+  function isZombiePlayer(p){ return ZOMBIE_SET.has(codeOf(p)); }
+  function uniq(arr){ return Array.from(new Set((arr||[]).map(function(x){return String(x||'').trim();}).filter(Boolean))); }
+
+  function purgeZombieState(st){
+    if(!st || typeof st !== 'object') return st;
+    try{
+      var before = Array.isArray(st.players) ? st.players.length : 0;
+      if(Array.isArray(st.players)){
+        st.players = st.players.filter(function(p){ return !isZombiePlayer(p); });
+      }
+      st.deletedPlayerKeys = uniq([].concat(st.deletedPlayerKeys || [], ZOMBIE_CODES));
+      st.lastPurgedZombiePlayersAt = new Date().toISOString();
+      st.lastPurgedZombiePlayersCount = Math.max(0, before - (Array.isArray(st.players) ? st.players.length : before));
+    }catch(e){ console.warn('[V182 purgeZombieState]', e); }
+    return st;
+  }
+  window.bpV182PurgeZombieState = purgeZombieState;
+
+  function purgeCurrentState(reason){
+    try{
+      if(window.state && typeof window.state === 'object'){
+        purgeZombieState(window.state);
+      }
+    }catch(e){ console.warn('[V182 purgeCurrentState]', reason, e); }
+  }
+
+  // Purge au démarrage / après rendu, sans forcer de sauvegarde automatique.
+  function schedulePurge(reason){
+    try{ purgeCurrentState(reason); }catch(e){}
+    setTimeout(function(){ purgeCurrentState(reason + ' +100'); patchAdminList(); }, 100);
+    setTimeout(function(){ purgeCurrentState(reason + ' +700'); patchAdminList(); }, 700);
+  }
+
+  // Sécurise toutes les écritures app_state Supabase, même celles issues d'anciens blocs.
+  function sanitizePayload(payload){
+    try{
+      if(!payload) return payload;
+      if(Array.isArray(payload)){ payload.forEach(sanitizePayload); return payload; }
+      if(payload.data && typeof payload.data === 'object') purgeZombieState(payload.data);
+      else if(payload.players && typeof payload === 'object') purgeZombieState(payload);
+    }catch(e){ console.warn('[V182 sanitizePayload]', e); }
+    return payload;
+  }
+
+  var previousFetch = window.fetch ? window.fetch.bind(window) : null;
+  if(previousFetch && !window.fetch.__bpV182AntiZombieWrapped){
+    var wrappedFetch = async function(input, init){
+      var url = '';
+      try{ url = String((input && input.url) || input || ''); }catch(e){}
+      var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+      var isAppState = url.indexOf('/rest/v1/app_state') !== -1;
+
+      if(isAppState && init && init.body && method !== 'GET' && method !== 'HEAD'){
+        try{
+          var body = init.body;
+          if(typeof body === 'string'){
+            var parsed = JSON.parse(body);
+            sanitizePayload(parsed);
+            init = Object.assign({}, init, { body: JSON.stringify(parsed) });
+          }
+        }catch(e){ console.warn('[V182 fetch write sanitize]', e); }
+      }
+
+      var res = await previousFetch(input, init);
+
+      // Sécurise aussi les lectures app_state avant que le JS applicatif ne fusionne l'état.
+      if(isAppState && method === 'GET' && res && res.clone){
+        try{
+          var clone = res.clone();
+          var ct = String((clone.headers && clone.headers.get('content-type')) || '');
+          if(ct.indexOf('application/json') !== -1){
+            var json = await clone.json();
+            var changed = false;
+            function sanitizeRead(x){
+              if(x && x.data && typeof x.data === 'object'){
+                var before = Array.isArray(x.data.players) ? x.data.players.length : 0;
+                purgeZombieState(x.data);
+                var after = Array.isArray(x.data.players) ? x.data.players.length : before;
+                if(before !== after) changed = true;
+              }
+            }
+            if(Array.isArray(json)) json.forEach(sanitizeRead); else sanitizeRead(json);
+            if(changed){
+              return new Response(JSON.stringify(json), {
+                status: res.status,
+                statusText: res.statusText,
+                headers: res.headers
+              });
+            }
+          }
+        }catch(e){ /* ne jamais bloquer le chargement */ }
+      }
+      return res;
+    };
+    wrappedFetch.__bpV182AntiZombieWrapped = true;
+    window.fetch = wrappedFetch;
+  }
+
+  // Filtre minimal de la liste Admin, car USER/classements sont déjà OK.
+  function patchAdminList(){
+    try{
+      var list = document.getElementById('adminPlayers');
+      if(!list) return;
+      list.querySelectorAll('.admin-player-card').forEach(function(card){
+        var code = String((card.querySelector('.user-code') || {}).textContent || '').trim();
+        if(ZOMBIE_SET.has(code)) card.remove();
+      });
+    }catch(e){ console.warn('[V182 patchAdminList]', e); }
+  }
+
+  function wrapFn(name){
+    try{
+      var fn = window[name];
+      if(typeof fn === 'function' && !fn.__bpV182AntiZombieWrapped){
+        var wrapped = async function(){
+          purgeCurrentState(name + ':before');
+          patchAdminList();
+          var r = await fn.apply(this, arguments);
+          purgeCurrentState(name + ':after');
+          patchAdminList();
+          return r;
+        };
+        wrapped.__bpV182AntiZombieWrapped = true;
+        window[name] = wrapped;
+      }
+    }catch(e){ console.warn('[V182 wrapFn '+name+']', e); }
+  }
+
+  function installWrappers(){
+    [
+      'renderAdmin','renderAll','saveAdmin','saveOfficialScoresDay','calculateGains',
+      'openDay','closeDay','bpManualSaveBDD','bpV95SaveBDD','bpForceSaveSupabase',
+      'bpV77ForceCloudSave','bpCloudSave','bpCloudLoad','bpV77CloudLoadMerge'
+    ].forEach(wrapFn);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    installWrappers();
+    schedulePurge('DOMContentLoaded');
+  });
+  window.addEventListener('load', function(){
+    installWrappers();
+    schedulePurge('load');
+  });
+  setTimeout(function(){ installWrappers(); schedulePurge('late'); }, 1500);
 })();
 </script>
 
