@@ -2780,7 +2780,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
     </div>
     <div class="award-prize">100 FID</div>
   </div><div class="award-card">
-    <div class="award-icon">🦁</div>
+    <div class="award-icon">🐯</div>
     <div>
       <div class="award-title">Cannibale</div>
       <div class="award-desc">Nombre de points pris à d’autres joueurs</div>
@@ -6070,7 +6070,7 @@ function renderRanking(){
         value:`${sniper.value} score(s) exact(s)`
       }),
       renderAward({
-        icon:"🦁",
+        icon:"🐯",
         title:"Cannibale",
         desc:"Nombre de points pris à d’autres joueurs",
         prize:25,
@@ -17080,7 +17080,7 @@ window.BP_LOCAL_ONLY = true;
       renderAwardCard({icon:'⚽',title:'Striker',desc:'Plus longue série de pronostics gagnants consécutifs',prize:50,unit:'',valueLabel:'victoire(s)',metric:name=>longestSeriesFor(name,'win')}),
       renderAwardCard({icon:'🪦',title:'Loser',desc:'Plus longue série de pronostics perdants consécutifs',prize:25,unit:'',valueLabel:'défaite(s)',metric:name=>longestSeriesFor(name,'loss')}),
       renderAwardCard({icon:'🎯',title:'Sniper',desc:'Nombre de scores exacts validés',prize:100,unit:'',valueLabel:'score(s) exact(s)',metric:name=>exactCount(name)}),
-      renderAwardCard({icon:'🦁',title:'Cannibale',desc:'FID nets positifs cumulés pris sur les journées calculées',prize:25,unit:'FID',valueLabel:'',metric:name=>cannibaleScore(name)})
+      renderAwardCard({icon:'🐯',title:'Cannibale',desc:'FID nets positifs cumulés pris sur les journées calculées',prize:25,unit:'FID',valueLabel:'',metric:name=>cannibaleScore(name)})
     ].join('') + '<div class="help">Trophées recalculés à partir des mises calculées et stockées en BDD. Les ex-aequo sont affichés ensemble. Les prix spéciaux restent attribués à la fin de la compétition.</div>';
   }
 
@@ -17291,7 +17291,7 @@ window.BP_LOCAL_ONLY = true;
       card('⚽','Striker','Plus longue série de pronostics gagnants consécutifs',50,'','victoire(s)',name=>longest(name,true)),
       card('🪦','Loser','Plus longue série de pronostics perdants consécutifs',25,'','défaite(s)',name=>longest(name,false)),
       card('🎯','Sniper','Nombre de scores exacts validés',100,'','score(s) exact(s)',exact),
-      card('🦁','Cannibale','FID nets positifs cumulés sur les journées calculées',25,'FID','',cannibale)
+      card('🐯','Cannibale','FID nets positifs cumulés sur les journées calculées',25,'FID','',cannibale)
     ].join('') + '<div class="help">Les joueurs absents de la table Joueurs sont ignorés dans les trophées/classements dynamiques. Les ex-aequo sont affichés ensemble.</div>';
   }
 
@@ -20855,4 +20855,906 @@ window.BP_LOCAL_ONLY = true;
 })();
 </script>
 
+
+
+<style id="bp-v183-closed-draft-gray-style">
+/* V183 — Gris pour matchs non misés / brouillons sur journée fermée
+   Objectif : une journée fermée garde les mises validées en état validé,
+   mais les cartes sans mise validée deviennent entièrement grises. */
+#bets .bet-card.bp-closed-draft-gray{
+  background:linear-gradient(180deg,#2b2b2b,#171717)!important;
+  border-color:#4b5563!important;
+  opacity:.92!important;
+  filter:grayscale(.92)!important;
+}
+#bets .bet-card.bp-closed-draft-gray .bet-title{
+  background:linear-gradient(90deg,#3a3a3a,#1f1f1f)!important;
+  border-bottom-color:#555!important;
+}
+#bets .bet-card.bp-closed-draft-gray .match-info-panel,
+#bets .bet-card.bp-closed-draft-gray .prediction-derived,
+#bets .bet-card.bp-closed-draft-gray .bet-actions{
+  background:rgba(255,255,255,.035)!important;
+  border-color:rgba(255,255,255,.08)!important;
+}
+#bets .bet-card.bp-closed-draft-gray input,
+#bets .bet-card.bp-closed-draft-gray select{
+  background:#1b1b1b!important;
+  border-color:#555!important;
+  color:#bdbdbd!important;
+}
+#bets .bet-card.bp-closed-draft-gray .badge,
+#bets .bet-card.bp-closed-draft-gray .badge.closed{
+  background:#3f3f46!important;
+  color:#e5e7eb!important;
+  border:1px solid #6b7280!important;
+}
+#bets .bet-card.bp-closed-draft-gray .bet-status{
+  color:#d1d5db!important;
+  font-weight:800!important;
+}
+#bets .bet-card.bp-closed-draft-gray .action.secondary,
+#bets .bet-card.bp-closed-draft-gray button[disabled]{
+  background:#3f3f46!important;
+  color:#e5e7eb!important;
+  border:1px solid #6b7280!important;
+  opacity:1!important;
+}
+</style>
+
+<script id="bp-v184-closed-draft-gray-script">
+/* V184 — version légère : applique le gris uniquement après rendu Mes Pronos.
+   Correctif perf : suppression des listeners globaux click/change et du MutationObserver
+   qui relançaient le traitement en boucle à chaque micro-changement DOM. */
+(function(){
+  'use strict';
+  if(window.__BP_V184_CLOSED_DRAFT_GRAY__) return;
+  window.__BP_V184_CLOSED_DRAFT_GRAY__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function norm(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+
+  function currentDay(){
+    try{ if(typeof window.currentPronoDay === 'function') return Number(window.currentPronoDay()); }catch(e){}
+    try{ return Number(S().currentDay || 1); }catch(e){ return 1; }
+  }
+
+  function player(){
+    try{ if(typeof window.player === 'function'){ var p=window.player(); if(p && p.name) return p; } }catch(e){}
+    try{ if(typeof window.currentPlayer === 'function'){ var p2=window.currentPlayer(); if(p2 && p2.name) return p2; } }catch(e){}
+    var code='';
+    try{ code=localStorage.getItem(window.__BP_CURRENT_USER_KEY__ || 'bpwc_current_user_code') || ''; }catch(e){}
+    return arr(S().players).find(function(p){ return String(p.code || '') === String(code); }) || null;
+  }
+
+  function dayClosed(day){
+    try{ if(typeof window.pronoDayIsAvailable === 'function') return !window.pronoDayIsAvailable(day); }catch(e){}
+    try{ if(typeof window.isDayClosed === 'function') return !!window.isDayClosed(day); }catch(e){}
+    try{ return !!(S().closedDays && S().closedDays[day]); }catch(e){}
+    return false;
+  }
+
+  function matchId(card){
+    var id=String(card && card.id || '');
+    if(id.indexOf('betCard_')===0) return id.slice(8);
+    var el=card && card.querySelector ? card.querySelector('[data-match]') : null;
+    return el ? String(el.getAttribute('data-match') || '') : '';
+  }
+
+  function betFor(day, mid, playerName){
+    return arr(S().bets).find(function(b){
+      return Number(b.day) === Number(day) && String(b.matchId) === String(mid) && norm(b.player) === norm(playerName);
+    }) || null;
+  }
+
+  function isValidated(b){
+    return !!(b && String(b.status || '').toUpperCase() === 'VALIDATED');
+  }
+
+  function setTextOnce(el, txt){
+    if(el && el.textContent !== txt) el.textContent = txt;
+  }
+
+  function applyClosedDraftGray(){
+    var rows=document.getElementById('betRows');
+    if(!rows) return;
+
+    var day=currentDay();
+    var closed=dayClosed(day);
+    var p=player();
+
+    rows.querySelectorAll('.bet-card[id^="betCard_"]').forEach(function(card){
+      var b = p ? betFor(day, matchId(card), p.name) : null;
+      var shouldGray = closed && !isValidated(b);
+
+      if(card.classList.contains('bp-closed-draft-gray') !== shouldGray){
+        card.classList.toggle('bp-closed-draft-gray', shouldGray);
+      }
+      if(!shouldGray) return;
+
+      card.classList.add('lockedCard');
+      card.querySelectorAll('.scoreA,.scoreB,.stake,input,select').forEach(function(el){
+        if(!el.disabled) el.disabled = true;
+      });
+
+      var badge=card.querySelector('.bet-title .badge');
+      if(badge){
+        if(badge.className !== 'badge closed') badge.className='badge closed';
+        setTextOnce(badge, b ? 'Brouillon fermé' : 'Non misé');
+      }
+
+      var status=card.querySelector('.bet-status');
+      if(status){
+        if(status.className !== 'bet-status muted') status.className='bet-status muted';
+        setTextOnce(status, b ? 'Journée fermée · brouillon non validé' : 'Journée fermée · aucune mise validée');
+      }
+
+      var btn=card.querySelector('.bet-actions button');
+      if(btn){
+        if(!btn.disabled) btn.disabled=true;
+        if(btn.className !== 'action secondary') btn.className='action secondary';
+        setTextOnce(btn,'Mise non disponible');
+      }
+    });
+  }
+
+  var pending=false;
+  function schedule(){
+    if(pending) return;
+    pending=true;
+    (window.requestAnimationFrame || window.setTimeout)(function(){
+      pending=false;
+      applyClosedDraftGray();
+    }, 0);
+  }
+
+  window.bpApplyClosedDraftGray = applyClosedDraftGray;
+
+  var oldRender = window.renderBets;
+  if(typeof oldRender === 'function' && !oldRender.__bpV184ClosedDraftGrayWrapped){
+    var wrapped=function(){
+      var r=oldRender.apply(this, arguments);
+      schedule();
+      return r;
+    };
+    wrapped.__bpV184ClosedDraftGrayWrapped = true;
+    window.renderBets = wrapped;
+    try{ renderBets = window.renderBets; }catch(e){}
+  }
+
+  document.addEventListener('DOMContentLoaded', schedule, {once:true});
+  window.addEventListener('load', schedule, {once:true});
+  setTimeout(schedule, 300);
+})();
+</script>
+
+
+
+<script>
+/* V188_SPECIAL_AWARDS_FROM_OFFICIAL_MATCHES — calcule les prix spéciaux depuis :
+   state.matches[].scoreA/scoreB + state.bets[] VALIDATED.
+   Ne dépend pas de settlementDetails ni des gains déjà calculés.
+   Aucun write BDD. Aucun MutationObserver. */
+(function(){
+  'use strict';
+  if(window.__BP_V188_SPECIAL_AWARDS_FROM_OFFICIAL_MATCHES__) return;
+  window.__BP_V188_SPECIAL_AWARDS_FROM_OFFICIAL_MATCHES__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d=0){ const x=Number(v); return Number.isFinite(x) ? x : d; }
+  function norm(v){ return String(v ?? '').trim(); }
+  function esc(v){ return String(v ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function fmt(v){
+    const x=Math.round(n(v,0)*100)/100;
+    return Number.isInteger(x) ? String(x) : String(x).replace('.',',');
+  }
+  function playerName(b){ return norm(b && (b.player || b.playerName || b.user || b.username)); }
+  function playerDisplay(name){
+    const p=arr(S().players).find(x=>norm(x.name)===norm(name));
+    return p ? (p.pseudo || p.name || name) : name;
+  }
+  function knownPlayers(){
+    return arr(S().players).map(p=>norm(p.name)).filter(Boolean);
+  }
+  function isValidatedBet(b){
+    return String((b && b.status) || '').toUpperCase() === 'VALIDATED';
+  }
+  function isRealBet(b){
+    const p=playerName(b);
+    if(!p || p==='RÉSERVE') return false;
+    if(String(b && b.matchId || '').indexOf('EVENT_')===0) return false;
+    return isValidatedBet(b) && n(b && (b.stake ?? b.mise),0)>0;
+  }
+  function scoreParts(v){
+    const p=String(v||'').split(/[-–]/);
+    return [n(p[0],NaN), n(p[1],NaN)];
+  }
+  function predA(b){ return n(b.scoreA ?? scoreParts(b.score)[0], NaN); }
+  function predB(b){ return n(b.scoreB ?? scoreParts(b.score)[1], NaN); }
+
+  function matchForBet(b){
+    const mid=String(b && b.matchId || '');
+    return arr(S().matches).find(m=>String(m.id)===mid) || null;
+  }
+  function hasOfficial(m){
+    if(!m) return false;
+    return m.scoreA !== null && m.scoreA !== undefined && m.scoreA !== '' &&
+           m.scoreB !== null && m.scoreB !== undefined && m.scoreB !== '';
+  }
+  function officialA(m){ return n(m.scoreA,NaN); }
+  function officialB(m){ return n(m.scoreB,NaN); }
+  function sign(x){ return x>0 ? 1 : x<0 ? -1 : 0; }
+
+  function evaluatedBets(){
+    const validNames=new Set(knownPlayers());
+    const seen=new Set();
+    const rows=[];
+    arr(S().bets).forEach(b=>{
+      if(!isRealBet(b)) return;
+      const name=playerName(b);
+      if(validNames.size && !validNames.has(name)) return;
+
+      const m=matchForBet(b);
+      if(!hasOfficial(m)) return;
+
+      const pa=predA(b), pb=predB(b), oa=officialA(m), ob=officialB(m);
+      if(!Number.isFinite(pa) || !Number.isFinite(pb) || !Number.isFinite(oa) || !Number.isFinite(ob)) return;
+
+      const key=[n(b.day,0), String(b.matchId||''), name].join('|');
+      if(seen.has(key)) return;
+      seen.add(key);
+
+      const stake=n(b.stake ?? b.mise,0);
+      const exact=(pa===oa && pb===ob);
+      const win=sign(pa-pb)===sign(oa-ob);
+      const gross=win ? (stake*2 + (exact ? 1.5 : 0)) : 0;
+      const net=Math.round((gross-stake)*100)/100;
+
+      rows.push({
+        day:n(b.day,0),
+        matchId:String(b.matchId||''),
+        player:name,
+        stake,
+        predA:pa, predB:pb,
+        officialA:oa, officialB:ob,
+        win, exact,
+        gross:Math.round(gross*100)/100,
+        net
+      });
+    });
+    rows.sort((a,b)=>a.day-b.day || a.matchId.localeCompare(b.matchId) || a.player.localeCompare(b.player));
+    return rows;
+  }
+
+  function byPlayer(){
+    const names=knownPlayers();
+    const base=new Map(names.map(name=>[name,{
+      name, bets:[], staked:0, gross:0, netPositive:0, exact:0
+    }]));
+    evaluatedBets().forEach(r=>{
+      if(!base.has(r.player)) base.set(r.player,{name:r.player,bets:[],staked:0,gross:0,netPositive:0,exact:0});
+      const p=base.get(r.player);
+      p.bets.push(r);
+      p.staked=Math.round((p.staked+r.stake)*100)/100;
+      p.gross=Math.round((p.gross+r.gross)*100)/100;
+      p.netPositive=Math.round((p.netPositive+Math.max(0,r.net))*100)/100;
+      if(r.exact) p.exact++;
+    });
+    return [...base.values()];
+  }
+
+  function longestSeries(p, type){
+    let best=0, cur=0;
+    p.bets.forEach(r=>{
+      const ok = type==='win' ? r.win : !r.win;
+      if(ok){ cur++; if(cur>best) best=cur; }
+      else cur=0;
+    });
+    return best;
+  }
+
+  function groups(rows, asc=false){
+    const sorted=rows
+      .filter(r=>Number.isFinite(n(r.value)) && n(r.value)>0)
+      .sort((a,b)=> asc
+        ? n(a.value)-n(b.value) || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr')
+        : n(b.value)-n(a.value) || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr')
+      );
+    const out=[];
+    sorted.forEach(r=>{
+      const last=out[out.length-1];
+      if(last && Number(last.value)===Number(r.value)) last.names.push(r.name);
+      else out.push({value:r.value, names:[r.name], extra:r.extra});
+    });
+    return out.slice(0,3);
+  }
+
+  function groupsRatio(players, asc){
+    const rows=players
+      .filter(p=>p.staked>=5)
+      .map(p=>({name:p.name,value:p.gross/p.staked, extra:p}));
+    return groups(rows, asc);
+  }
+
+  function standardRows(metric, asc=false){
+    return groups(byPlayer().map(p=>({name:p.name,value:metric(p),extra:p})), asc);
+  }
+
+  function line(g,i,unit, ratioMode){
+    const medals=['🥇','🥈','🥉'];
+    const names=g.names.map(playerDisplay).map(esc).join(', ');
+    if(ratioMode && g.extra){
+      return `<div class="hof-row hof-award-ratio-row">
+        <div class="hof-rank">${medals[i]||i+1}</div>
+        <div class="hof-name">${names}</div>
+        <div class="hof-score">${fmt(g.extra.staked)} FID</div>
+        <div class="hof-score">${fmt(g.extra.gross)} FID</div>
+        <div class="hof-score">${fmt(g.value)}</div>
+      </div>`;
+    }
+    const val = unit==='FID' ? `${fmt(g.value)} FID` : fmt(g.value);
+    return `<div class="hof-row" style="grid-template-columns:42px 1fr auto">
+      <div class="hof-rank">${medals[i]||i+1}</div>
+      <div class="hof-name">${names}</div>
+      <div class="hof-score">${val}</div>
+    </div>`;
+  }
+
+  function awardCard(cfg){
+    const gs=cfg.groups();
+    const leader=gs[0];
+    const leaderTxt=leader
+      ? `${leader.names.map(playerDisplay).map(esc).join(', ')} (${cfg.unit==='FID' ? fmt(leader.value)+' FID' : fmt(leader.value)}${cfg.label?' '+cfg.label:''})`
+      : (cfg.empty || 'Aucun calcul validé');
+
+    let head='';
+    if(cfg.ratio){
+      head=`<div class="hof-row hof-award-ratio-row hof-award-ratio-head">
+        <div>#</div><div>JOUEUR</div><div>FID MISÉS</div><div>FID GAGNÉS</div><div>RATIO</div>
+      </div>`;
+    }
+
+    const top=gs.length
+      ? head + gs.map((g,i)=>line(g,i,cfg.unit,cfg.ratio)).join('')
+      : `<div class="muted">${cfg.emptyDetail || 'Les leaders apparaîtront après calcul d’une journée.'}</div>`;
+
+    return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start">
+      <div class="award-icon">${cfg.icon}</div>
+      <div>
+        <div class="award-title">${cfg.title}</div>
+        <div class="award-desc">${cfg.desc}</div>
+        <div class="muted" style="margin:8px 0">Leader(s) actuel(s) : <b>${leaderTxt}</b></div>
+        <div class="hof-list">${top}</div>
+        ${cfg.note ? `<div class="muted" style="margin-top:6px">${cfg.note}</div>` : ''}
+      </div>
+      <div class="award-prize">${cfg.prize} FID</div>
+    </div>`;
+  }
+
+  function renderSpecialAwardsFromOfficialMatches(){
+    const el=document.getElementById('awards');
+    if(!el) return;
+
+    const players=byPlayer();
+    const fifty=groups(players.map(p=>({name:p.name,value:p.staked,extra:p})), false);
+
+    el.innerHTML = [
+      awardCard({
+        icon:'⚽', title:'Striker', prize:30,
+        desc:'Plus longue série de pronostics gagnants consécutifs',
+        label:'victoire(s)',
+        groups:()=>standardRows(p=>longestSeries(p,'win'))
+      }),
+      awardCard({
+        icon:'🪦', title:'Loser', prize:10,
+        desc:'Plus longue série de pronostics perdants consécutifs',
+        label:'défaite(s)',
+        groups:()=>standardRows(p=>longestSeries(p,'loss'))
+      }),
+      awardCard({
+        icon:'🎯', title:'Sniper', prize:60,
+        desc:'Nombre de scores exacts validés',
+        label:'score(s) exact(s)',
+        groups:()=>standardRows(p=>p.exact)
+      }),
+      awardCard({
+        icon:'🐯', title:'Cannibale', prize:25,
+        desc:'FID nets positifs cumulés sur les journées calculées',
+        unit:'FID',
+        groups:()=>standardRows(p=>p.netPositive)
+      }),
+      awardCard({
+        icon:'🐜', title:'Fourmi', prize:30,
+        desc:'Meilleur rendement : FID gagnés / FID misés — minimum 5 FID misés',
+        ratio:true,
+        groups:()=>groupsRatio(players,false),
+        empty:'Aucun joueur éligible',
+        emptyDetail:'Minimum 5 FID misés requis.',
+        note:'Minimum 5 FID misés requis.'
+      }),
+      awardCard({
+        icon:'🦗', title:'Cigale', prize:10,
+        desc:'Plus mauvais rendement : FID gagnés / FID misés — minimum 5 FID misés',
+        ratio:true,
+        groups:()=>groupsRatio(players,true),
+        empty:'Aucun joueur éligible',
+        emptyDetail:'Minimum 5 FID misés requis.',
+        note:'Minimum 5 FID misés requis.'
+      }),
+      (function(){
+        const gs=fifty;
+        const leader=gs[0];
+        const leaderTxt=leader
+          ? `${leader.names.map(playerDisplay).map(esc).join(', ')} (${fmt(leader.value)} FID / 50 FID)`
+          : 'Aucun joueur éligible';
+        const top=gs.length
+          ? gs.map((g,i)=>`<div class="hof-row" style="grid-template-columns:42px 1fr auto">
+              <div class="hof-rank">${['🥇','🥈','🥉'][i]||i+1}</div>
+              <div class="hof-name">${g.names.map(playerDisplay).map(esc).join(', ')}</div>
+              <div class="hof-score">${fmt(g.value)} FID / 50</div>
+            </div>`).join('')
+          : '<div class="muted">Les leaders apparaîtront après validation des mises.</div>';
+        return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start">
+          <div class="award-icon">🪙</div>
+          <div>
+            <div class="award-title">50 Cents !</div>
+            <div class="award-desc">Premier joueur à atteindre 50 FID de mises cumulées</div>
+            <div class="muted" style="margin:8px 0">Leader actuel : <b>${leaderTxt}</b></div>
+            <div class="hof-list">${top}</div>
+          </div>
+          <div class="award-prize">10 FID</div>
+        </div>`;
+      })()
+    ].join('');
+  }
+
+  window.bpRenderSpecialAwardsFromOfficialMatches = renderSpecialAwardsFromOfficialMatches;
+
+  const css=document.createElement('style');
+  css.textContent=`
+    .hof-award-ratio-row{grid-template-columns:42px 1fr 130px 130px 110px!important}
+    .hof-award-ratio-head{font-size:12px;color:var(--muted);font-weight:400}
+    @media(max-width:800px){
+      .hof-award-ratio-row{grid-template-columns:34px 1fr!important}
+      .hof-award-ratio-row .hof-score,
+      .hof-award-ratio-head div:nth-child(n+3){display:none!important}
+    }
+  `;
+  document.head.appendChild(css);
+
+  function after(){ try{ renderSpecialAwardsFromOfficialMatches(); }catch(e){ console.warn('[V188 awards official]',e); } }
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function'){
+    window.renderAll=function(){
+      const r=oldRenderAll.apply(this,arguments);
+      after();
+      return r;
+    };
+  }
+  const oldRenderRanking=window.renderRanking;
+  if(typeof oldRenderRanking==='function'){
+    window.renderRanking=function(){
+      const r=oldRenderRanking.apply(this,arguments);
+      after();
+      return r;
+    };
+  }
+  const oldManualLoad=window.bpManualLoadBDD;
+  if(typeof oldManualLoad==='function'){
+    window.bpManualLoadBDD=async function(){
+      const r=await oldManualLoad.apply(this,arguments);
+      setTimeout(after,80);
+      setTimeout(after,350);
+      return r;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    [100,500,1200,2500,4500].forEach(ms=>setTimeout(after,ms));
+  });
+  setTimeout(after,0);
+})();
+</script>
+
 </body></html>
+
+
+<script>
+/* V190_STRIKER_LOSER_CHRONO_CONFIRMED — audit confirmé Striker/Loser.
+   Règle : série continue sur tout le tournoi, sans reset par journée.
+   Tri strict : date du match ASC + heure ASC + matchNo ASC.
+   Données : uniquement mises VALIDATED + matchs ayant scoreA/scoreB officiels.
+   Exclusions : brouillons, matchs non scorés, EVENT_*, réserve, doublons joueur/match.
+
+   Ancien marqueur conservé ci-dessous :
+   V189_STRIKER_LOSER_CHRONO_FIX — correction ciblée Striker/Loser.
+   Règle corrigée : les séries gagnantes/perdantes sont calculées dans l'ordre
+   chronologique réel des matchs : date + heure + numéro de match.
+   Source : state.matches[].scoreA/scoreB + state.bets[] VALIDATED.
+   Aucun write BDD. Aucun MutationObserver. */
+(function(){
+  'use strict';
+  if(window.__BP_V189_STRIKER_LOSER_CHRONO_FIX__) return;
+  window.__BP_V189_STRIKER_LOSER_CHRONO_FIX__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d=0){ const x=Number(v); return Number.isFinite(x) ? x : d; }
+  function norm(v){ return String(v ?? '').trim(); }
+  function esc(v){ return String(v ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function fmt(v){ const x=Math.round(n(v,0)*100)/100; return Number.isInteger(x) ? String(x) : String(x).replace('.',','); }
+  function playerName(b){ return norm(b && (b.player || b.playerName || b.user || b.username)); }
+  function playerDisplay(name){ const p=arr(S().players).find(x=>norm(x.name)===norm(name)); return p ? (p.pseudo || p.name || name) : name; }
+  function knownPlayers(){ return arr(S().players).map(p=>norm(p.name)).filter(Boolean); }
+  function isValidatedBet(b){ return String((b && b.status) || '').toUpperCase() === 'VALIDATED'; }
+  function isRealBet(b){ const p=playerName(b); if(!p || p==='RÉSERVE') return false; if(String(b && b.matchId || '').indexOf('EVENT_')===0) return false; return isValidatedBet(b) && n(b && (b.stake ?? b.mise),0)>0; }
+  function scoreParts(v){ const p=String(v||'').split(/[-–]/); return [n(p[0],NaN), n(p[1],NaN)]; }
+  function predA(b){ return n(b.scoreA ?? scoreParts(b.score)[0], NaN); }
+  function predB(b){ return n(b.scoreB ?? scoreParts(b.score)[1], NaN); }
+  function matchForBet(b){ const mid=String(b && b.matchId || ''); return arr(S().matches).find(m=>String(m.id)===mid) || null; }
+  function hasOfficial(m){ return !!(m && m.scoreA !== null && m.scoreA !== undefined && m.scoreA !== '' && m.scoreB !== null && m.scoreB !== undefined && m.scoreB !== ''); }
+  function officialA(m){ return n(m.scoreA,NaN); }
+  function officialB(m){ return n(m.scoreB,NaN); }
+  function sign(x){ return x>0 ? 1 : x<0 ? -1 : 0; }
+
+  function dateKey(dateText){
+    const raw=norm(dateText).toLowerCase();
+    const months={janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12};
+    let m=raw.match(/(\d{1,2})\s+([a-zéûôîïèêàùç]+)\s+(\d{4})/i);
+    if(m){ return Number(m[3])*10000 + (months[m[2]]||0)*100 + Number(m[1]); }
+    m=raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if(m){ return Number(m[1])*10000 + Number(m[2])*100 + Number(m[3]); }
+    m=raw.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if(m){ return Number(m[3])*10000 + Number(m[2])*100 + Number(m[1]); }
+    return 99999999;
+  }
+  function timeKey(timeText){
+    const m=norm(timeText).match(/(\d{1,2})\s*[:hH]\s*(\d{2})?/);
+    if(!m) return 9999;
+    return Number(m[1])*60 + Number(m[2]||0);
+  }
+  function matchChronoKey(m){
+    return {
+      date: dateKey(m && (m.date || m.matchDate || m.kickoffDate)),
+      time: timeKey(m && (m.time || m.hour || m.kickoffTime)),
+      matchNo: n(m && (m.matchNo || m.no || String(m.id||'').replace(/\D/g,'')), 9999),
+      id: String(m && m.id || '')
+    };
+  }
+  function chronoSort(a,b){
+    return a.chrono.date-b.chrono.date || a.chrono.time-b.chrono.time || a.chrono.matchNo-b.chrono.matchNo || a.matchId.localeCompare(b.matchId) || a.player.localeCompare(b.player);
+  }
+
+  function evaluatedBets(){
+    const validNames=new Set(knownPlayers());
+    const seen=new Set();
+    const rows=[];
+    arr(S().bets).forEach(b=>{
+      if(!isRealBet(b)) return;
+      const name=playerName(b);
+      if(validNames.size && !validNames.has(name)) return;
+      const m=matchForBet(b);
+      if(!hasOfficial(m)) return;
+      const pa=predA(b), pb=predB(b), oa=officialA(m), ob=officialB(m);
+      if(!Number.isFinite(pa) || !Number.isFinite(pb) || !Number.isFinite(oa) || !Number.isFinite(ob)) return;
+      const key=[String(b.matchId||''), name].join('|');
+      if(seen.has(key)) return;
+      seen.add(key);
+      const stake=n(b.stake ?? b.mise,0);
+      const exact=(pa===oa && pb===ob);
+      const win=sign(pa-pb)===sign(oa-ob);
+      const gross=win ? (stake*2 + (exact ? 1.5 : 0)) : 0;
+      rows.push({
+        day:n(b.day,0), matchId:String(b.matchId||''), player:name, stake,
+        predA:pa, predB:pb, officialA:oa, officialB:ob,
+        win, exact,
+        gross:Math.round(gross*100)/100,
+        net:Math.round((gross-stake)*100)/100,
+        chrono:matchChronoKey(m)
+      });
+    });
+    return rows.sort(chronoSort);
+  }
+
+  function byPlayer(){
+    const base=new Map(knownPlayers().map(name=>[name,{name,bets:[],staked:0,gross:0,netPositive:0,exact:0}]));
+    evaluatedBets().forEach(r=>{
+      if(!base.has(r.player)) base.set(r.player,{name:r.player,bets:[],staked:0,gross:0,netPositive:0,exact:0});
+      const p=base.get(r.player);
+      p.bets.push(r);
+      p.staked=Math.round((p.staked+r.stake)*100)/100;
+      p.gross=Math.round((p.gross+r.gross)*100)/100;
+      p.netPositive=Math.round((p.netPositive+Math.max(0,r.net))*100)/100;
+      if(r.exact) p.exact++;
+    });
+    return [...base.values()];
+  }
+
+  function longestSeries(p,type){
+    let best=0, cur=0;
+    // IMPORTANT : p.bets est déjà trié date + heure + numéro de match.
+    p.bets.forEach(r=>{
+      const ok = type==='win' ? r.win : !r.win;
+      if(ok){ cur++; best=Math.max(best,cur); }
+      else cur=0;
+    });
+    return best;
+  }
+
+  function groups(rows, asc=false){
+    const sorted=rows.filter(r=>Number.isFinite(n(r.value)) && n(r.value)>0).sort((a,b)=> asc ? n(a.value)-n(b.value) || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr') : n(b.value)-n(a.value) || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr'));
+    const out=[];
+    sorted.forEach(r=>{ const last=out[out.length-1]; if(last && Number(last.value)===Number(r.value)) last.names.push(r.name); else out.push({value:r.value,names:[r.name],extra:r.extra}); });
+    return out.slice(0,3);
+  }
+  function standardRows(metric, asc=false){ return groups(byPlayer().map(p=>({name:p.name,value:metric(p),extra:p})), asc); }
+  function groupsRatio(players, asc){ return groups(players.filter(p=>p.staked>=5).map(p=>({name:p.name,value:p.gross/p.staked,extra:p})), asc); }
+  function line(g,i,unit,ratioMode){
+    const medals=['🥇','🥈','🥉'];
+    const names=g.names.map(playerDisplay).map(esc).join(', ');
+    if(ratioMode && g.extra){
+      return `<div class="hof-row hof-award-ratio-row"><div class="hof-rank">${medals[i]||i+1}</div><div class="hof-name">${names}</div><div class="hof-score">${fmt(g.extra.staked)} FID</div><div class="hof-score">${fmt(g.extra.gross)} FID</div><div class="hof-score">${fmt(g.value)}</div></div>`;
+    }
+    const val=unit==='FID' ? `${fmt(g.value)} FID` : fmt(g.value);
+    return `<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${medals[i]||i+1}</div><div class="hof-name">${names}</div><div class="hof-score">${val}</div></div>`;
+  }
+  function awardCard(cfg){
+    const gs=cfg.groups();
+    const leader=gs[0];
+    const leaderTxt=leader ? `${leader.names.map(playerDisplay).map(esc).join(', ')} (${cfg.unit==='FID' ? fmt(leader.value)+' FID' : fmt(leader.value)}${cfg.label?' '+cfg.label:''})` : (cfg.empty || 'Aucun calcul validé');
+    const head=cfg.ratio ? `<div class="hof-row hof-award-ratio-row hof-award-ratio-head"><div>#</div><div>JOUEUR</div><div>FID MISÉS</div><div>FID GAGNÉS</div><div>RATIO</div></div>` : '';
+    const top=gs.length ? head + gs.map((g,i)=>line(g,i,cfg.unit,cfg.ratio)).join('') : `<div class="muted">${cfg.emptyDetail || 'Les leaders apparaîtront après calcul d’une journée.'}</div>`;
+    return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start"><div class="award-icon">${cfg.icon}</div><div><div class="award-title">${cfg.title}</div><div class="award-desc">${cfg.desc}</div><div class="muted" style="margin:8px 0">Leader(s) actuel(s) : <b>${leaderTxt}</b></div><div class="hof-list">${top}</div>${cfg.note ? `<div class="muted" style="margin-top:6px">${cfg.note}</div>` : ''}</div><div class="award-prize">${cfg.prize} FID</div></div>`;
+  }
+
+  function renderSpecialAwardsChronoFix(){
+    const el=document.getElementById('awards');
+    if(!el) return;
+    const players=byPlayer();
+    const fifty=groups(players.map(p=>({name:p.name,value:p.staked,extra:p})), false);
+    el.innerHTML = [
+      awardCard({icon:'⚽',title:'Striker',prize:30,desc:'Plus longue série de pronostics gagnants consécutifs',label:'victoire(s)',groups:()=>standardRows(p=>longestSeries(p,'win'))}),
+      awardCard({icon:'🪦',title:'Loser',prize:10,desc:'Plus longue série de pronostics perdants consécutifs',label:'défaite(s)',groups:()=>standardRows(p=>longestSeries(p,'loss'))}),
+      awardCard({icon:'🎯',title:'Sniper',prize:60,desc:'Nombre de scores exacts validés',label:'score(s) exact(s)',groups:()=>standardRows(p=>p.exact)}),
+      awardCard({icon:'🐯',title:'Cannibale',prize:25,desc:'FID nets positifs cumulés sur les journées calculées',unit:'FID',groups:()=>standardRows(p=>p.netPositive)}),
+      awardCard({icon:'🐜',title:'Fourmi',prize:30,desc:'Meilleur rendement : FID gagnés / FID misés — minimum 5 FID misés',ratio:true,groups:()=>groupsRatio(players,false),empty:'Aucun joueur éligible',emptyDetail:'Minimum 5 FID misés requis.',note:'Minimum 5 FID misés requis.'}),
+      awardCard({icon:'🦗',title:'Cigale',prize:10,desc:'Plus mauvais rendement : FID gagnés / FID misés — minimum 5 FID misés',ratio:true,groups:()=>groupsRatio(players,true),empty:'Aucun joueur éligible',emptyDetail:'Minimum 5 FID misés requis.',note:'Minimum 5 FID misés requis.'}),
+      (function(){
+        const leader=fifty[0];
+        const leaderTxt=leader ? `${leader.names.map(playerDisplay).map(esc).join(', ')} (${fmt(leader.value)} FID / 50 FID)` : 'Aucun joueur éligible';
+        const top=fifty.length ? fifty.map((g,i)=>`<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${['🥇','🥈','🥉'][i]||i+1}</div><div class="hof-name">${g.names.map(playerDisplay).map(esc).join(', ')}</div><div class="hof-score">${fmt(g.value)} FID / 50</div></div>`).join('') : '<div class="muted">Les leaders apparaîtront après validation des mises.</div>';
+        return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start"><div class="award-icon">🪙</div><div><div class="award-title">50 Cents !</div><div class="award-desc">Premier joueur à atteindre 50 FID de mises cumulées</div><div class="muted" style="margin:8px 0">Leader actuel : <b>${leaderTxt}</b></div><div class="hof-list">${top}</div></div><div class="award-prize">10 FID</div></div>`;
+      })()
+    ].join('');
+  }
+
+  window.bpRenderSpecialAwardsChronoFix = renderSpecialAwardsChronoFix;
+  function after(){ try{ renderSpecialAwardsChronoFix(); }catch(e){ console.warn('[V189 awards chrono fix]', e); } }
+
+  const oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function') window.renderAll=function(){ const r=oldRenderAll.apply(this,arguments); after(); return r; };
+  const oldRenderRanking=window.renderRanking;
+  if(typeof oldRenderRanking==='function') window.renderRanking=function(){ const r=oldRenderRanking.apply(this,arguments); after(); return r; };
+  const oldManualLoad=window.bpManualLoadBDD;
+  if(typeof oldManualLoad==='function') window.bpManualLoadBDD=async function(){ const r=await oldManualLoad.apply(this,arguments); setTimeout(after,100); setTimeout(after,400); return r; };
+
+  document.addEventListener('DOMContentLoaded',()=>{ [150,600,1300,2600,4700].forEach(ms=>setTimeout(after,ms)); });
+  setTimeout(after,0);
+})();
+</script>
+
+
+<script>
+/* V191_STRIKER_LOSER_TIEBREAK_TOP3
+   - Striker plus discriminant : série gagnante puis scores exacts dans la série puis FID gagnés puis mise plus faible.
+   - Loser plus discriminant : série perdante puis perte FID puis FID misés puis série la plus récente.
+   - Affichage Top 3 individuels pour éviter les longues listes d'ex æquo.
+   - 50 Cents corrigé : basé sur toutes les mises VALIDATED, pas seulement les matchs scorés.
+*/
+(function(){
+  'use strict';
+  const W=window;
+  function S(){ return W.state || {}; }
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function n(v,d=0){ const x=Number(String(v ?? '').replace(',','.')); return Number.isFinite(x) ? x : d; }
+  function norm(v){ return String(v ?? '').trim(); }
+  function esc(v){ return norm(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function fmt(v){ const x=Math.round(n(v,0)*100)/100; return String(x).replace('.',','); }
+  function sign(x){ return x>0 ? 1 : x<0 ? -1 : 0; }
+  function isValidated(b){ return String(b && (b.status || b.statut || '')).toUpperCase() === 'VALIDATED'; }
+  function playerName(b){ return norm(b && (b.player || b.playerName || b.name || b.user || b.prenom)); }
+  function playerDisplay(name){
+    try{
+      const p=arr(S().players).find(x=>norm(x.name)===norm(name) || norm(x.prenom)===norm(name) || norm(x.pseudo)===norm(name));
+      if(p && typeof W.displayName==='function') return W.displayName(p);
+      return norm((p && (p.pseudo || p.name || p.prenom)) || name || '—');
+    }catch(e){ return norm(name || '—'); }
+  }
+  function knownPlayers(){
+    return arr(S().players).map(p=>norm(p.name || p.prenom || p.pseudo)).filter(Boolean);
+  }
+  function matchForBet(b){
+    const id=norm(b && (b.matchId || b.match_id || b.idMatch));
+    const day=n(b && b.day, NaN);
+    return arr(S().matches).find(m=>norm(m.id)===id || norm(m.matchId)===id || (Number.isFinite(day) && n(m.day,NaN)===day && norm(m.id)===id));
+  }
+  function hasOfficial(m){ return !!(m && m.scoreA !== null && m.scoreA !== undefined && m.scoreA !== '' && m.scoreB !== null && m.scoreB !== undefined && m.scoreB !== ''); }
+  function predA(b){
+    if(b && b.scoreA !== undefined && b.scoreA !== null && b.scoreA !== '') return n(b.scoreA,NaN);
+    const s=norm(b && b.score).match(/(-?\d+)\s*[-:]\s*(-?\d+)/); return s ? n(s[1],NaN) : NaN;
+  }
+  function predB(b){
+    if(b && b.scoreB !== undefined && b.scoreB !== null && b.scoreB !== '') return n(b.scoreB,NaN);
+    const s=norm(b && b.score).match(/(-?\d+)\s*[-:]\s*(-?\d+)/); return s ? n(s[2],NaN) : NaN;
+  }
+  function officialA(m){ return n(m && m.scoreA,NaN); }
+  function officialB(m){ return n(m && m.scoreB,NaN); }
+  function dateKey(dateText){
+    const raw=norm(dateText).toLowerCase();
+    const months={janvier:1,fevrier:2,février:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,août:8,septembre:9,octobre:10,novembre:11,decembre:12,décembre:12};
+    let m=raw.match(/(\d{1,2})\s+([a-zéûôîïèêàùç]+)\s+(\d{4})/i);
+    if(m) return Number(m[3])*10000 + (months[m[2]]||0)*100 + Number(m[1]);
+    m=raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/); if(m) return Number(m[1])*10000 + Number(m[2])*100 + Number(m[3]);
+    m=raw.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/); if(m) return Number(m[3])*10000 + Number(m[2])*100 + Number(m[1]);
+    return 99999999;
+  }
+  function timeKey(timeText){ const m=norm(timeText).match(/(\d{1,2})\s*[:hH]\s*(\d{2})?/); return m ? Number(m[1])*60 + Number(m[2]||0) : 9999; }
+  function matchChronoKey(m){
+    return {
+      date: dateKey(m && (m.date || m.matchDate || m.kickoffDate)),
+      time: timeKey(m && (m.time || m.hour || m.kickoffTime)),
+      matchNo: n(m && (m.matchNo || m.no || norm(m.id).replace(/\D/g,'')),9999),
+      id: norm(m && m.id)
+    };
+  }
+  function chronoValue(c){ return (c.date||99999999)*10000000 + (c.time||9999)*10000 + (c.matchNo||9999); }
+  function chronoSort(a,b){ return chronoValue(a.chrono)-chronoValue(b.chrono) || a.matchId.localeCompare(b.matchId) || a.player.localeCompare(b.player); }
+
+  function evaluatedBets(){
+    const validNames=new Set(knownPlayers());
+    const seen=new Set();
+    const rows=[];
+    arr(S().bets).forEach(b=>{
+      if(!isValidated(b)) return;
+      const name=playerName(b); if(!name) return;
+      if(validNames.size && !validNames.has(name)) return;
+      const m=matchForBet(b); if(!hasOfficial(m)) return;
+      const pa=predA(b), pb=predB(b), oa=officialA(m), ob=officialB(m);
+      if(!Number.isFinite(pa) || !Number.isFinite(pb) || !Number.isFinite(oa) || !Number.isFinite(ob)) return;
+      const key=[norm(b.matchId||b.match_id||b.idMatch), name].join('|'); if(seen.has(key)) return; seen.add(key);
+      const stake=n(b.stake ?? b.mise,0);
+      const exact=(pa===oa && pb===ob);
+      const win=sign(pa-pb)===sign(oa-ob);
+      const gross=win ? (stake*2 + (exact ? 1.5 : 0)) : 0;
+      rows.push({
+        day:n(b.day,0), matchId:norm(b.matchId||b.match_id||b.idMatch), player:name, stake,
+        win, exact, gross:Math.round(gross*100)/100, net:Math.round((gross-stake)*100)/100,
+        chrono:matchChronoKey(m)
+      });
+    });
+    return rows.sort(chronoSort);
+  }
+  function validatedBetsAll(){
+    const validNames=new Set(knownPlayers()); const seen=new Set(); const rows=[];
+    arr(S().bets).forEach(b=>{
+      if(!isValidated(b)) return;
+      const name=playerName(b); if(!name) return;
+      if(validNames.size && !validNames.has(name)) return;
+      const key=[norm(b.matchId||b.match_id||b.idMatch), name].join('|'); if(seen.has(key)) return; seen.add(key);
+      const m=matchForBet(b) || {};
+      rows.push({player:name, stake:n(b.stake ?? b.mise,0), matchId:norm(b.matchId||b.match_id||b.idMatch), chrono:matchChronoKey(m)});
+    });
+    return rows.sort(chronoSort);
+  }
+  function byPlayer(){
+    const base=new Map(knownPlayers().map(name=>[name,{name,bets:[],staked:0,gross:0,netPositive:0,exact:0}]));
+    evaluatedBets().forEach(r=>{
+      if(!base.has(r.player)) base.set(r.player,{name:r.player,bets:[],staked:0,gross:0,netPositive:0,exact:0});
+      const p=base.get(r.player);
+      p.bets.push(r); p.staked=Math.round((p.staked+r.stake)*100)/100; p.gross=Math.round((p.gross+r.gross)*100)/100;
+      p.netPositive=Math.round((p.netPositive+Math.max(0,r.net))*100)/100; if(r.exact) p.exact++;
+    });
+    return [...base.values()];
+  }
+
+  function bestSeriesDetail(p,type){
+    let cur=[]; let best=null;
+    function summarize(seq){
+      const len=seq.length;
+      const exact=seq.filter(x=>x.exact).length;
+      const gross=Math.round(seq.reduce((s,x)=>s+x.gross,0)*100)/100;
+      const stake=Math.round(seq.reduce((s,x)=>s+x.stake,0)*100)/100;
+      const loss=Math.round(seq.reduce((s,x)=>s+Math.max(0,-x.net),0)*100)/100;
+      const recent=seq.length ? chronoValue(seq[seq.length-1].chrono) : 0;
+      return {len, exact, gross, stake, loss, recent, seq};
+    }
+    function better(a,b){
+      if(!b) return true;
+      if(type==='win'){
+        return a.len>b.len || (a.len===b.len && (a.exact>b.exact || (a.exact===b.exact && (a.gross>b.gross || (a.gross===b.gross && a.stake<b.stake)))));
+      }
+      return a.len>b.len || (a.len===b.len && (a.loss>b.loss || (a.loss===b.loss && (a.stake>b.stake || (a.stake===b.stake && a.recent>b.recent)))));
+    }
+    p.bets.forEach(r=>{
+      const ok=type==='win' ? r.win : !r.win;
+      if(ok) cur.push(r);
+      else { if(cur.length){ const s=summarize(cur); if(better(s,best)) best=s; } cur=[]; }
+    });
+    if(cur.length){ const s=summarize(cur); if(better(s,best)) best=s; }
+    return best || {len:0, exact:0, gross:0, stake:0, loss:0, recent:0, seq:[]};
+  }
+  function strikerRows(players){
+    return players.map(p=>({name:p.name, d:bestSeriesDetail(p,'win')})).filter(x=>x.d.len>0)
+      .sort((a,b)=> b.d.len-a.d.len || b.d.exact-a.d.exact || b.d.gross-a.d.gross || a.d.stake-b.d.stake || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr')).slice(0,3);
+  }
+  function loserRows(players){
+    return players.map(p=>({name:p.name, d:bestSeriesDetail(p,'loss')})).filter(x=>x.d.len>0)
+      .sort((a,b)=> b.d.len-a.d.len || b.d.loss-a.d.loss || b.d.stake-a.d.stake || b.d.recent-a.d.recent || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr')).slice(0,3);
+  }
+  function groupRows(rows, asc=false){
+    return rows.filter(r=>Number.isFinite(n(r.value)) && n(r.value)>0)
+      .sort((a,b)=> asc ? n(a.value)-n(b.value) || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr') : n(b.value)-n(a.value) || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr')).slice(0,3);
+  }
+  function ratioRows(players, asc){ return groupRows(players.filter(p=>p.staked>=5).map(p=>({name:p.name,value:p.gross/p.staked,extra:p})),asc); }
+
+  function awardShell(icon,title,desc,prize,leaderTxt,body,note){
+    return `<div class="award-card" style="grid-template-columns:42px 1fr auto;align-items:start"><div class="award-icon">${icon}</div><div><div class="award-title">${title}</div><div class="award-desc">${desc}</div><div class="muted" style="margin:8px 0">Leader actuel : <b>${leaderTxt}</b></div><div class="hof-list">${body}</div>${note?`<div class="muted" style="margin-top:6px">${note}</div>`:''}</div><div class="award-prize">${prize} FID</div></div>`;
+  }
+  function medal(i){ return ['🥇','🥈','🥉'][i] || (i+1); }
+  function strikerCard(players){
+    const rows=strikerRows(players); const l=rows[0];
+    const leader=l ? `${esc(playerDisplay(l.name))} (${fmt(l.d.len)} victoire(s), ${fmt(l.d.exact)} exact, ${fmt(l.d.gross)} FID gagnés)` : 'Aucun calcul validé';
+    const body=rows.length ? rows.map((r,i)=>`<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${medal(i)}</div><div class="hof-name">${esc(playerDisplay(r.name))}<div class="muted">${r.d.exact} exact · ${fmt(r.d.gross)} FID gagnés · ${fmt(r.d.stake)} FID misés</div></div><div class="hof-score">${fmt(r.d.len)}</div></div>`).join('') : '<div class="muted">Les leaders apparaîtront après calcul d’une journée.</div>';
+    return awardShell('⚽','Striker','Plus longue série de pronostics gagnants consécutifs — tie-break : exacts, FID gagnés, mise plus faible',30,leader,body);
+  }
+  function loserCard(players){
+    const rows=loserRows(players); const l=rows[0];
+    const leader=l ? `${esc(playerDisplay(l.name))} (${fmt(l.d.len)} défaite(s), ${fmt(l.d.loss)} FID perdus)` : 'Aucun calcul validé';
+    const body=rows.length ? rows.map((r,i)=>`<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${medal(i)}</div><div class="hof-name">${esc(playerDisplay(r.name))}<div class="muted">${fmt(r.d.loss)} FID perdus · ${fmt(r.d.stake)} FID misés</div></div><div class="hof-score">${fmt(r.d.len)}</div></div>`).join('') : '<div class="muted">Les leaders apparaîtront après calcul d’une journée.</div>';
+    return awardShell('🪦','Loser','Plus longue série de pronostics perdants consécutifs — tie-break : perte FID, FID misés, série récente',10,leader,body);
+  }
+  function simpleCard(icon,title,desc,prize,rows,unit,label){
+    const l=rows[0]; const leader=l ? `${esc(playerDisplay(l.name))} (${unit==='FID'?fmt(l.value)+' FID':fmt(l.value)+(label?' '+label:'')})` : 'Aucun calcul validé';
+    const body=rows.length ? rows.map((r,i)=>`<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${medal(i)}</div><div class="hof-name">${esc(playerDisplay(r.name))}</div><div class="hof-score">${unit==='FID'?fmt(r.value)+' FID':fmt(r.value)}</div></div>`).join('') : '<div class="muted">Les leaders apparaîtront après calcul d’une journée.</div>';
+    return awardShell(icon,title,desc,prize,leader,body);
+  }
+  function ratioCard(icon,title,desc,prize,rows,empty){
+    const l=rows[0]; const leader=l ? `${esc(playerDisplay(l.name))} (${fmt(l.value)})` : empty;
+    const head='<div class="hof-row hof-award-ratio-row hof-award-ratio-head"><div>#</div><div>JOUEUR</div><div>FID MISÉS</div><div>FID GAGNÉS</div><div>RATIO</div></div>';
+    const body=rows.length ? head + rows.map((r,i)=>`<div class="hof-row hof-award-ratio-row"><div class="hof-rank">${medal(i)}</div><div class="hof-name">${esc(playerDisplay(r.name))}</div><div class="hof-score">${fmt(r.extra.staked)} FID</div><div class="hof-score">${fmt(r.extra.gross)} FID</div><div class="hof-score">${fmt(r.value)}</div></div>`).join('') : '<div class="muted">Minimum 5 FID misés requis.</div>';
+    return awardShell(icon,title,desc,prize,leader,body,'Minimum 5 FID misés requis.');
+  }
+  function fiftyCard(){
+    const totals=new Map(); validatedBetsAll().forEach(r=>totals.set(r.player, Math.round(((totals.get(r.player)||0)+r.stake)*100)/100));
+    const rows=[...totals.entries()].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value || playerDisplay(a.name).localeCompare(playerDisplay(b.name),'fr')).slice(0,3);
+    const l=rows[0]; const leader=l ? `${esc(playerDisplay(l.name))} (${fmt(l.value)} FID / 50 FID)` : 'Aucun joueur éligible';
+    const body=rows.length ? rows.map((r,i)=>`<div class="hof-row" style="grid-template-columns:42px 1fr auto"><div class="hof-rank">${medal(i)}</div><div class="hof-name">${esc(playerDisplay(r.name))}</div><div class="hof-score">${fmt(r.value)} FID / 50</div></div>`).join('') : '<div class="muted">Les leaders apparaîtront après validation des mises.</div>';
+    return awardShell('🪙','50 Cents !','Premier joueur à atteindre 50 FID de mises cumulées',10,leader,body);
+  }
+
+  function renderSpecialAwardsV191(){
+    const el=document.getElementById('awards'); if(!el) return;
+    const players=byPlayer();
+    el.innerHTML=[
+      strikerCard(players),
+      loserCard(players),
+      simpleCard('🎯','Sniper','Nombre de scores exacts validés',60,groupRows(players.map(p=>({name:p.name,value:p.exact}))),null,'score(s) exact(s)'),
+      simpleCard('🐯','Cannibale','FID nets positifs cumulés sur les journées calculées',25,groupRows(players.map(p=>({name:p.name,value:p.netPositive}))),'FID'),
+      ratioCard('🐜','Fourmi','Meilleur rendement : FID gagnés / FID misés — minimum 5 FID misés',30,ratioRows(players,false),'Aucun joueur éligible'),
+      ratioCard('🦗','Cigale','Plus mauvais rendement : FID gagnés / FID misés — minimum 5 FID misés',10,ratioRows(players,true),'Aucun joueur éligible'),
+      fiftyCard()
+    ].join('');
+  }
+
+  W.bpRenderSpecialAwardsV191 = renderSpecialAwardsV191;
+  function after(){ try{ renderSpecialAwardsV191(); }catch(e){ console.warn('[V191 awards tiebreak]',e); } }
+  const oldRenderAll=W.renderAll; if(typeof oldRenderAll==='function') W.renderAll=function(){ const r=oldRenderAll.apply(this,arguments); after(); return r; };
+  const oldRenderRanking=W.renderRanking; if(typeof oldRenderRanking==='function') W.renderRanking=function(){ const r=oldRenderRanking.apply(this,arguments); after(); return r; };
+  const oldManualLoad=W.bpManualLoadBDD; if(typeof oldManualLoad==='function') W.bpManualLoadBDD=async function(){ const r=await oldManualLoad.apply(this,arguments); setTimeout(after,120); setTimeout(after,450); return r; };
+  document.addEventListener('DOMContentLoaded',()=>{ [200,700,1500,3000,5200].forEach(ms=>setTimeout(after,ms)); });
+  setTimeout(after,0);
+})();
+</script>
