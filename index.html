@@ -5586,10 +5586,14 @@ function previousDayClosed(day){
   return isDayClosed(day-1);
 }
 function syncToOpenDay(){
-  const d=onlyOpenDay();
-  state.currentDay=d;
-  calendarDayDisplayed=d;
-  state.closed=isDayClosed(d);
+  // V249 — ne jamais déduire la journée courante depuis "la journée ouverte".
+  // La journée affichée reste celle sélectionnée ; le statut vient uniquement de closedDays[day].
+  const d = Number(state.currentDay || calendarDayDisplayed || pronoDayDisplayed || 1);
+  state.currentDay = d;
+  if(!Number.isFinite(Number(calendarDayDisplayed)) || Number(calendarDayDisplayed) < 1) calendarDayDisplayed = d;
+  if(!Number.isFinite(Number(pronoDayDisplayed)) || Number(pronoDayDisplayed) < 1) pronoDayDisplayed = d;
+  state.closed = isDayClosed(d);
+  return d;
 }
 function ensureScoresEnteredForCurrentDay(){
   const targetDay = scoreEntryDay();
@@ -5603,11 +5607,12 @@ function ensureScoresEnteredForCurrentDay(){
 
 
 function onlyOpenDay(){
+  // V249 — fonction consultative uniquement : elle ne doit jamais rouvrir une journée.
   const max=maxCalendarDay();
   for(let d=1; d<=max; d++){
-    if(!isDayClosed(d)) return d;
+    if(state.closedDays && (state.closedDays[d] === false || state.closedDays[String(d)] === false)) return d;
   }
-  return state.currentDay || 1;
+  return Number(state.currentDay || calendarDayDisplayed || pronoDayDisplayed || 1);
 }
 function enforceSingleOpenDay(openDay){
   if(!state.closedDays) state.closedDays={};
@@ -11369,20 +11374,24 @@ window.BP_LOCAL_ONLY = true;
   function nDay(day){ return Math.max(1, Math.min(maxDay(), Number(day||state.currentDay||1))); }
 
   function ensureClosedDays(){
+    // V249 — correction anti-réouverture.
+    // Ancien comportement KO : si aucune journée n'était explicitement ouverte,
+    // le code rouvrait automatiquement currentDay. Désormais, closedDays est la vérité.
     if(!window.state) return;
     if(!state.closedDays || typeof state.closedDays !== "object") state.closedDays = {};
     const max=maxDay();
-    let hasExplicitOpen=false;
     for(let d=1; d<=max; d++){
-      if(state.closedDays[d] === false) hasExplicitOpen=true;
+      const k=String(d);
+      let v = state.closedDays[k];
+      if(v === undefined) v = state.closedDays[d];
+      if(v === "true") v = true;
+      if(v === "false") v = false;
+      if(v === undefined) v = true; // défaut sécurisé : fermé, jamais réouvert automatiquement
+      state.closedDays[d] = !!v;
+      state.closedDays[k] = !!v;
     }
-    if(!hasExplicitOpen){
-      const current=nDay(state.currentDay||1);
-      for(let d=1; d<=max; d++){
-        if(state.closedDays[d] === undefined) state.closedDays[d] = d !== current;
-      }
-      state.closedDays[current]=false;
-    }
+    const current=nDay(state.currentDay||1);
+    state.closed = state.closedDays[String(current)] !== false;
     delete state.adminForcedOpenDays;
   }
 
@@ -24564,6 +24573,723 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
 })();
 </script>
 
+
+
+<script id="bp-v230-edit-button-final-fix">
+/* V230 — Correctif final bouton Modifier la mise.
+   Problème: plusieurs anciennes couches editBet/renderBets coexistent. Certaines remettent la carte en état VALIDATED
+   ou utilisent un currentDay différent, ce qui laisse les champs désactivés.
+   Solution: capture du clic Modifier en dernier, déverrouillage DOM direct de la carte affichée, puis revalidation via le flux BDD V149/V229.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V230_EDIT_BUTTON_FINAL_FIX__) return;
+  window.__BP_V230_EDIT_BUTTON_FINAL_FIX__ = true;
+
+  function A(x){ return Array.isArray(x) ? x : []; }
+  function S(){ return window.state || (window.state = {}); }
+  function now(){ return new Date().toISOString(); }
+  function norm(v){ return String(v == null ? '' : v).trim(); }
+  function midFromCard(card){
+    if(!card) return '';
+    var id = String(card.id || '');
+    if(id.indexOf('betCard_') === 0) return id.slice(8);
+    var el = card.querySelector('[data-match]');
+    return el ? String(el.getAttribute('data-match') || '') : '';
+  }
+  function currentPlayerSafe(){
+    try{ if(typeof window.player === 'function'){ var p = window.player(); if(p && p.name) return p; } }catch(e){}
+    try{ if(typeof window.currentPlayer === 'function'){ var p2 = window.currentPlayer(); if(p2 && p2.name) return p2; } }catch(e){}
+    try{
+      if(window.currentRole === 'user' && window.currentUserIndex != null && A(S().players)[window.currentUserIndex]) return A(S().players)[window.currentUserIndex];
+    }catch(e){}
+    var code = '';
+    try{ code = localStorage.getItem('bpwc_current_user_code') || ''; }catch(e){}
+    return A(S().players).find(function(p){ return norm(p.code) === norm(code); }) || null;
+  }
+  function dayFromCardOrState(card){
+    try{
+      var nav = document.querySelector('#bets .prono-day-title, #bets .day-nav-title, .prono-day-title, .day-nav-title');
+      var txt = nav ? (nav.textContent || '') : '';
+      var m = txt.match(/Journ[ée]e\s*(\d+)/i) || txt.match(/J\s*(\d+)/i);
+      if(m) return Number(m[1]);
+    }catch(e){}
+    try{ if(typeof window.currentPronoDay === 'function') return Number(window.currentPronoDay()); }catch(e){}
+    try{ if(window.pronoDayDisplayed) return Number(window.pronoDayDisplayed); }catch(e){}
+    return Number(S().currentDay || 1);
+  }
+  function isOpen(day){
+    try{ if(typeof window.pronoDayIsAvailable === 'function') return !!window.pronoDayIsAvailable(day); }catch(e){}
+    try{ if(typeof window.isDayClosed === 'function') return !window.isDayClosed(day); }catch(e){}
+    var c = S().closedDays || {};
+    return !(c[String(day)] === true || c[day] === true);
+  }
+  function findBet(day, mid, playerName){
+    return A(S().bets).find(function(b){
+      return Number(b.day) === Number(day) && String(b.matchId) === String(mid) && String(b.player) === String(playerName);
+    });
+  }
+  function outcome(a,b){ a=Number(a); b=Number(b); return a>b?'A':(a<b?'B':'D'); }
+  function outcomeLabel(pred, mid){
+    var m = A(S().matches).find(function(x){ return String(x.id) === String(mid); }) || {};
+    return pred === 'A' ? (m.teamA || 'Équipe A') : pred === 'B' ? (m.teamB || 'Équipe B') : 'Nul';
+  }
+  function updatePrediction(card){
+    if(!card) return;
+    var mid = midFromCard(card);
+    var a = Number((card.querySelector('.scoreA') || {}).value || 0);
+    var b = Number((card.querySelector('.scoreB') || {}).value || 0);
+    var box = card.querySelector('.prediction-derived');
+    if(box) box.innerHTML = 'Résultat pronostiqué : <b>' + outcomeLabel(outcome(a,b), mid) + '</b>';
+  }
+  function unlockCard(card, day, mid, playerName){
+    if(!card) throw new Error('Carte match introuvable.');
+    card.classList.remove('lockedCard');
+    card.setAttribute('data-bp-editing','1');
+
+    // Champ score/mise : force le déverrouillage même si d'anciens wrappers ont posé disabled inline.
+    card.querySelectorAll('.scoreA,.scoreB,.stake,input[data-match],select[data-match]').forEach(function(el){
+      el.disabled = false;
+      el.removeAttribute('disabled');
+      el.style.pointerEvents = 'auto';
+      el.style.opacity = '';
+      if(!el.__bpV230EditBound){
+        el.addEventListener('input', function(){ updatePrediction(card); }, true);
+        el.addEventListener('change', function(){ updatePrediction(card); }, true);
+        el.__bpV230EditBound = true;
+      }
+    });
+
+    // État local en brouillon uniquement pour l'UI. La BDD ne sera modifiée qu'à la revalidation.
+    var b = findBet(day, mid, playerName);
+    if(b){
+      b.status = 'DRAFT';
+      b.validatedAt = null;
+      b.editUnlockedAt = now();
+      b.updatedAt = now();
+    }
+
+    var badge = card.querySelector('.bet-title .badge');
+    if(badge){ badge.className = 'badge'; badge.textContent = 'Brouillon'; }
+    var st = card.querySelector('.bet-status');
+    if(st){ st.className = 'bet-status warn'; st.textContent = 'Modification en cours — valide à nouveau pour sauvegarder en BDD.'; }
+    var btn = card.querySelector('.bet-actions button.action, .bet-actions button');
+    if(btn){
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+      btn.className = 'action';
+      btn.textContent = 'Sauvegarder la mise';
+      btn.onclick = function(ev){ if(ev) ev.preventDefault(); return window.validateSingleBet(mid); };
+    }
+    updatePrediction(card);
+    var first = card.querySelector('.scoreA,.scoreB,.stake');
+    if(first && first.focus) setTimeout(function(){ first.focus({preventScroll:true}); }, 30);
+    return true;
+  }
+
+  window.editBet = function(matchId){
+    try{
+      var card = document.getElementById('betCard_' + matchId) || (document.activeElement && document.activeElement.closest ? document.activeElement.closest('.bet-card') : null);
+      var mid = String(matchId || midFromCard(card));
+      var day = dayFromCardOrState(card);
+      var p = currentPlayerSafe();
+      if(!p || !p.name) throw new Error('Joueur introuvable.');
+      if(!isOpen(day)) throw new Error('Les pronostics sont clôturés.');
+      window.editingMatchId = mid;
+      return unlockCard(card, day, mid, p.name);
+    }catch(e){
+      console.error('[V230 editBet]', e);
+      alert(e.message || String(e));
+      return false;
+    }
+  };
+  try{ editBet = window.editBet; }catch(e){}
+
+  // Capture prioritaire : évite qu'un ancien onclick/handler réactive l'ancien editBet.
+  document.addEventListener('click', function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('#betRows .bet-card button, .bet-actions button') : null;
+    if(!btn) return;
+    var txt = (btn.textContent || '').toLowerCase();
+    if(txt.indexOf('modifier') < 0) return;
+    var card = btn.closest('.bet-card');
+    if(!card) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    return window.editBet(midFromCard(card));
+  }, true);
+})();
+</script>
+
+
+<script id="bp-v236-save-click-final-source-fix">
+/* V236 — Fix final ciblé Sauvegarder la mise.
+   Le bug confirmé : validateSingleBet() et bpConfirmBet() fonctionnent en console.
+   Donc on force le bouton visible "Sauvegarder la mise" à appeler validateSingleBet(mid)
+   via click + pointerup, avec anti-double-clic. */
+(function(){
+  'use strict';
+  if(window.__BP_V236_SAVE_CLICK_FINAL__) return;
+  window.__BP_V236_SAVE_CLICK_FINAL__ = true;
+
+  function cardOf(el){ return el && el.closest ? el.closest('[id^="betCard_"], .bet-card') : null; }
+  function midFromCard(card){
+    if(!card) return '';
+    var id = String(card.id || '');
+    if(id.indexOf('betCard_') === 0) return id.slice(8);
+    var x = card.querySelector('[data-match]');
+    return x ? String(x.getAttribute('data-match') || '') : '';
+  }
+  function midFromButton(btn){
+    if(!btn) return '';
+    var direct = btn.getAttribute('data-bp-save-mid') || btn.getAttribute('data-match') || btn.getAttribute('data-bp-edit-mid');
+    if(direct) return String(direct);
+    return midFromCard(cardOf(btn));
+  }
+  function unlock(card){
+    if(!card) return;
+    card.querySelectorAll('.scoreA,.scoreB,.stake,input,select').forEach(function(el){
+      el.disabled = false;
+      el.removeAttribute('disabled');
+      el.readOnly = false;
+      el.style.pointerEvents = 'auto';
+      el.style.opacity = '1';
+    });
+  }
+  function callSave(mid, card, ev){
+    if(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    }
+    if(!mid) return false;
+    if(window.__BP_V236_SAVE_IN_PROGRESS__) return false;
+    window.__BP_V236_SAVE_IN_PROGRESS__ = true;
+    setTimeout(function(){ window.__BP_V236_SAVE_IN_PROGRESS__ = false; }, 800);
+    unlock(card || document.getElementById('betCard_' + mid));
+    console.log('[V236 SAVE]', mid);
+    if(typeof window.validateSingleBet !== 'function'){
+      alert('Erreur : validateSingleBet introuvable.');
+      return false;
+    }
+    return window.validateSingleBet(mid);
+  }
+  function bindSaveButtons(){
+    document.querySelectorAll('[id^="betCard_"] .bet-actions button, .bet-card .bet-actions button').forEach(function(btn){
+      var txt = String(btn.textContent || '').toLowerCase();
+      if(txt.indexOf('sauvegarder') < 0) return;
+      if(btn.__bpV236Bound) return;
+      var card = cardOf(btn);
+      var mid = midFromButton(btn) || midFromCard(card);
+      if(!mid) return;
+      btn.__bpV236Bound = true;
+      btn.type = 'button';
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+      btn.setAttribute('data-bp-save-mid', mid);
+      btn.style.pointerEvents = 'auto';
+      btn.style.cursor = 'pointer';
+      btn.style.position = 'relative';
+      btn.style.zIndex = '30';
+      var h = function(ev){ return callSave(mid, card, ev); };
+      btn.onclick = h;
+      btn.onpointerup = h;
+      btn.onmouseup = h;
+      btn.addEventListener('click', h, true);
+      btn.addEventListener('pointerup', h, true);
+      console.log('[V236 BOUND SAVE]', mid, btn);
+    });
+  }
+
+  var previousEdit = window.editBet;
+  if(typeof previousEdit === 'function' && !previousEdit.__bpV236Wrapped){
+    window.editBet = function(mid){
+      var r = previousEdit.apply(this, arguments);
+      [0,50,150,350].forEach(function(ms){ setTimeout(bindSaveButtons, ms); });
+      return r;
+    };
+    window.editBet.__bpV236Wrapped = true;
+    try{ editBet = window.editBet; }catch(e){}
+  }
+
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+    if(!btn) return;
+    if(String(btn.textContent || '').toLowerCase().indexOf('sauvegarder') < 0) return;
+    var card = cardOf(btn);
+    var mid = midFromButton(btn) || midFromCard(card);
+    return callSave(mid, card, ev);
+  }, true);
+
+  document.addEventListener('pointerup', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+    if(!btn) return;
+    if(String(btn.textContent || '').toLowerCase().indexOf('sauvegarder') < 0) return;
+    var card = cardOf(btn);
+    var mid = midFromButton(btn) || midFromCard(card);
+    return callSave(mid, card, ev);
+  }, true);
+
+  ['renderAll','renderBets','showSection'].forEach(function(name){
+    var old = window[name];
+    if(typeof old === 'function' && !old.__bpV236BindWrapped){
+      window[name] = function(){
+        var r = old.apply(this, arguments);
+        [0,80,250].forEach(function(ms){ setTimeout(bindSaveButtons, ms); });
+        return r;
+      };
+      window[name].__bpV236BindWrapped = true;
+    }
+  });
+
+  [0,200,800,1500].forEach(function(ms){ setTimeout(bindSaveButtons, ms); });
+})();
+</script>
+
+
+
+<script>
+/* V237 — ADMIN DAY CLOSE/OPEN BDD HARD FIX
+   Problème corrigé : le bouton ADMIN pouvait afficher "Fermée" sans écrire state.closedDays[J]=true en BDD.
+   Source de vérité : state.closedDays[day].
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V237_ADMIN_DAY_BDD_HARD_FIX__) return;
+  window.__BP_V237_ADMIN_DAY_BDD_HARD_FIX__ = true;
+
+  function S(){ return window.state || (window.state = {}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d){ v=Number(v); return Number.isFinite(v) ? v : d; }
+  function maxDay(){
+    var days=[];
+    arr(S().matches).forEach(function(m){ days.push(n(m.day,1)); });
+    arr(S().calendar).forEach(function(m){ days.push(n(m.day,1)); });
+    days.push(n(S().currentDay,1), n(S().adminSelectedDay,1));
+    return Math.max.apply(null, days.filter(Number.isFinite).concat([1]));
+  }
+  function clampDay(day){ return Math.max(1, Math.min(maxDay(), n(day,1))); }
+  function adminDay(){
+    var dom = document.getElementById('adminDay');
+    var d = dom ? n(String(dom.textContent||'').replace(/[^0-9]/g,''), null) : null;
+    return clampDay(S().adminSelectedDay || d || window.calendarDayDisplayed || S().currentDay || 1);
+  }
+  function role(){
+    try{ if(typeof window.getRole === 'function') return window.getRole(); }catch(e){}
+    return window.currentRole || S().currentRole || null;
+  }
+  function isAdmin(){ return String(role()||'').toLowerCase() === 'admin'; }
+  function ensureClosedDays(){
+    var s=S();
+    if(!s.closedDays || typeof s.closedDays !== 'object') s.closedDays = {};
+    for(var d=1; d<=maxDay(); d++){
+      if(s.closedDays[d] === undefined && s.closedDays[String(d)] === undefined) s.closedDays[d] = true;
+    }
+    return s.closedDays;
+  }
+  function setClosed(day, closed){
+    var s=S(), cd=ensureClosedDays();
+    day=clampDay(day);
+    cd[day] = !!closed;
+    cd[String(day)] = !!closed;
+    s.adminSelectedDay = day;
+    s.currentDay = day;
+    s.closed = !!closed;
+    delete s.adminForcedOpenDays;
+    s.lastSavedAt = new Date().toISOString();
+    s.lastSaveReason = (closed ? 'fermeture' : 'ouverture') + ' J' + day + ' admin V237';
+    return day;
+  }
+  function slim(data){
+    var c = JSON.parse(JSON.stringify(data || {}));
+    if(Array.isArray(c.logs)) c.logs = c.logs.slice(-300);
+    if(Array.isArray(c.settlementDetails)) c.settlementDetails = c.settlementDetails.slice(-2500);
+    delete c.__backupHistory; delete c.backupHistory; delete c.dailyBackups; delete c.autoBackups;
+    return c;
+  }
+  async function persistClosedDay(day, closed){
+    var s=S();
+    if(!Array.isArray(s.players) || s.players.length===0) throw new Error('Sécurité : state.players est vide. Sauvegarde BDD annulée.');
+    if(!Array.isArray(s.matches) || s.matches.length===0) throw new Error('Sécurité : state.matches est vide. Sauvegarde BDD annulée.');
+    var url = String(window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL || '').replace(/\/$/,'');
+    var key = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY || '';
+    var appId = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+    if(!url || !key) throw new Error('Supabase non configuré.');
+    var endpoint = url + '/rest/v1/app_state';
+    var headers = {
+      apikey:key,
+      authorization:'Bearer '+key,
+      'content-type':'application/json',
+      prefer:'resolution=merge-duplicates,return=representation'
+    };
+    var previous = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      var wr = await fetch(endpoint, {
+        method:'POST',
+        headers:headers,
+        body:JSON.stringify({id:appId, data:slim(s), updated_at:new Date().toISOString()})
+      });
+      if(!wr.ok) throw new Error('Écriture Supabase KO HTTP '+wr.status+' — '+(await wr.text()));
+      var rr = await fetch(endpoint+'?id=eq.'+encodeURIComponent(appId)+'&select=data,updated_at', {
+        method:'GET',
+        headers:{apikey:key, authorization:'Bearer '+key}
+      });
+      if(!rr.ok) throw new Error('Relecture Supabase KO HTTP '+rr.status);
+      var rows = await rr.json();
+      var remote = rows && rows[0] && rows[0].data;
+      var got = remote && remote.closedDays && (remote.closedDays[day] === !!closed || remote.closedDays[String(day)] === !!closed);
+      if(!got) throw new Error('Vérification BDD KO : closedDays['+day+'] n’est pas '+closed+'.');
+      return true;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = previous;
+    }
+  }
+  function renderSafe(){
+    try{ if(typeof window.renderAll === 'function') window.renderAll(); }
+    catch(e){ try{ if(typeof window.renderAdmin === 'function') window.renderAdmin(); }catch(_e){} }
+  }
+  async function toggleDay(closed){
+    if(!isAdmin()){ alert('Action réservée à l’ADMIN.'); return false; }
+    var day = adminDay();
+    var label = closed ? 'Fermer' : 'Ouvrir';
+    if(!confirm(label+' la journée '+day+' ?\n\nLa modification sera écrite immédiatement en BDD et relue pour vérification.')) return false;
+    setClosed(day, closed);
+    renderSafe();
+    try{
+      await persistClosedDay(day, closed);
+      renderSafe();
+      alert('Journée '+day+' '+(closed?'fermée':'ouverte')+' et vérifiée en BDD.');
+      console.log('[V237 ADMIN DAY]', {day:day, closed:closed, closedDays:S().closedDays, isDayClosed: (typeof window.isDayClosed==='function' ? window.isDayClosed(day) : null)});
+      return true;
+    }catch(e){
+      console.error('[V237 ADMIN DAY BDD]', e);
+      alert('Erreur BDD : la journée '+day+' n’a pas été confirmée.\n\n'+(e.message||e));
+      return false;
+    }
+  }
+
+  window.closeBets = function(){ return toggleDay(true); };
+  window.openBets = function(){ return toggleDay(false); };
+  try{ closeBets = window.closeBets; openBets = window.openBets; }catch(e){}
+
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+    if(!btn) return;
+    var t = String(btn.textContent || '').trim().toLowerCase();
+    if(t.indexOf('fermer la journée') >= 0){ ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); return window.closeBets(); }
+    if(t.indexOf('ouvrir la journée') >= 0){ ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); return window.openBets(); }
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V239 — CLOSED DAYS STRICT SOURCE OF TRUTH
+   Fix critique : anciens blocs V69/ensureClosedDays rouvraient automatiquement currentDay
+   quand toutes les journées étaient fermées. Désormais :
+   - state.closedDays[day] est la seule source de vérité ;
+   - une journée non définie est fermée par défaut ;
+   - fermer J6 ne peut plus être annulé par renderAll()/isDayClosed().
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V239_CLOSEDAYS_STRICT_FIX__) return;
+  window.__BP_V239_CLOSEDAYS_STRICT_FIX__ = true;
+
+  function S(){ return window.state || (window.state = {}); }
+  function n(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
+  function arr(v){ return Array.isArray(v)?v:[]; }
+  function appId(){ return window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026'; }
+  function cfg(){ return {url:String(window.BP_MANUAL_SUPABASE_URL||window.BP_SUPABASE_URL||'').replace(/\/$/,''), key:window.BP_MANUAL_SUPABASE_ANON_KEY||window.BP_SUPABASE_ANON_KEY||''}; }
+  function maxDay(){
+    var days=[];
+    arr(S().matches).forEach(function(m){ var d=n(m&&m.day,NaN); if(Number.isFinite(d)) days.push(d); });
+    return Math.max.apply(null, days.concat([34, n(S().currentDay,1), n(S().adminSelectedDay,1)]));
+  }
+  function dayKey(day){ return String(Math.max(1, Math.min(maxDay(), n(day, S().currentDay||1)))); }
+
+  function strictClosedDays(){
+    var s=S();
+    if(!s.closedDays || typeof s.closedDays !== 'object') s.closedDays = {};
+    for(var d=1; d<=maxDay(); d++){
+      var ks=String(d);
+      var v = s.closedDays[ks];
+      if(v === undefined) v = s.closedDays[d];
+      if(v === 'true') v = true;
+      if(v === 'false') v = false;
+      if(v === undefined) v = true; // défaut sécurisé : fermé
+      s.closedDays[ks] = !!v;
+      s.closedDays[d] = !!v;
+    }
+    return s.closedDays;
+  }
+
+  window.bpStrictClosedDays = strictClosedDays;
+
+  window.isDayClosed = function(day){
+    var cd = strictClosedDays();
+    var k = dayKey(day);
+    return cd[k] !== false; // seul false explicite = ouvert
+  };
+  try{ isDayClosed = window.isDayClosed; }catch(e){}
+
+  window.pronoDayIsAvailable = function(day){ return !window.isDayClosed(day); };
+  try{ pronoDayIsAvailable = window.pronoDayIsAvailable; }catch(e){}
+
+  function firstOpenDay(){
+    var cd=strictClosedDays();
+    for(var d=1; d<=maxDay(); d++) if(cd[String(d)] === false) return d;
+    return n(S().currentDay,1);
+  }
+  window.openDay = firstOpenDay;
+  window.onlyOpenDay = firstOpenDay;
+  try{ openDay=window.openDay; onlyOpenDay=window.onlyOpenDay; }catch(e){}
+
+  function selectedAdminDay(){
+    var el=document.getElementById('adminDay');
+    var fromDom=el ? n(String(el.textContent||'').replace(/[^0-9]/g,''),NaN) : NaN;
+    return n(S().adminSelectedDay, Number.isFinite(fromDom)?fromDom:n(S().currentDay,1));
+  }
+  function role(){ try{ if(typeof getRole==='function') return getRole(); }catch(e){} return window.currentRole || S().currentRole || ''; }
+  function isAdmin(){ return String(role()||'').toLowerCase()==='admin'; }
+
+  function setDay(day, closed){
+    var s=S(); day=n(day,1); strictClosedDays();
+    s.closedDays[String(day)] = !!closed;
+    s.closedDays[day] = !!closed;
+    s.currentDay = day;
+    s.adminSelectedDay = day;
+    s.closed = !!closed;
+    delete s.adminForcedOpenDays;
+    s.lastSavedAt = new Date().toISOString();
+    s.lastSaveReason = (closed?'fermeture':'ouverture')+' J'+day+' V239 strict';
+  }
+  function setOnlyOpen(day){
+    strictClosedDays();
+    for(var d=1; d<=maxDay(); d++){ S().closedDays[String(d)] = true; S().closedDays[d] = true; }
+    setDay(day,false);
+  }
+  function slim(x){
+    var c=JSON.parse(JSON.stringify(x||{}));
+    if(Array.isArray(c.logs)) c.logs=c.logs.slice(-300);
+    if(Array.isArray(c.settlementDetails)) c.settlementDetails=c.settlementDetails.slice(-2500);
+    delete c.__backupHistory; delete c.backupHistory; delete c.dailyBackups; delete c.autoBackups;
+    return c;
+  }
+  async function writeAndVerify(day, closed){
+    var c=cfg(); if(!c.url||!c.key) throw new Error('Supabase non configuré.');
+    var ep=c.url+'/rest/v1/app_state';
+    var headers={apikey:c.key, authorization:'Bearer '+c.key, 'content-type':'application/json', prefer:'resolution=merge-duplicates,return=representation'};
+    var prev=window.__BP_ALLOW_BDD_WRITE__; window.__BP_ALLOW_BDD_WRITE__=true;
+    try{
+      var wr=await fetch(ep,{method:'POST',headers:headers,body:JSON.stringify({id:appId(),data:slim(S()),updated_at:new Date().toISOString()})});
+      if(!wr.ok) throw new Error('Écriture Supabase KO HTTP '+wr.status+' — '+await wr.text());
+      var rr=await fetch(ep+'?id=eq.'+encodeURIComponent(appId())+'&select=data,updated_at',{method:'GET',headers:{apikey:c.key,authorization:'Bearer '+c.key}});
+      if(!rr.ok) throw new Error('Relecture Supabase KO HTTP '+rr.status+' — '+await rr.text());
+      var rows=await rr.json(); var remote=rows&&rows[0]&&rows[0].data;
+      var v=remote&&remote.closedDays&&(remote.closedDays[String(day)] ?? remote.closedDays[day]);
+      if(String(v)!==String(!!closed)) throw new Error('Vérification BDD KO : closedDays['+day+']='+v+' au lieu de '+!!closed);
+      Object.assign(S(), remote); strictClosedDays();
+      return rows[0];
+    }finally{ window.__BP_ALLOW_BDD_WRITE__=prev; }
+  }
+  function renderSafe(){ try{ if(typeof renderAll==='function') renderAll(); }catch(e){ try{ if(typeof renderAdmin==='function') renderAdmin(); }catch(_e){} } }
+
+  window.closeBets = async function(){
+    if(!isAdmin()){ alert('Action réservée à l’ADMIN.'); return false; }
+    var day=selectedAdminDay();
+    if(!confirm('Fermer la journée '+day+' ?')) return false;
+    setDay(day,true);
+    try{ await writeAndVerify(day,true); renderSafe(); alert('Journée '+day+' fermée et vérifiée en BDD.'); return true; }
+    catch(e){ console.error('[V239 closeBets]',e); alert('Erreur BDD : '+(e.message||e)); return false; }
+  };
+  window.openBets = async function(){
+    if(!isAdmin()){ alert('Action réservée à l’ADMIN.'); return false; }
+    var day=selectedAdminDay();
+    if(!confirm('Ouvrir la journée '+day+' ?\n\nToutes les autres journées seront fermées.')) return false;
+    setOnlyOpen(day);
+    try{ await writeAndVerify(day,false); renderSafe(); alert('Journée '+day+' ouverte et vérifiée en BDD.'); return true; }
+    catch(e){ console.error('[V239 openBets]',e); alert('Erreur BDD : '+(e.message||e)); return false; }
+  };
+  try{ closeBets=window.closeBets; openBets=window.openBets; }catch(e){}
+
+  document.addEventListener('click',function(ev){
+    var btn=ev.target&&ev.target.closest?ev.target.closest('button'):null; if(!btn) return;
+    var t=String(btn.textContent||'').toLowerCase();
+    if(t.indexOf('fermer la journée')>=0){ ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); window.closeBets(); }
+    if(t.indexOf('ouvrir la journée')>=0){ ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); window.openBets(); }
+  },true);
+
+  // Neutralise immédiatement les états mémoire rouverts par les anciens scripts.
+  strictClosedDays();
+  if(S().currentDay) S().closed = window.isDayClosed(S().currentDay);
+  console.log('[V239 CLOSED DAYS STRICT ACTIVE]', {currentDay:S().currentDay, j6:S().closedDays&&S().closedDays[6], isJ6Closed:window.isDayClosed(6)});
+})();
+</script>
+
+<script>
+/* V249 — CLOSEDAYS SOURCE OF TRUTH / NO AUTO-REOPEN
+   Base: V242. Correctif ciblé : empêcher toute réouverture au refresh quand toutes les journées sont fermées.
+   Ne touche pas aux joueurs/mises/questions ; corrige uniquement la gestion closedDays.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V249_CLOSEDAYS_NO_AUTO_REOPEN__) return;
+  window.__BP_V249_CLOSEDAYS_NO_AUTO_REOPEN__ = true;
+
+  function S(){ return window.state || (window.state = {}); }
+  function n(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
+  function maxDay(){
+    try{
+      if(typeof window.maxCalendarDay === 'function') return Math.max(1,n(window.maxCalendarDay(),34));
+      var m=(S().matches||[]).map(function(x){return n(x && x.day,0);});
+      return Math.max(34,1,...m);
+    }catch(e){ return 34; }
+  }
+  function normalizeClosedDays(){
+    var s=S();
+    if(!s.closedDays || typeof s.closedDays !== 'object' || Array.isArray(s.closedDays)) s.closedDays={};
+    for(var d=1; d<=maxDay(); d++){
+      var k=String(d);
+      var v=s.closedDays[k];
+      if(v===undefined) v=s.closedDays[d];
+      if(v==='true') v=true;
+      if(v==='false') v=false;
+      if(v===undefined) v=true; // sécurité : fermé par défaut, jamais ouvert par défaut
+      s.closedDays[k]=!!v;
+      s.closedDays[d]=!!v;
+    }
+    var cur=n(s.currentDay || window.calendarDayDisplayed || window.pronoDayDisplayed || 1,1);
+    s.currentDay=cur;
+    s.closed = s.closedDays[String(cur)] !== false;
+    delete s.adminForcedOpenDays;
+    return s.closedDays;
+  }
+
+  function isClosed(day){
+    normalizeClosedDays();
+    day=n(day,S().currentDay||1);
+    return S().closedDays[String(day)] !== false;
+  }
+
+  window.bpV249NormalizeClosedDays = normalizeClosedDays;
+  window.bpV249Check = function(day){
+    normalizeClosedDays();
+    day=n(day,S().currentDay||1);
+    return {
+      day: day,
+      closedDaysValue: S().closedDays[String(day)],
+      isDayClosed: isClosed(day),
+      currentDay: S().currentDay,
+      closed: S().closed
+    };
+  };
+
+  window.isDayClosed = function(day){ return isClosed(day); };
+  window.pronoDayIsAvailable = function(day){ return !isClosed(day); };
+
+  window.onlyOpenDay = function(){
+    normalizeClosedDays();
+    for(var d=1; d<=maxDay(); d++){
+      if(S().closedDays[String(d)] === false) return d;
+    }
+    return n(S().currentDay || window.calendarDayDisplayed || window.pronoDayDisplayed || 1,1);
+  };
+  window.openDay = window.onlyOpenDay;
+
+  window.syncToOpenDay = function(){
+    // Ne plus basculer automatiquement vers une journée ouverte.
+    var d=n(S().currentDay || window.calendarDayDisplayed || window.pronoDayDisplayed || 1,1);
+    S().currentDay=d;
+    try{ if(!Number.isFinite(Number(window.calendarDayDisplayed)) || Number(window.calendarDayDisplayed)<1) window.calendarDayDisplayed=d; }catch(e){}
+    try{ if(!Number.isFinite(Number(window.pronoDayDisplayed)) || Number(window.pronoDayDisplayed)<1) window.pronoDayDisplayed=d; }catch(e){}
+    S().closed=isClosed(d);
+    return d;
+  };
+
+  try{
+    isDayClosed=window.isDayClosed;
+    pronoDayIsAvailable=window.pronoDayIsAvailable;
+    onlyOpenDay=window.onlyOpenDay;
+    openDay=window.openDay;
+    syncToOpenDay=window.syncToOpenDay;
+  }catch(e){}
+
+  function patchStatus(){
+    normalizeClosedDays();
+    var cur=n(S().currentDay || 1,1);
+    var adminDayEl=document.getElementById('adminDay');
+    var adminStatus=document.getElementById('adminStatus');
+    var d=adminDayEl ? n(String(adminDayEl.textContent||'').replace(/[^0-9]/g,''),cur) : cur;
+    var c=isClosed(d);
+    if(adminStatus){
+      adminStatus.innerHTML = c
+        ? '<span class="day-status-closed bad">Fermée</span>'
+        : '<span class="day-status-open good">Ouverte</span>';
+    }
+    var pronoStatus=document.getElementById('pronoDayStatus');
+    if(pronoStatus){
+      var pd=n(window.pronoDayDisplayed || cur,cur);
+      var pc=isClosed(pd);
+      pronoStatus.innerHTML = pc
+        ? '<span class="day-status-closed">Journée fermée · mise non disponible</span>'
+        : '<span class="day-status-open">Journée ouverte aux mises</span>';
+    }
+  }
+
+  function afterRender(){
+    try{ patchStatus(); }catch(e){ console.warn('[V249 patchStatus]',e); }
+  }
+
+  ['renderAll','renderAdmin','renderBets','showSection','tab'].forEach(function(name){
+    var old=window[name];
+    if(typeof old !== 'function' || old.__bpV249Wrapped) return;
+    window[name]=function(){
+      normalizeClosedDays();
+      var r=old.apply(this,arguments);
+      afterRender();
+      setTimeout(afterRender,50);
+      setTimeout(afterRender,250);
+      return r;
+    };
+    window[name].__bpV249Wrapped=true;
+    try{ eval(name+'=window[name]'); }catch(e){}
+  });
+
+  // Relecture BDD au refresh : uniquement si la fonction existe déjà.
+  async function syncBDDOnce(){
+    if(window.__BP_V249_BDD_SYNC_DONE__) return;
+    window.__BP_V249_BDD_SYNC_DONE__=true;
+    try{
+      if(typeof window.bpUserReadBDDIntoState === 'function'){
+        await window.bpUserReadBDDIntoState({render:false});
+        normalizeClosedDays();
+        try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(e){}
+        afterRender();
+        console.log('[V249 BDD CLOSEDAYS SYNC OK]', window.bpV249Check(S().currentDay));
+      }else{
+        normalizeClosedDays();
+        afterRender();
+      }
+    }catch(e){
+      console.warn('[V249 BDD sync ignored]', e);
+      normalizeClosedDays();
+      afterRender();
+    }
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(syncBDDOnce,0); setTimeout(afterRender,500); });
+  }else{
+    setTimeout(syncBDDOnce,0);
+    setTimeout(afterRender,500);
+  }
+
+  console.log('[V249 CLOSEDAYS NO AUTO-REOPEN ACTIVE]');
+})();
+</script>
+
 </body></html>
 
 
@@ -25397,5 +26123,1004 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
   }
   document.addEventListener('DOMContentLoaded',()=>{ [200,800,1600,3200].forEach(ms=>setTimeout(renderHallV2,ms)); });
   setTimeout(renderHallV2,0);
+})();
+</script>
+
+<script id="bp-v231-edit-click-hard-fix">
+/* V231 — Fix ciblé Modifier la mise.
+   Objectif: terminer le bug UI uniquement.
+   Diagnostic confirmé: editBet('M017') en console déverrouille bien les champs, mais le clic bouton peut être intercepté/re-rendu.
+   Stratégie:
+   1) binding robuste sur tous les boutons Modifier après chaque rendu ;
+   2) capture globale prioritaire ;
+   3) double déverrouillage immédiat + différé pour résister aux décorateurs V212/V213 ;
+   4) aucun renderAll au clic Modifier ; render uniquement après sauvegarde via validateSingleBet.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V231_EDIT_CLICK_HARD_FIX__) return;
+  window.__BP_V231_EDIT_CLICK_HARD_FIX__ = true;
+
+  window.__BP_EDITING_BETS__ = window.__BP_EDITING_BETS__ || {};
+
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function stateSafe(){ return window.state || (window.state = {}); }
+  function norm(v){ return String(v == null ? '' : v).trim(); }
+  function now(){ return new Date().toISOString(); }
+
+  function cardFor(mid){ return document.getElementById('betCard_' + mid); }
+  function midFromCard(card){
+    if(!card) return '';
+    var id = String(card.id || '');
+    if(id.indexOf('betCard_') === 0) return id.slice(8);
+    var el = card.querySelector('[data-match]');
+    return el ? String(el.getAttribute('data-match') || '') : '';
+  }
+  function midFromButton(btn){
+    var attr = btn && btn.getAttribute ? (btn.getAttribute('data-bp-edit-mid') || btn.getAttribute('data-match')) : '';
+    if(attr) return String(attr);
+    var onclick = btn && btn.getAttribute ? String(btn.getAttribute('onclick') || '') : '';
+    var m = onclick.match(/editBet\(['"]([^'"]+)['"]\)/i) || onclick.match(/validateSingleBet\(['"]([^'"]+)['"]\)/i);
+    if(m) return m[1];
+    return midFromCard(btn && btn.closest ? btn.closest('.bet-card,[id^="betCard_"]') : null);
+  }
+  function currentPlayerSafe(){
+    try{ if(typeof window.player === 'function'){ var p = window.player(); if(p && p.name) return p; } }catch(e){}
+    try{ if(typeof window.currentPlayer === 'function'){ var p2 = window.currentPlayer(); if(p2 && p2.name) return p2; } }catch(e){}
+    try{ if(window.currentRole === 'user' && window.currentUserIndex != null && arr(stateSafe().players)[window.currentUserIndex]) return arr(stateSafe().players)[window.currentUserIndex]; }catch(e){}
+    var code='';
+    try{ code = localStorage.getItem('bpwc_current_user_code') || ''; }catch(e){}
+    return arr(stateSafe().players).find(function(p){ return norm(p.code) === norm(code); }) || null;
+  }
+  function currentDaySafe(){
+    try{ if(typeof window.currentPronoDay === 'function') return Number(window.currentPronoDay()); }catch(e){}
+    try{ if(window.pronoDayDisplayed) return Number(window.pronoDayDisplayed); }catch(e){}
+    return Number(stateSafe().currentDay || 1);
+  }
+  function isDayOpen(day){
+    try{ if(typeof window.pronoDayIsAvailable === 'function') return !!window.pronoDayIsAvailable(day); }catch(e){}
+    try{ if(typeof window.isDayClosed === 'function') return !window.isDayClosed(day); }catch(e){}
+    var c = stateSafe().closedDays || {};
+    return !(c[String(day)] === true || c[day] === true);
+  }
+  function outcome(a,b){ a=Number(a); b=Number(b); return a>b?'A':(a<b?'B':'D'); }
+  function outcomeLabel(pred, mid){
+    var m = arr(stateSafe().matches).find(function(x){ return String(x.id) === String(mid); }) || {};
+    return pred === 'A' ? (m.teamA || 'Équipe A') : pred === 'B' ? (m.teamB || 'Équipe B') : 'Nul';
+  }
+  function updatePrediction(card){
+    if(!card) return;
+    var mid = midFromCard(card);
+    var aEl = card.querySelector('.scoreA');
+    var bEl = card.querySelector('.scoreB');
+    var a = Number(aEl ? aEl.value : 0);
+    var b = Number(bEl ? bEl.value : 0);
+    var box = card.querySelector('.prediction-derived');
+    if(box) box.innerHTML = 'Résultat pronostiqué : <b>' + outcomeLabel(outcome(a,b), mid) + '</b>';
+  }
+  function findBet(day, mid, playerName){
+    return arr(stateSafe().bets).find(function(b){
+      return Number(b.day) === Number(day) && String(b.matchId) === String(mid) && String(b.player) === String(playerName);
+    });
+  }
+
+  function forceUnlock(mid, opts){
+    opts = opts || {};
+    var card = cardFor(mid);
+    if(!card) return false;
+    var p = currentPlayerSafe();
+    var day = currentDaySafe();
+    if(!p || !p.name){ if(!opts.silent) alert('Joueur introuvable.'); return false; }
+    if(!isDayOpen(day)){ if(!opts.silent) alert('Les pronostics sont clôturés.'); return false; }
+
+    window.__BP_EDITING_BETS__[mid] = true;
+    window.editingMatchId = mid;
+    card.dataset.bpEditing = '1';
+    card.setAttribute('data-bp-editing','1');
+    card.classList.add('bp-editing');
+    card.classList.remove('lockedCard');
+
+    // Déverrouillage complet de la carte visible.
+    card.querySelectorAll('.scoreA,.scoreB,.stake,input[data-match],select[data-match]').forEach(function(el){
+      el.disabled = false;
+      el.removeAttribute('disabled');
+      el.readOnly = false;
+      el.style.pointerEvents = 'auto';
+      el.style.opacity = '1';
+      if(!el.__bpV231EditBound){
+        el.addEventListener('input', function(){ updatePrediction(card); }, true);
+        el.addEventListener('change', function(){ updatePrediction(card); }, true);
+        el.__bpV231EditBound = true;
+      }
+    });
+
+    // Marque la mise locale en brouillon pour éviter qu'un décorateur la traite comme verrouillée.
+    var b = findBet(day, mid, p.name);
+    if(b){
+      b.status = 'DRAFT';
+      b.validatedAt = null;
+      b.editUnlockedAt = now();
+      b.updatedAt = now();
+    }
+
+    var badge = card.querySelector('.bet-title .badge');
+    if(badge){ badge.className = 'badge'; badge.textContent = 'Brouillon'; }
+    var st = card.querySelector('.bet-status');
+    if(st){ st.className = 'bet-status warn'; st.textContent = 'Modification en cours — sauvegarde BDD requise.'; }
+
+    var btn = card.querySelector('.bet-actions button.action, .bet-actions button');
+    if(btn){
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+      btn.className = 'action bp-v231-save-edit';
+      btn.textContent = '💾 Sauvegarder la mise';
+      btn.setAttribute('data-bp-save-mid', mid);
+      btn.removeAttribute('onclick');
+      btn.type = 'button';
+      btn.style.pointerEvents = 'auto';
+      btn.style.cursor = 'pointer';
+      btn.style.position = 'relative';
+      btn.style.zIndex = '20';
+      function bpV236RunSave(ev){
+        if(ev){
+          ev.preventDefault();
+          ev.stopPropagation();
+          if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+        }
+        if(btn.__bpV236SavingClick) return false;
+        btn.__bpV236SavingClick = true;
+        setTimeout(function(){ btn.__bpV236SavingClick = false; }, 800);
+        console.log('[V236 SAVE DIRECT]', mid);
+        if(typeof window.validateSingleBet !== 'function'){
+          alert('Erreur : validateSingleBet introuvable.');
+          return false;
+        }
+        return window.validateSingleBet(mid);
+      }
+      btn.onclick = bpV236RunSave;
+      btn.onpointerup = bpV236RunSave;
+      btn.onmouseup = bpV236RunSave;
+      btn.addEventListener('click', bpV236RunSave, true);
+      btn.addEventListener('pointerup', bpV236RunSave, true);
+    }
+
+    updatePrediction(card);
+    var first = card.querySelector('.scoreA,.scoreB,.stake');
+    if(first && first.focus) setTimeout(function(){ try{ first.focus({preventScroll:true}); }catch(e){ first.focus(); } }, 20);
+    try{ console.log('[V231 EDIT OPEN]', mid, {day:day, player:p.name}); }catch(e){}
+    return true;
+  }
+
+  async function saveEditedBet(mid){
+    try{
+      var card = cardFor(mid);
+      if(!card) throw new Error('Carte match introuvable.');
+      var result;
+      if(typeof window.validateSingleBet === 'function'){
+        result = window.validateSingleBet(mid);
+        if(result && typeof result.then === 'function') result = await result;
+      }
+      delete window.__BP_EDITING_BETS__[mid];
+      if(card){
+        delete card.dataset.bpEditing;
+        card.removeAttribute('data-bp-editing');
+        card.classList.remove('bp-editing');
+      }
+      try{ console.log('[V231 EDIT SAVE]', mid, result); }catch(e){}
+      return result;
+    }catch(e){
+      console.error('[V231 saveEditedBet]', e);
+      alert(e.message || String(e));
+      return false;
+    }
+  }
+
+  // Override final: la fonction console et le bouton passent par le même chemin.
+  window.editBet = function(matchId){
+    return forceUnlock(String(matchId || ''), {silent:false});
+  };
+  try{ editBet = window.editBet; }catch(e){}
+
+  // Capture prioritaire du clic Modifier.
+  document.addEventListener('click', function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(!btn) return;
+    var txt = (btn.textContent || '').toLowerCase();
+    var isEdit = txt.indexOf('modifier') >= 0 || btn.classList.contains('editBtn') || btn.hasAttribute('data-bp-edit-mid');
+    if(!isEdit) return;
+    var mid = midFromButton(btn);
+    if(!mid) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    forceUnlock(mid, {silent:false});
+    // Second passage après les éventuels décorateurs/renders synchrones.
+    setTimeout(function(){ if(window.__BP_EDITING_BETS__[mid]) forceUnlock(mid, {silent:true}); }, 60);
+  }, true);
+
+  // Rebind des boutons après chaque rendu, sans relancer de rendu.
+  function bindEditButtons(){
+    document.querySelectorAll('button.editBtn, .bet-actions button').forEach(function(btn){
+      var txt = (btn.textContent || '').toLowerCase();
+      if(txt.indexOf('modifier') < 0 && !btn.classList.contains('editBtn')) return;
+      var mid = midFromButton(btn);
+      if(!mid) return;
+      btn.setAttribute('data-bp-edit-mid', mid);
+      btn.removeAttribute('onclick');
+      btn.onclick = function(ev){
+        if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+        forceUnlock(mid, {silent:false});
+        setTimeout(function(){ if(window.__BP_EDITING_BETS__[mid]) forceUnlock(mid, {silent:true}); }, 60);
+        return false;
+      };
+    });
+  }
+
+  ['renderAll','renderBets','showSection'].forEach(function(name){
+    var old = window[name];
+    if(typeof old === 'function' && !old.__bpV231Wrapped){
+      window[name] = function(){
+        var r = old.apply(this, arguments);
+        setTimeout(bindEditButtons, 0);
+        setTimeout(bindEditButtons, 80);
+        return r;
+      };
+      window[name].__bpV231Wrapped = true;
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    [0,100,400,1000,2000].forEach(function(ms){ setTimeout(bindEditButtons, ms); });
+  });
+  setTimeout(bindEditButtons, 0);
+})();
+</script>
+
+
+<script>
+/* V235 — FIX FINAL CIBLÉ SAUVEGARDER APRÈS MODIFIER
+   Base: V231 où Modifier fonctionne.
+   Objectif unique: quand le bouton affiche "Sauvegarder la mise", appeler directement validateSingleBet(mid).
+   Aucun changement BDD, aucun renderAll, aucun changement de l'écran BDD. */
+(function(){
+  'use strict';
+  if(window.__BP_V235_SAVE_HANDLER_AFTER_EDIT_FIX__) return;
+  window.__BP_V235_SAVE_HANDLER_AFTER_EDIT_FIX__ = true;
+
+  function cardFor(mid){ return document.getElementById('betCard_' + mid); }
+  function midFromCard(card){
+    if(!card) return '';
+    var id = String(card.id || '');
+    if(id.indexOf('betCard_') === 0) return id.slice(8);
+    var el = card.querySelector('[data-match]');
+    return el ? String(el.getAttribute('data-match') || '') : '';
+  }
+  function closestCard(el){
+    return el && el.closest ? el.closest('[id^="betCard_"], .bet-card') : null;
+  }
+  function midFromButton(btn){
+    if(!btn) return '';
+    var direct = btn.getAttribute('data-bp-save-mid') || btn.getAttribute('data-match') || btn.getAttribute('data-bp-edit-mid');
+    if(direct) return String(direct);
+    var card = closestCard(btn);
+    return midFromCard(card);
+  }
+  function unlockControls(card){
+    if(!card) return;
+    card.querySelectorAll('.scoreA,.scoreB,.stake,input[data-match],select[data-match]').forEach(function(el){
+      el.disabled = false;
+      el.removeAttribute('disabled');
+      el.readOnly = false;
+      el.style.pointerEvents = 'auto';
+      el.style.opacity = '1';
+    });
+  }
+  async function hardValidate(mid, card){
+    if(!mid) return false;
+    card = card || cardFor(mid);
+    unlockControls(card);
+    if(typeof window.validateSingleBet !== 'function'){
+      alert('Erreur : validateSingleBet introuvable.');
+      return false;
+    }
+    try{ console.log('[V235 SAVE CLICK]', mid); }catch(e){}
+    return await window.validateSingleBet(mid);
+  }
+  function bindSaveButton(mid){
+    var card = cardFor(mid);
+    if(!card) return false;
+    var btns = Array.prototype.slice.call(card.querySelectorAll('.bet-actions button, button.action'));
+    var btn = btns.find(function(b){ return String(b.textContent || '').toLowerCase().indexOf('sauvegarder') >= 0; });
+    if(!btn) return false;
+    btn.disabled = false;
+    btn.removeAttribute('disabled');
+    btn.setAttribute('data-bp-save-mid', mid);
+    btn.onclick = function(ev){
+      if(ev){ ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); }
+      return hardValidate(mid, card);
+    };
+    return true;
+  }
+
+  // On garde le editBet de V231, puis on force le handler du bouton Sauvegarder juste après l'ouverture édition.
+  var previousEditBet = window.editBet;
+  if(typeof previousEditBet === 'function'){
+    window.editBet = function(matchId){
+      var mid = String(matchId || '');
+      var result = previousEditBet.apply(this, arguments);
+      setTimeout(function(){ bindSaveButton(mid); }, 0);
+      setTimeout(function(){ bindSaveButton(mid); }, 80);
+      setTimeout(function(){ bindSaveButton(mid); }, 200);
+      return result;
+    };
+    try{ editBet = window.editBet; }catch(e){}
+  }
+
+  // Capture globale uniquement sur le bouton Sauvegarder. Ne touche PAS au bouton Modifier.
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+    if(!btn) return;
+    var txt = String(btn.textContent || '').toLowerCase();
+    if(txt.indexOf('sauvegarder') < 0) return;
+    var card = closestCard(btn);
+    var mid = midFromButton(btn);
+    if(!mid) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();
+    hardValidate(mid, card);
+    return false;
+  }, true);
+})();
+</script>
+
+
+<script id="bp-v236-save-click-final-source-fix">
+/* V236 — Fix final ciblé Sauvegarder la mise.
+   Le bug confirmé : validateSingleBet() et bpConfirmBet() fonctionnent en console.
+   Donc on force le bouton visible "Sauvegarder la mise" à appeler validateSingleBet(mid)
+   via click + pointerup, avec anti-double-clic. */
+(function(){
+  'use strict';
+  if(window.__BP_V236_SAVE_CLICK_FINAL__) return;
+  window.__BP_V236_SAVE_CLICK_FINAL__ = true;
+
+  function cardOf(el){ return el && el.closest ? el.closest('[id^="betCard_"], .bet-card') : null; }
+  function midFromCard(card){
+    if(!card) return '';
+    var id = String(card.id || '');
+    if(id.indexOf('betCard_') === 0) return id.slice(8);
+    var x = card.querySelector('[data-match]');
+    return x ? String(x.getAttribute('data-match') || '') : '';
+  }
+  function midFromButton(btn){
+    if(!btn) return '';
+    var direct = btn.getAttribute('data-bp-save-mid') || btn.getAttribute('data-match') || btn.getAttribute('data-bp-edit-mid');
+    if(direct) return String(direct);
+    return midFromCard(cardOf(btn));
+  }
+  function unlock(card){
+    if(!card) return;
+    card.querySelectorAll('.scoreA,.scoreB,.stake,input,select').forEach(function(el){
+      el.disabled = false;
+      el.removeAttribute('disabled');
+      el.readOnly = false;
+      el.style.pointerEvents = 'auto';
+      el.style.opacity = '1';
+    });
+  }
+  function callSave(mid, card, ev){
+    if(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    }
+    if(!mid) return false;
+    if(window.__BP_V236_SAVE_IN_PROGRESS__) return false;
+    window.__BP_V236_SAVE_IN_PROGRESS__ = true;
+    setTimeout(function(){ window.__BP_V236_SAVE_IN_PROGRESS__ = false; }, 800);
+    unlock(card || document.getElementById('betCard_' + mid));
+    console.log('[V236 SAVE]', mid);
+    if(typeof window.validateSingleBet !== 'function'){
+      alert('Erreur : validateSingleBet introuvable.');
+      return false;
+    }
+    return window.validateSingleBet(mid);
+  }
+  function bindSaveButtons(){
+    document.querySelectorAll('[id^="betCard_"] .bet-actions button, .bet-card .bet-actions button').forEach(function(btn){
+      var txt = String(btn.textContent || '').toLowerCase();
+      if(txt.indexOf('sauvegarder') < 0) return;
+      if(btn.__bpV236Bound) return;
+      var card = cardOf(btn);
+      var mid = midFromButton(btn) || midFromCard(card);
+      if(!mid) return;
+      btn.__bpV236Bound = true;
+      btn.type = 'button';
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+      btn.setAttribute('data-bp-save-mid', mid);
+      btn.style.pointerEvents = 'auto';
+      btn.style.cursor = 'pointer';
+      btn.style.position = 'relative';
+      btn.style.zIndex = '30';
+      var h = function(ev){ return callSave(mid, card, ev); };
+      btn.onclick = h;
+      btn.onpointerup = h;
+      btn.onmouseup = h;
+      btn.addEventListener('click', h, true);
+      btn.addEventListener('pointerup', h, true);
+      console.log('[V236 BOUND SAVE]', mid, btn);
+    });
+  }
+
+  var previousEdit = window.editBet;
+  if(typeof previousEdit === 'function' && !previousEdit.__bpV236Wrapped){
+    window.editBet = function(mid){
+      var r = previousEdit.apply(this, arguments);
+      [0,50,150,350].forEach(function(ms){ setTimeout(bindSaveButtons, ms); });
+      return r;
+    };
+    window.editBet.__bpV236Wrapped = true;
+    try{ editBet = window.editBet; }catch(e){}
+  }
+
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+    if(!btn) return;
+    if(String(btn.textContent || '').toLowerCase().indexOf('sauvegarder') < 0) return;
+    var card = cardOf(btn);
+    var mid = midFromButton(btn) || midFromCard(card);
+    return callSave(mid, card, ev);
+  }, true);
+
+  document.addEventListener('pointerup', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+    if(!btn) return;
+    if(String(btn.textContent || '').toLowerCase().indexOf('sauvegarder') < 0) return;
+    var card = cardOf(btn);
+    var mid = midFromButton(btn) || midFromCard(card);
+    return callSave(mid, card, ev);
+  }, true);
+
+  ['renderAll','renderBets','showSection'].forEach(function(name){
+    var old = window[name];
+    if(typeof old === 'function' && !old.__bpV236BindWrapped){
+      window[name] = function(){
+        var r = old.apply(this, arguments);
+        [0,80,250].forEach(function(ms){ setTimeout(bindSaveButtons, ms); });
+        return r;
+      };
+      window[name].__bpV236BindWrapped = true;
+    }
+  });
+
+  [0,200,800,1500].forEach(function(ms){ setTimeout(bindSaveButtons, ms); });
+})();
+</script>
+
+
+<script>
+/* V238 — USER BDD READ BEFORE LOGIN + CLOSED DAYS HARD SYNC
+   Problème corrigé : la BDD peut avoir closedDays[6]=true, mais le USER garde un état mémoire/embarqué stale avec closedDays[6]=false.
+   Règle : au clic Entrer, on recharge TOUJOURS Supabase en lecture seule avant d'identifier le joueur et avant renderAll().
+   Aucune écriture BDD côté USER.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V238_USER_BDD_LOAD_CLOSEDAYS_FIX__) return;
+  window.__BP_V238_USER_BDD_LOAD_CLOSEDAYS_FIX__ = true;
+
+  function txt(e){ return (e && (e.message || e.error_description || e.details)) || String(e || 'Erreur inconnue'); }
+  function now(){ return new Date().toISOString(); }
+  function appId(){ return window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026'; }
+  function sbCfg(){
+    return {
+      url:String(window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL || '').replace(/\/$/,''),
+      key:window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY || ''
+    };
+  }
+  function btnLogin(){
+    return document.querySelector('#loginScreen .bp-login-submit') || document.querySelector('#loginScreen button.action') || null;
+  }
+  function setLoginLoading(on, label){
+    var b=btnLogin();
+    if(!b) return;
+    if(on){
+      if(!b.dataset.bpOldText) b.dataset.bpOldText = b.innerHTML;
+      b.disabled = true;
+      b.innerHTML = label || 'Chargement BDD…';
+    }else{
+      b.disabled = false;
+      if(b.dataset.bpOldText) b.innerHTML = b.dataset.bpOldText;
+      delete b.dataset.bpOldText;
+    }
+  }
+  function normalizeClosedDays(s){
+    if(!s || typeof s !== 'object') return s;
+    if(!s.closedDays || typeof s.closedDays !== 'object') s.closedDays = {};
+    var max=34;
+    try{
+      var days=[];
+      (Array.isArray(s.matches)?s.matches:[]).forEach(function(m){ var d=Number(m && m.day); if(Number.isFinite(d)) days.push(d); });
+      if(days.length) max=Math.max.apply(null, days.concat([34]));
+    }catch(e){}
+    for(var d=1; d<=max; d++){
+      var v = s.closedDays[d];
+      if(v === undefined) v = s.closedDays[String(d)];
+      if(v === 'true') v = true;
+      if(v === 'false') v = false;
+      if(v === undefined) v = true;
+      s.closedDays[d] = !!v;
+      s.closedDays[String(d)] = !!v;
+    }
+    var cd = s.closedDays[s.currentDay] !== undefined ? s.closedDays[s.currentDay] : s.closedDays[String(s.currentDay||'')];
+    if(cd !== undefined) s.closed = !!cd;
+    return s;
+  }
+  function replaceState(remote){
+    if(!remote || typeof remote !== 'object') throw new Error('Données BDD vides ou invalides.');
+    normalizeClosedDays(remote);
+    // Conservation minimale si la BDD ne contient pas les matchs, mais normalement Supabase doit tout contenir.
+    try{ if((!remote.matches || !remote.matches.length) && typeof starterMatches !== 'undefined') remote.matches = starterMatches; }catch(e){}
+    try{ state = remote; }catch(e){ window.state = remote; }
+    try{ window.state = state; }catch(e){ window.state = remote; }
+    window.__BP_LAST_USER_BDD_LOAD_AT__ = now();
+    return remote;
+  }
+
+  window.bpUserReadBDDIntoState = async function(opts){
+    opts = opts || {};
+    var cfg=sbCfg();
+    if(!cfg.url || !cfg.key) throw new Error('Supabase non configuré.');
+    var endpoint = cfg.url + '/rest/v1/app_state?id=eq.' + encodeURIComponent(appId()) + '&select=data,updated_at';
+    var r = await fetch(endpoint, {method:'GET', headers:{apikey:cfg.key, authorization:'Bearer '+cfg.key}});
+    if(!r.ok) throw new Error('Lecture Supabase KO HTTP '+r.status+' — '+(await r.text()));
+    var rows = await r.json();
+    var row = rows && rows[0];
+    if(!row || !row.data) throw new Error('Aucune ligne app_state trouvée pour '+appId());
+    var remote = replaceState(row.data);
+    console.log('[V238 USER BDD LOAD OK]', {
+      updated_at: row.updated_at,
+      currentDay: remote.currentDay,
+      closed: remote.closed,
+      j6: remote.closedDays && (remote.closedDays[6] ?? remote.closedDays['6'])
+    });
+    if(opts.render !== false){
+      try{ if(typeof renderAll === 'function') renderAll(); }catch(e){ console.warn('[V238 renderAll après load]', e); }
+    }
+    return remote;
+  };
+
+  var oldLogin = window.loginWithCode || (typeof loginWithCode === 'function' ? loginWithCode : null);
+  if(typeof oldLogin === 'function' && !oldLogin.__bpV238Wrapped){
+    window.loginWithCode = async function(){
+      var codeEl = document.getElementById('loginCode');
+      var code = String(codeEl && codeEl.value || '').trim();
+      if(!code){ return oldLogin.apply(this, arguments); }
+      setLoginLoading(true, 'Chargement BDD…');
+      try{
+        await window.bpUserReadBDDIntoState({render:false});
+      }catch(e){
+        console.error('[V238 USER BDD LOAD BEFORE LOGIN]', e);
+        var err=document.getElementById('loginError');
+        if(err){ err.textContent='Impossible de charger la BDD. Réessaie dans quelques secondes.'; err.style.display='block'; }
+        alert('Lecture BDD impossible avant connexion : '+txt(e));
+        return false;
+      }finally{
+        setLoginLoading(false);
+      }
+      return oldLogin.apply(this, arguments);
+    };
+    window.loginWithCode.__bpV238Wrapped = true;
+    try{ loginWithCode = window.loginWithCode; }catch(e){}
+  }
+
+  // Sécurité : si un USER est déjà connecté sur un état stale, on peut forcer la synchro via console ou au premier affichage Prono.
+  var syncedOnceAfterLoad = false;
+  async function syncOnceSoon(){
+    if(syncedOnceAfterLoad) return;
+    syncedOnceAfterLoad = true;
+    try{ await window.bpUserReadBDDIntoState({render:true}); }catch(e){ console.warn('[V238 sync once ignored]', e); }
+  }
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+    if(!btn) return;
+    var t = String(btn.textContent || '').toLowerCase();
+    if(t.indexOf('mes pronos') >= 0 || t.indexOf('pronostic') >= 0){ setTimeout(syncOnceSoon, 0); }
+  }, true);
+})();
+</script>
+
+
+<script>
+/* V240 — FINAL CLOSEDDAYS BDD TRUTH FIX
+   Correctif final placé tout en bas du fichier pour écraser les anciens blocs chargés après V239.
+   Problème : la BDD contient closedDays[6]=true, mais des scripts legacy remettent currentDay/J6 à false en mémoire.
+   Règle : closedDays[day] est la source unique. Aucune réouverture automatique.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V240_FINAL_CLOSEDAYS_BDD_TRUTH__) return;
+  window.__BP_V240_FINAL_CLOSEDAYS_BDD_TRUTH__ = true;
+
+  function S(){ return window.state || (window.state = {}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function num(v,d){ v = Number(v); return Number.isFinite(v) ? v : d; }
+  function maxDay(){
+    var days = [34, num(S().currentDay,1), num(S().adminSelectedDay,1)];
+    arr(S().matches).forEach(function(m){ var d=num(m && m.day,NaN); if(Number.isFinite(d)) days.push(d); });
+    arr(S().calendar).forEach(function(m){ var d=num(m && m.day,NaN); if(Number.isFinite(d)) days.push(d); });
+    return Math.max.apply(null, days);
+  }
+  function clampDay(day){ return Math.max(1, Math.min(maxDay(), num(day, num(S().currentDay,1)))); }
+  function normalizeClosedDays(source){
+    var s = source || S();
+    if(!s.closedDays || typeof s.closedDays !== 'object') s.closedDays = {};
+    for(var d=1; d<=maxDay(); d++){
+      var k = String(d);
+      var v = s.closedDays[k];
+      if(v === undefined) v = s.closedDays[d];
+      if(v === 'true') v = true;
+      if(v === 'false') v = false;
+      if(v === undefined) v = true; // défaut sécurisé : fermé
+      s.closedDays[k] = !!v;
+      s.closedDays[d] = !!v;
+    }
+    var cd = s.closedDays[String(s.currentDay)] !== undefined ? s.closedDays[String(s.currentDay)] : s.closedDays[s.currentDay];
+    if(cd !== undefined) s.closed = !!cd;
+    delete s.adminForcedOpenDays;
+    return s.closedDays;
+  }
+  function isClosed(day){
+    var cd = normalizeClosedDays();
+    day = clampDay(day);
+    var v = cd[String(day)];
+    if(v === undefined) v = cd[day];
+    return v !== false; // seul false explicite = ouverte
+  }
+  function selectedAdminDay(){
+    var el=document.getElementById('adminDay');
+    var dom = el ? num(String(el.textContent||'').replace(/[^0-9]/g,''), NaN) : NaN;
+    return clampDay(num(S().adminSelectedDay, Number.isFinite(dom) ? dom : num(S().currentDay,1)));
+  }
+  function role(){ try{ if(typeof window.getRole === 'function') return window.getRole(); }catch(e){} return window.currentRole || S().currentRole || ''; }
+  function isAdmin(){ return String(role()||'').toLowerCase() === 'admin'; }
+  function appId(){ return window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026'; }
+  function cfg(){ return {url:String(window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL || '').replace(/\/$/,''), key:window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY || ''}; }
+  function headers(json){ var c=cfg(); var h={apikey:c.key, authorization:'Bearer '+c.key}; if(json){ h['content-type']='application/json'; h.prefer='resolution=merge-duplicates,return=representation'; } return h; }
+  function slim(x){
+    var c = JSON.parse(JSON.stringify(x || {}));
+    if(Array.isArray(c.logs)) c.logs = c.logs.slice(-300);
+    if(Array.isArray(c.settlementDetails)) c.settlementDetails = c.settlementDetails.slice(-2500);
+    delete c.__backupHistory; delete c.backupHistory; delete c.dailyBackups; delete c.autoBackups;
+    return c;
+  }
+  async function readRemote(){
+    var c=cfg(); if(!c.url || !c.key) throw new Error('Supabase non configuré.');
+    var ep=c.url + '/rest/v1/app_state?id=eq.' + encodeURIComponent(appId()) + '&select=data,updated_at';
+    var r=await fetch(ep,{method:'GET',headers:headers(false)});
+    if(!r.ok) throw new Error('Lecture Supabase KO HTTP '+r.status+' — '+await r.text());
+    var rows=await r.json();
+    var row=rows && rows[0];
+    if(!row || !row.data) throw new Error('Aucune ligne app_state trouvée pour '+appId());
+    normalizeClosedDays(row.data);
+    return row;
+  }
+  function replaceState(remote){
+    normalizeClosedDays(remote);
+    try{ state = remote; }catch(e){ window.state = remote; }
+    window.state = remote;
+    normalizeClosedDays();
+  }
+  async function writeRemote(day, closed){
+    var c=cfg(); if(!c.url || !c.key) throw new Error('Supabase non configuré.');
+    day = clampDay(day);
+    normalizeClosedDays();
+    S().closedDays[String(day)] = !!closed;
+    S().closedDays[day] = !!closed;
+    S().currentDay = day;
+    S().adminSelectedDay = day;
+    S().closed = !!closed;
+    S().lastSavedAt = new Date().toISOString();
+    S().lastSaveReason = (closed ? 'fermeture' : 'ouverture') + ' J' + day + ' V240 final';
+    var ep=c.url + '/rest/v1/app_state';
+    var previous = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      var wr=await fetch(ep,{method:'POST',headers:headers(true),body:JSON.stringify({id:appId(),data:slim(S()),updated_at:new Date().toISOString()})});
+      if(!wr.ok) throw new Error('Écriture Supabase KO HTTP '+wr.status+' — '+await wr.text());
+      var row=await readRemote();
+      replaceState(row.data);
+      var v=S().closedDays[String(day)];
+      if(v !== !!closed) throw new Error('Vérification BDD KO : closedDays['+day+']='+v+' au lieu de '+!!closed);
+      return row;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = previous;
+    }
+  }
+
+  window.bpV240NormalizeClosedDays = normalizeClosedDays;
+  window.isDayClosed = function(day){ return isClosed(day); };
+  window.pronoDayIsAvailable = function(day){ return !isClosed(day); };
+  window.openDay = function(){
+    normalizeClosedDays();
+    for(var d=1; d<=maxDay(); d++) if(S().closedDays[String(d)] === false) return d;
+    return num(S().currentDay,1);
+  };
+  window.onlyOpenDay = window.openDay;
+  try{ isDayClosed=window.isDayClosed; pronoDayIsAvailable=window.pronoDayIsAvailable; openDay=window.openDay; onlyOpenDay=window.onlyOpenDay; }catch(e){}
+
+  function patchAdminDom(){
+    normalizeClosedDays();
+    var day=selectedAdminDay();
+    var closed=isClosed(day);
+    var status=document.getElementById('adminStatus');
+    if(status){
+      status.innerHTML = closed ? '<span class="day-status-closed">Fermée</span>' : '<span class="day-status-open">Ouverte</span>';
+    }
+    var dayEl=document.getElementById('adminDay');
+    if(dayEl) dayEl.textContent=String(day);
+    S().closed = closed;
+    return closed;
+  }
+  window.bpV240PatchAdminDom = patchAdminDom;
+
+  function renderSafe(){
+    try{ if(typeof window.renderAll === 'function') window.renderAll(); }
+    catch(e){ try{ if(typeof window.renderAdmin === 'function') window.renderAdmin(); }catch(_e){} }
+    setTimeout(patchAdminDom,0);
+    setTimeout(patchAdminDom,80);
+  }
+
+  var oldRenderAdmin = window.renderAdmin;
+  if(typeof oldRenderAdmin === 'function' && !oldRenderAdmin.__bpV240Wrapped){
+    window.renderAdmin = function(){
+      var r = oldRenderAdmin.apply(this, arguments);
+      patchAdminDom();
+      setTimeout(patchAdminDom,0);
+      return r;
+    };
+    window.renderAdmin.__bpV240Wrapped = true;
+    try{ renderAdmin = window.renderAdmin; }catch(e){}
+  }
+  var oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV240Wrapped){
+    window.renderAll = function(){
+      var r = oldRenderAll.apply(this, arguments);
+      normalizeClosedDays();
+      setTimeout(patchAdminDom,0);
+      return r;
+    };
+    window.renderAll.__bpV240Wrapped = true;
+    try{ renderAll = window.renderAll; }catch(e){}
+  }
+
+  window.bpUserReadBDDIntoState = async function(opts){
+    opts = opts || {};
+    var row = await readRemote();
+    replaceState(row.data);
+    console.log('[V240 BDD LOAD OK]', {updated_at:row.updated_at, currentDay:S().currentDay, j6:S().closedDays && S().closedDays['6'], isJ6Closed:isClosed(6)});
+    if(opts.render !== false) renderSafe();
+    return S();
+  };
+
+  window.closeBets = async function(){
+    if(!isAdmin()){ alert('Action réservée à l’ADMIN.'); return false; }
+    var day=selectedAdminDay();
+    if(!confirm('Fermer la journée '+day+' ?')) return false;
+    try{ await writeRemote(day,true); renderSafe(); alert('Journée '+day+' fermée et vérifiée en BDD.'); return true; }
+    catch(e){ console.error('[V240 closeBets]', e); alert('Erreur BDD : '+(e.message||e)); return false; }
+  };
+  window.openBets = async function(){
+    if(!isAdmin()){ alert('Action réservée à l’ADMIN.'); return false; }
+    var day=selectedAdminDay();
+    if(!confirm('Ouvrir la journée '+day+' ?\n\nToutes les autres journées seront fermées.')) return false;
+    normalizeClosedDays();
+    for(var d=1; d<=maxDay(); d++){ S().closedDays[String(d)] = true; S().closedDays[d] = true; }
+    try{ await writeRemote(day,false); renderSafe(); alert('Journée '+day+' ouverte et vérifiée en BDD.'); return true; }
+    catch(e){ console.error('[V240 openBets]', e); alert('Erreur BDD : '+(e.message||e)); return false; }
+  };
+  try{ closeBets=window.closeBets; openBets=window.openBets; }catch(e){}
+
+  // Au chargement ADMIN/USER : relecture BDD courte pour éliminer tout état embarqué stale.
+  setTimeout(function(){
+    normalizeClosedDays();
+    patchAdminDom();
+    readRemote().then(function(row){ replaceState(row.data); renderSafe(); })
+      .catch(function(e){ console.warn('[V240 initial BDD read ignored]', e); });
+  }, 250);
+
+  console.log('[V240 FINAL CLOSEDAYS BDD TRUTH ACTIVE]', {j6:S().closedDays && (S().closedDays['6'] ?? S().closedDays[6]), isJ6Closed:isClosed(6)});
+})();
+</script>
+
+
+<script>
+/* V242 — CLOSEDAYS RENDER WATCHDOG FIX
+   Diagnostic confirmé : BDD + isDayClosed OK, mais un rendu legacy réécrit le DOM en "Ouverte".
+   Correctif : closedDays[day] reste la seule vérité + patch DOM ADMIN/USER après CHAQUE rendu et mutation.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V242_CLOSEDAYS_RENDER_WATCHDOG__) return;
+  window.__BP_V242_CLOSEDAYS_RENDER_WATCHDOG__ = true;
+
+  function S(){ return window.state || (window.state = {}); }
+  function n(v,d){ v=Number(v); return Number.isFinite(v)?v:d; }
+  function maxDay(){
+    try{
+      if(typeof window.maxCalendarDay === 'function') return n(window.maxCalendarDay(),34);
+      var m=(S().matches||[]).map(function(x){return n(x.day,0);});
+      return Math.max(34, 1, ...m);
+    }catch(e){ return 34; }
+  }
+  function currentDay(){ return n(S().currentDay || S().adminSelectedDay || 1, 1); }
+  function pronoDay(){
+    try{ if(typeof window.currentPronoDay === 'function') return n(window.currentPronoDay(), currentDay()); }catch(e){}
+    try{ if(window.pronoDayDisplayed) return n(window.pronoDayDisplayed, currentDay()); }catch(e){}
+    return currentDay();
+  }
+  function adminDay(){
+    var el=document.getElementById('adminDay');
+    var v=el ? n(String(el.textContent||'').replace(/[^0-9]/g,''), NaN) : NaN;
+    return Number.isFinite(v) && v>0 ? v : currentDay();
+  }
+  function ensure(){
+    var s=S();
+    if(!s.closedDays || typeof s.closedDays !== 'object' || Array.isArray(s.closedDays)) s.closedDays={};
+    var md=maxDay();
+    for(var d=1; d<=md; d++){
+      var sv=s.closedDays[String(d)], nv=s.closedDays[d];
+      if(sv === undefined && nv !== undefined) s.closedDays[String(d)] = !!nv;
+      if(nv === undefined && sv !== undefined) s.closedDays[d] = !!sv;
+      if(sv === undefined && nv === undefined){
+        // Défaut sécurisé : fermée. Jamais de réouverture automatique du currentDay.
+        s.closedDays[String(d)] = true;
+        s.closedDays[d] = true;
+      }
+    }
+    if(window.__BP_DAY_LOCKS__ && typeof window.__BP_DAY_LOCKS__ === 'object'){
+      Object.keys(window.__BP_DAY_LOCKS__).forEach(function(k){
+        var d=n(k,0); if(!d) return;
+        var val=!!window.__BP_DAY_LOCKS__[k];
+        s.closedDays[String(d)] = val;
+        s.closedDays[d] = val;
+      });
+    }
+    s.closed = s.closedDays[String(currentDay())] === true;
+    return s.closedDays;
+  }
+  function closed(day){ ensure(); return S().closedDays[String(n(day,currentDay()))] === true; }
+  function setClosed(day,val){
+    day=n(day,currentDay()); ensure();
+    S().closedDays[String(day)] = !!val;
+    S().closedDays[day] = !!val;
+    if(!window.__BP_DAY_LOCKS__) window.__BP_DAY_LOCKS__ = {};
+    window.__BP_DAY_LOCKS__[String(day)] = !!val;
+    if(n(S().currentDay,1) === day) S().closed = !!val;
+  }
+
+  window.bpV242ClosedDaysEnsure = ensure;
+  window.bpV242SetDayClosedLocal = setClosed;
+  window.isDayClosed = function(day){ return closed(day); };
+  window.pronoDayIsAvailable = function(day){ return !closed(day); };
+  window.openDay = function(){
+    ensure();
+    for(var d=1; d<=maxDay(); d++) if(S().closedDays[String(d)] === false) return d;
+    return currentDay();
+  };
+  window.onlyOpenDay = window.openDay;
+  try{ isDayClosed=window.isDayClosed; pronoDayIsAvailable=window.pronoDayIsAvailable; openDay=window.openDay; onlyOpenDay=window.onlyOpenDay; }catch(e){}
+
+  function setStatusEl(el,isClosed){
+    if(!el) return;
+    el.innerHTML = isClosed
+      ? '<span class="day-status-closed bad">Fermée</span>'
+      : '<span class="day-status-open good">Ouverte</span>';
+  }
+
+  function patchAdmin(){
+    ensure();
+    var d=adminDay();
+    var c=closed(d);
+    var st=document.getElementById('adminStatus');
+    setStatusEl(st,c);
+    var dayEl=document.getElementById('adminDay');
+    if(dayEl) dayEl.textContent=String(d);
+    if(n(S().currentDay,1) === d) S().closed = c;
+    return c;
+  }
+
+  function patchUser(){
+    ensure();
+    var d=pronoDay();
+    var c=closed(d);
+    var st=document.getElementById('pronoDayStatus');
+    if(st){
+      st.innerHTML = c
+        ? '<span class="day-status-closed">Journée fermée · mise non disponible</span>'
+        : '<span class="day-status-open">Journée ouverte aux mises</span>';
+    }
+    var rows=document.getElementById('betRows');
+    if(rows && c){
+      rows.querySelectorAll('.bet-card').forEach(function(card){
+        card.classList.add('lockedCard');
+        card.querySelectorAll('.scoreA,.scoreB,.stake,input,select').forEach(function(el){ el.disabled=true; });
+        var badge=card.querySelector('.bet-title .badge');
+        if(badge){ badge.className='badge closed'; badge.textContent='Mise non disponible'; }
+        var status=card.querySelector('.bet-status');
+        if(status){ status.className='bet-status bad'; status.textContent='Journée fermée · modification impossible.'; }
+        card.querySelectorAll('.bet-actions button').forEach(function(btn){
+          btn.disabled=true;
+          if(!/modifier/i.test(btn.textContent||'')) btn.textContent='Journée fermée';
+        });
+      });
+    }
+    return c;
+  }
+
+  var scheduled=false;
+  function applyAll(){
+    scheduled=false;
+    try{ patchAdmin(); }catch(e){ console.warn('[V242 patchAdmin]',e); }
+    try{ patchUser(); }catch(e){ console.warn('[V242 patchUser]',e); }
+  }
+  function schedule(){
+    if(scheduled) return;
+    scheduled=true;
+    (window.requestAnimationFrame || window.setTimeout)(applyAll, 0);
+  }
+  window.bpV242ApplyClosedDaysTruth = function(){ applyAll(); return {day:currentDay(), j6:S().closedDays && S().closedDays['6'], isJ6Closed:closed(6)}; };
+
+  function wrap(name){
+    var old=window[name];
+    if(typeof old !== 'function' || old.__bpV242Wrapped) return;
+    window[name]=function(){
+      var r=old.apply(this,arguments);
+      schedule(); setTimeout(applyAll,50); setTimeout(applyAll,250); setTimeout(applyAll,900);
+      return r;
+    };
+    window[name].__bpV242Wrapped=true;
+    try{ eval(name+' = window[name]'); }catch(e){}
+  }
+  ['renderAll','renderAdmin','renderBets','showSection'].forEach(wrap);
+
+  // Surveille les réécritures legacy du DOM : si "Ouverte" revient, on repatche immédiatement.
+  try{
+    var obs=new MutationObserver(function(){ schedule(); });
+    obs.observe(document.body || document.documentElement, {childList:true, subtree:true, characterData:true});
+  }catch(e){}
+
+  // Watchdog léger : nécessaire car certains anciens scripts font des setTimeout tardifs après alert().
+  setInterval(applyAll, 300);
+  [0,50,150,300,700,1200,2000,3500].forEach(function(t){ setTimeout(applyAll,t); });
+
+  var oldClose=window.closeBets;
+  window.closeBets=async function(){
+    var d=adminDay();
+    var ok=true;
+    if(typeof oldClose==='function') ok=await oldClose.apply(this,arguments);
+    setClosed(d,true);
+    applyAll(); setTimeout(applyAll,100); setTimeout(applyAll,600); setTimeout(applyAll,1500);
+    return ok;
+  };
+  var oldOpen=window.openBets;
+  window.openBets=async function(){
+    var d=adminDay();
+    var ok=true;
+    if(typeof oldOpen==='function') ok=await oldOpen.apply(this,arguments);
+    if(ok!==false){
+      ensure();
+      for(var i=1;i<=maxDay();i++) setClosed(i,true);
+      setClosed(d,false);
+    }
+    applyAll(); setTimeout(applyAll,100); setTimeout(applyAll,600); setTimeout(applyAll,1500);
+    return ok;
+  };
+  try{ closeBets=window.closeBets; openBets=window.openBets; }catch(e){}
+
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(applyAll,0); setTimeout(applyAll,500); setTimeout(applyAll,1500); });
+  console.log('[V242 CLOSEDAYS RENDER WATCHDOG ACTIVE]');
 })();
 </script>
