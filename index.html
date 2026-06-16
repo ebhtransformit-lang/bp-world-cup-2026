@@ -354,7 +354,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V227 R2 J7 + PRONO TEAM STACK</title>
+<title>B Partner FIFA World Cup 2026 - V228A PLAYER CENTER HERO KPI</title>
 <!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
@@ -3187,69 +3187,96 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 
 
 <section id="scores">
-  <h2>📊 Mes scores</h2>
+  <div class="bp-v228-player-center">
 
-  <div class="card scores-block">
-    <h2>1. Bilan</h2>
-
-    <h3>Bilan journée</h3>
-    <div class="summary">
-      <div class="tile">✅ Bons pronos<strong id="dayGood">0</strong></div>
-      <div class="tile">🎯 Scores exacts<strong id="dayExact">0</strong></div>
-      <div class="tile">💰 Gain jour<strong id="dayGain">+0 FID</strong></div>
-      <div class="tile">📈 Rang<strong id="dayRank">+0 place</strong></div>
+    <div class="bp-v228-hero">
+      <div class="bp-v228-hero-main">
+        <div class="bp-v228-avatar" id="bpV228Avatar">🏆</div>
+        <div>
+          <div class="bp-v228-eyebrow">Mon centre de performance</div>
+          <h2 id="bpV228PlayerName">Joueur</h2>
+          <div class="bp-v228-sub" id="bpV228PlayerStatus">Performance personnelle FIFA World Cup 2026</div>
+        </div>
+      </div>
+      <div class="bp-v228-hero-stats">
+        <div><span>Solde actuel</span><strong id="bpV228Balance">— FID</strong></div>
+        <div><span>Classement</span><strong id="bpV228Rank">—</strong></div>
+        <div><span>Évolution</span><strong id="bpV228Trend">—</strong></div>
+        <div><span>Série</span><strong id="bpV228Streak">🔥 —</strong></div>
+      </div>
     </div>
 
-    <h3>Bilan compétition</h3>
-    <div class="summary">
-      <div class="tile">✅ Bons pronos<strong id="compGood">0</strong></div>
-      <div class="tile">🎯 Scores exacts<strong id="compExact">0</strong></div>
-      <div class="tile">💰 Gain cumulé<strong id="compGain">+0 FID</strong></div>
-      <div class="tile">📈 Évolution<strong id="compRank">+0 place</strong></div>
-    </div>
-  </div>
-
-  <div class="card scores-block">
-    <h2>2. Scores obtenus par journée</h2>
-    <table class="daily-recap-table">
-      <thead>
-        <tr>
-          <th>Journée</th>
-          <th>Match</th>
-          <th>Pronostic</th>
-          <th>Mise</th>
-          <th>Gain / perte</th>
-          <th>Score exact</th>
-          <th>Solde net</th>
-        </tr>
-      </thead>
-      <tbody id="personalLog">
-        <tr><td colspan="7" class="muted">Aucun pronostic validé à afficher.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="card scores-block secret-panel">
-    <h2>3. Mes questions secrètes</h2>
-
-    <div class="secret-field">
-      <label>🏆 Vainqueur final (+50 FID)</label>
-      <input id="secretWinner" placeholder="Ex. France">
+    <div class="bp-v228-kpis">
+      <div class="bp-v228-kpi"><div class="bp-v228-kpi-icon">🎯</div><span>Bons pronos</span><strong id="compGood">0</strong><small>Compétition</small></div>
+      <div class="bp-v228-kpi"><div class="bp-v228-kpi-icon">⭐</div><span>Scores exacts</span><strong id="compExact">0</strong><small>Précision</small></div>
+      <div class="bp-v228-kpi"><div class="bp-v228-kpi-icon">💰</div><span>Gain net</span><strong id="compGain">+0 FID</strong><small>Cumulé</small></div>
+      <div class="bp-v228-kpi"><div class="bp-v228-kpi-icon">🏆</div><span>Classement</span><strong id="compRank">+0 place</strong><small>Évolution</small></div>
     </div>
 
-    <div class="secret-field">
-      <label>🌟 Meilleur joueur (+25 FID)</label>
-      <input id="secretBestPlayer" placeholder="Ex. Kylian Mbappé">
+    <div class="bp-v228-day-strip">
+      <div class="bp-v228-day-card"><span>Journée</span><strong id="dayGood">0</strong><small>Bons pronos</small></div>
+      <div class="bp-v228-day-card"><span>Journée</span><strong id="dayExact">0</strong><small>Scores exacts</small></div>
+      <div class="bp-v228-day-card"><span>Gain jour</span><strong id="dayGain">+0 FID</strong><small>Net journée</small></div>
+      <div class="bp-v228-day-card"><span>Rang</span><strong id="dayRank">+0 place</strong><small>Mouvement</small></div>
     </div>
 
-    <div class="secret-field">
-      <label>⚽ Meilleur buteur (+25 FID)</label>
-      <input id="secretTopScorer" placeholder="Ex. Harry Kane">
+    <div class="card scores-block bp-v228-card bp-v228-table-card">
+      <div class="bp-v228-section-head">
+        <div>
+          <h2>📜 Timeline des pronostics</h2>
+          <p>Historique de tes mises validées, gains et scores exacts.</p>
+        </div>
+      </div>
+      <div class="bp-v228-table-wrap">
+        <table class="daily-recap-table">
+          <thead>
+            <tr>
+              <th>Journée</th>
+              <th>Match</th>
+              <th>Pronostic</th>
+              <th>Mise</th>
+              <th>Gain / perte</th>
+              <th>Score exact</th>
+              <th>Solde net</th>
+            </tr>
+          </thead>
+          <tbody id="personalLog">
+            <tr><td colspan="7" class="muted">Aucun pronostic validé à afficher.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <button class="action" onclick="sealSecrets()">Sceller mes choix</button>
-    <div class="muted" id="secretInfo" style="margin-top:16px">
-      Les choix seront sauvegardés après validation et visibles par l’admin.
+    <div class="card scores-block secret-panel bp-v228-card bp-v228-secret-card">
+      <div class="bp-v228-section-head">
+        <div>
+          <h2>🔒 Questions secrètes premium</h2>
+          <p>Ces choix sont scellés et visibles par l’admin après validation.</p>
+        </div>
+        <div class="bp-v228-lock">Scellé</div>
+      </div>
+
+      <div class="bp-v228-secret-grid">
+        <div class="secret-field bp-v228-secret-tile">
+          <label>🏆 Vainqueur final <small>+50 FID</small></label>
+          <input id="secretWinner" placeholder="Ex. France">
+        </div>
+
+        <div class="secret-field bp-v228-secret-tile">
+          <label>🌟 Meilleur joueur <small>+25 FID</small></label>
+          <input id="secretBestPlayer" placeholder="Ex. Kylian Mbappé">
+        </div>
+
+        <div class="secret-field bp-v228-secret-tile">
+          <label>⚽ Meilleur buteur <small>+25 FID</small></label>
+          <input id="secretTopScorer" placeholder="Ex. Harry Kane">
+        </div>
+      </div>
+
+      <button class="action bp-v228-secret-btn" onclick="sealSecrets()">Sceller mes choix</button>
+      <div class="muted" id="secretInfo" style="margin-top:16px">
+        Les choix seront sauvegardés après validation et visibles par l’admin.
+      </div>
     </div>
   </div>
 </section>
@@ -24131,6 +24158,409 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
     try{console.log(msg);}catch(e){}
     return {ok:ok, j6Exact:j6Exact, j7Exact:j7Exact, j7ResultOnly:j7ResultOnly};
   };
+})();
+</script>
+
+
+<style>
+/* V228A — Player Center : Hero + KPI premium, UX only */
+#scores .bp-v228-player-center{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:18px!important;
+}
+#scores .bp-v228-hero{
+  position:relative!important;
+  overflow:hidden!important;
+  border-radius:26px!important;
+  padding:24px!important;
+  border:1px solid rgba(122,0,25,.62)!important;
+  background:
+    radial-gradient(circle at 82% 16%,rgba(250,204,21,.16),transparent 24%),
+    radial-gradient(circle at 18% 8%,rgba(255,255,255,.07),transparent 26%),
+    linear-gradient(135deg,rgba(122,0,25,.72),rgba(16,16,16,.98) 48%,rgba(5,5,5,1))!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.48),0 0 42px rgba(122,0,25,.20)!important;
+}
+#scores .bp-v228-hero:after{
+  content:""!important;
+  position:absolute!important;
+  right:-80px!important;
+  top:-80px!important;
+  width:240px!important;
+  height:240px!important;
+  border-radius:50%!important;
+  background:rgba(122,0,25,.22)!important;
+  filter:blur(2px)!important;
+  pointer-events:none!important;
+}
+#scores .bp-v228-hero-main{
+  position:relative!important;
+  z-index:1!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:18px!important;
+  margin-bottom:18px!important;
+}
+#scores .bp-v228-avatar{
+  width:82px!important;
+  height:82px!important;
+  border-radius:24px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:0 0 82px!important;
+  font-size:34px!important;
+  font-weight:1000!important;
+  background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.02))!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),0 14px 34px rgba(0,0,0,.32)!important;
+  overflow:hidden!important;
+}
+#scores .bp-v228-avatar img{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+}
+#scores .bp-v228-eyebrow{
+  color:#facc15!important;
+  font-size:12px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+  letter-spacing:.7px!important;
+  text-transform:uppercase!important;
+  margin-bottom:8px!important;
+}
+#scores .bp-v228-hero h2{
+  margin:0!important;
+  color:#fff!important;
+  font-size:34px!important;
+  line-height:1.05!important;
+  font-weight:1000!important;
+  letter-spacing:.2px!important;
+  text-transform:uppercase!important;
+}
+#scores .bp-v228-sub{
+  margin-top:8px!important;
+  color:#d6d6d6!important;
+  font-size:13px!important;
+  font-weight:800!important;
+}
+#scores .bp-v228-hero-stats{
+  position:relative!important;
+  z-index:1!important;
+  display:grid!important;
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:10px!important;
+}
+#scores .bp-v228-hero-stats > div{
+  min-height:74px!important;
+  padding:12px!important;
+  border-radius:18px!important;
+  background:rgba(0,0,0,.28)!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+}
+#scores .bp-v228-hero-stats span{
+  display:block!important;
+  color:#bdbdbd!important;
+  font-size:11px!important;
+  font-weight:900!important;
+  text-transform:uppercase!important;
+  letter-spacing:.4px!important;
+}
+#scores .bp-v228-hero-stats strong{
+  display:block!important;
+  margin-top:8px!important;
+  color:#fff!important;
+  font-size:20px!important;
+  font-weight:1000!important;
+  font-variant-numeric:tabular-nums!important;
+}
+#scores .bp-v228-kpis{
+  display:grid!important;
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:12px!important;
+}
+#scores .bp-v228-kpi{
+  position:relative!important;
+  min-height:132px!important;
+  padding:16px!important;
+  border-radius:22px!important;
+  background:linear-gradient(180deg,rgba(24,24,24,.98),rgba(10,10,10,.98))!important;
+  border:1px solid rgba(122,0,25,.48)!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.32)!important;
+  overflow:hidden!important;
+}
+#scores .bp-v228-kpi:after{
+  content:""!important;
+  position:absolute!important;
+  inset:auto -30px -40px auto!important;
+  width:110px!important;
+  height:110px!important;
+  border-radius:50%!important;
+  background:rgba(122,0,25,.17)!important;
+}
+#scores .bp-v228-kpi-icon{
+  width:38px!important;
+  height:38px!important;
+  border-radius:14px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:rgba(122,0,25,.28)!important;
+  border:1px solid rgba(255,255,255,.10)!important;
+  font-size:19px!important;
+  margin-bottom:12px!important;
+}
+#scores .bp-v228-kpi span{
+  display:block!important;
+  color:#cfcfcf!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  text-transform:uppercase!important;
+}
+#scores .bp-v228-kpi strong{
+  display:block!important;
+  margin-top:6px!important;
+  color:#facc15!important;
+  font-size:28px!important;
+  font-weight:1000!important;
+  font-variant-numeric:tabular-nums!important;
+}
+#scores .bp-v228-kpi small{
+  display:block!important;
+  margin-top:6px!important;
+  color:#9f9f9f!important;
+  font-size:12px!important;
+  font-weight:800!important;
+}
+#scores .bp-v228-day-strip{
+  display:grid!important;
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:10px!important;
+}
+#scores .bp-v228-day-card{
+  padding:13px 14px!important;
+  border-radius:18px!important;
+  background:rgba(255,255,255,.045)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+}
+#scores .bp-v228-day-card span{
+  display:block!important;
+  color:#aaa!important;
+  font-size:11px!important;
+  font-weight:900!important;
+  text-transform:uppercase!important;
+}
+#scores .bp-v228-day-card strong{
+  display:block!important;
+  margin-top:6px!important;
+  color:#fff!important;
+  font-size:20px!important;
+  font-weight:1000!important;
+  font-variant-numeric:tabular-nums!important;
+}
+#scores .bp-v228-day-card small{
+  display:block!important;
+  margin-top:4px!important;
+  color:#8f8f8f!important;
+  font-size:11px!important;
+}
+#scores .bp-v228-card{
+  border-radius:22px!important;
+  padding:20px!important;
+  border:1px solid rgba(122,0,25,.42)!important;
+  background:linear-gradient(180deg,rgba(18,18,18,.98),rgba(10,10,10,.98))!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.28)!important;
+}
+#scores .bp-v228-section-head{
+  display:flex!important;
+  justify-content:space-between!important;
+  align-items:flex-start!important;
+  gap:14px!important;
+  margin-bottom:14px!important;
+}
+#scores .bp-v228-section-head h2{
+  margin:0!important;
+  font-size:21px!important;
+  font-weight:1000!important;
+}
+#scores .bp-v228-section-head p{
+  margin:6px 0 0!important;
+  color:#a9a9a9!important;
+  font-size:13px!important;
+}
+#scores .bp-v228-table-wrap{
+  width:100%!important;
+  overflow:auto!important;
+  border-radius:16px!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+}
+#scores .bp-v228-table-card .daily-recap-table{
+  margin:0!important;
+  min-width:760px!important;
+}
+#scores .bp-v228-table-card .daily-recap-table th{
+  background:#0c0c0c!important;
+  color:#bdbdbd!important;
+  font-size:11px!important;
+  text-transform:uppercase!important;
+  letter-spacing:.35px!important;
+}
+#scores .bp-v228-secret-grid{
+  display:grid!important;
+  grid-template-columns:repeat(3,1fr)!important;
+  gap:12px!important;
+}
+#scores .bp-v228-secret-tile{
+  margin:0!important;
+  padding:16px!important;
+  border-radius:18px!important;
+  background:rgba(255,255,255,.045)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+}
+#scores .bp-v228-secret-tile label{
+  margin-bottom:12px!important;
+  font-weight:1000!important;
+}
+#scores .bp-v228-secret-tile label small{
+  display:block!important;
+  margin-top:5px!important;
+  color:#facc15!important;
+  font-size:12px!important;
+}
+#scores .bp-v228-secret-tile input{
+  height:48px!important;
+  border-radius:14px!important;
+  background:#070707!important;
+}
+#scores .bp-v228-lock{
+  padding:8px 11px!important;
+  border-radius:999px!important;
+  background:rgba(122,0,25,.24)!important;
+  border:1px solid rgba(122,0,25,.55)!important;
+  color:#f1f1f1!important;
+  font-size:12px!important;
+  font-weight:1000!important;
+  text-transform:uppercase!important;
+}
+#scores .bp-v228-secret-btn{
+  min-height:48px!important;
+  border-radius:14px!important;
+  margin-top:14px!important;
+}
+@media(max-width:980px){
+  #scores .bp-v228-hero-stats,
+  #scores .bp-v228-kpis,
+  #scores .bp-v228-day-strip{grid-template-columns:repeat(2,1fr)!important}
+  #scores .bp-v228-secret-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:620px){
+  #scores .bp-v228-hero{padding:18px!important}
+  #scores .bp-v228-hero-main{align-items:flex-start!important}
+  #scores .bp-v228-avatar{width:64px!important;height:64px!important;flex-basis:64px!important;border-radius:18px!important;font-size:28px!important}
+  #scores .bp-v228-hero h2{font-size:24px!important}
+  #scores .bp-v228-hero-stats,
+  #scores .bp-v228-kpis,
+  #scores .bp-v228-day-strip{grid-template-columns:1fr!important}
+}
+</style>
+
+<script>
+/* V228A — Player Center Hero/KPI hydration only. No game calculation changed. */
+(function(){
+  'use strict';
+  if(window.__BP_V228_PLAYER_CENTER__) return;
+  window.__BP_V228_PLAYER_CENTER__ = true;
+
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const n=v=>{ const x=Number(String(v??'').replace(/[^\d.-]/g,'')); return Number.isFinite(x)?x:0; };
+  function getPlayer(){
+    try{ if(typeof player==='function') return player(); }catch(e){}
+    try{ if(typeof window.player==='function') return window.player(); }catch(e){}
+    try{
+      const st=window.state||{};
+      if(window.currentRole==='user' && window.currentUserIndex!=null) return (st.players||[])[window.currentUserIndex] || null;
+      const idx=Number(document.getElementById('activePlayer')?.value||0);
+      return (st.players||[])[idx] || null;
+    }catch(e){ return null; }
+  }
+  function getDisplayName(p){
+    try{ if(typeof displayName==='function') return displayName(p); }catch(e){}
+    return (p && (p.pseudo || p.name)) || 'Joueur';
+  }
+  function initials(name){
+    return String(name||'?').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]?.toUpperCase()).join('') || '?';
+  }
+  function getRank(p){
+    try{ if(typeof rankOf==='function' && p && p.name) return '#'+rankOf(p.name); }catch(e){}
+    const rows=[...document.querySelectorAll('#rankingBody tr')];
+    const name=String((p&&(p.name||p.pseudo))||'').trim().toLowerCase();
+    for(let i=0;i<rows.length;i++){
+      if((rows[i].textContent||'').toLowerCase().includes(name)) return '#'+(i+1);
+    }
+    return '—';
+  }
+  function parseGain(id){
+    const t=document.getElementById(id)?.textContent||'0';
+    return n(t);
+  }
+  function streakFor(p){
+    try{
+      const st=window.state||{};
+      const name=String(p?.name||'').trim();
+      const rows=(st.settlementDetails||[]).filter(d=>String(d.player||'').trim()===name && d.player!=='RÉSERVE')
+        .sort((a,b)=>Number(b.day||0)-Number(a.day||0));
+      let s=0;
+      for(const d of rows){
+        const status=String(d.status||'').toLowerCase();
+        const net=Number(d.netGain||0);
+        const good=status.includes('gagn') || status.includes('exact') || net>0;
+        const lost=status.includes('perdu') || net<0;
+        if(good){ s++; continue; }
+        if(lost) break;
+      }
+      return s ? '🔥 '+s+' bons pronos' : '🔥 —';
+    }catch(e){ return '🔥 —'; }
+  }
+  function hydrate(){
+    const p=getPlayer();
+    const name=getDisplayName(p);
+    const set=(id,html)=>{ const el=document.getElementById(id); if(el) el.innerHTML=html; };
+    set('bpV228PlayerName', esc(name));
+    set('bpV228PlayerStatus', 'Performance personnelle FIFA World Cup 2026');
+    const avatar=document.getElementById('bpV228Avatar');
+    if(avatar){
+      if(p && p.avatar) avatar.innerHTML='<img src="'+esc(p.avatar)+'" alt="">';
+      else avatar.textContent=initials(name);
+    }
+    const compNet=parseGain('compGain');
+    const balance=Number((p&&p.balance)!=null ? p.balance : 50 + compNet);
+    set('bpV228Balance', (Number.isFinite(balance)?balance:50)+' FID');
+    set('bpV228Rank', esc(getRank(p)));
+    const trend=document.getElementById('compRank')?.textContent || '—';
+    set('bpV228Trend', esc(trend));
+    set('bpV228Streak', esc(streakFor(p)));
+  }
+
+  function after(){ setTimeout(hydrate,0); setTimeout(hydrate,120); }
+
+  const oldRenderScores=window.renderScores;
+  if(typeof oldRenderScores==='function' && !oldRenderScores.__bpV228Wrapped){
+    window.renderScores=function(){ const r=oldRenderScores.apply(this,arguments); after(); return r; };
+    window.renderScores.__bpV228Wrapped=true;
+  }
+  const oldPersonal=window.renderPersonalDailyRecap;
+  if(typeof oldPersonal==='function' && !oldPersonal.__bpV228Wrapped){
+    window.renderPersonalDailyRecap=function(){ const r=oldPersonal.apply(this,arguments); after(); return r; };
+    window.renderPersonalDailyRecap.__bpV228Wrapped=true;
+  }
+  const oldAll=window.renderAll;
+  if(typeof oldAll==='function' && !oldAll.__bpV228Wrapped){
+    window.renderAll=function(){ const r=oldAll.apply(this,arguments); after(); return r; };
+    window.renderAll.__bpV228Wrapped=true;
+  }
+  document.addEventListener('DOMContentLoaded',()=>{ [100,500,1200,2400].forEach(ms=>setTimeout(hydrate,ms)); });
+  setTimeout(hydrate,0);
 })();
 </script>
 
