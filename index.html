@@ -6426,14 +6426,24 @@ function bpV208Rule(day){
 }
 
 function bpV208ShowRule(day){
-  const r=bpV208Rule(day);
-  alert(`Règle active — Journée ${day}
+
+  const d = Number(day)||1;
+
+  const r =
+    (typeof window.bpRuleForDayR2Safe === 'function')
+      ? window.bpRuleForDayR2Safe(d)
+      : bpV208Rule(d);
+
+  alert(`Règle active — Journée ${d}
 
 Référence : ${r.ref}
-Nom : ${r.label}
+Nom : ${r.label || r.name || r.ref}
+
 Résultat correct : mise × ${bpV208Fmt(r.resultMultiplier)}
+
 Score exact : bonus +${bpV208Fmt(r.exactScoreBonus)} FID
-Mise maximale : ${bpV208Fmt(r.maxStake)} FID`);
+
+Mise maximale : ${bpV208Fmt(r.maxStake || 4)} FID`);
 }
 
 function bpV208SplitScore(b){
@@ -13160,7 +13170,7 @@ window.BP_LOCAL_ONLY = true;
 
   // Spinner minimal sur chaque CTA même si l'ancien code ne renvoie pas de Promise.
   window.addEventListener('click', function(e){
-    const b=e.target&&e.target.closest?e.target.closest('button.action,button'):null;
+    const b=e.target&&e.target.closest?e.target.closest('button.action:not(.user-nav):not([id^="nav"]),button:not(.user-nav):not([id^="nav"])'):null;
     if(!b || b.disabled || b.closest('.bp-modal,.login-card')) return;
     if(!b.dataset.v80Old){ setBtnBusy(b,true,'Traitement…'); setTimeout(()=>setBtnBusy(b,false),1200); }
   }, true);
@@ -13422,7 +13432,7 @@ window.BP_LOCAL_ONLY = true;
 
   // Spinner visible sur tous les CTA, même pour les anciennes fonctions qui ne retournent pas de Promise.
   window.addEventListener('click', function(e){
-    const b = e.target && e.target.closest ? e.target.closest('button.action, button') : null;
+    const b = e.target && e.target.closest ? e.target.closest('button.action:not(.user-nav):not([id^="nav"]), button:not(.user-nav):not([id^="nav"])') : null;
     if(!b || b.disabled || b.closest('.bp-modal,.login-card')) return;
     if(!b.dataset.v81Old){
       setBusy(b, true, 'Traitement…');
@@ -25290,6 +25300,151 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
 })();
 </script>
 
+<!-- V250 HOF DETAIL TOPLEVEL GAIN FIX -->
+
+
+<script id="bp-v252-rule-active-r2-display-fix">
+/* V252 — Correctif affichage "Règle active"
+   Objectif : la modale doit afficher la règle réellement appliquée par le moteur R2/J7.
+   Ne touche pas à la BDD, aux gains, aux mises, au Hall of Fame ni au calcul. */
+(function(){
+  'use strict';
+  if(window.__BP_V252_RULE_ACTIVE_R2_DISPLAY_FIX__) return;
+  window.__BP_V252_RULE_ACTIVE_R2_DISPLAY_FIX__ = true;
+
+  function n(v,d){
+    var x = Number(v);
+    return Number.isFinite(x) ? x : (d || 0);
+  }
+
+  function fmt(v){
+    return String(Math.round(n(v,0) * 100) / 100).replace('.', ',');
+  }
+
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);
+    });
+  }
+
+  function stateRuleFallback(day){
+    var s = window.state || {};
+    var rules = (s.gainRules && typeof s.gainRules === 'object') ? s.gainRules : {};
+    var assigns = Array.isArray(s.gainRuleAssignments) ? s.gainRuleAssignments : [];
+    var ref = s.defaultGainRule || s.defaultGainRuleRef || 'R1';
+    var d = n(day,1);
+
+    var hit = assigns.find(function(a){
+      var from = n(a.fromDay,1);
+      var toRaw = a.toDay;
+      var to = (toRaw === null || toRaw === undefined || toRaw === '') ? Infinity : n(toRaw, Infinity);
+      return d >= from && d <= to && (a.ruleRef || a.ref);
+    });
+
+    if(hit) ref = hit.ruleRef || hit.ref;
+
+    var rr = rules[ref] || {};
+    return {
+      ref: rr.ref || ref,
+      label: rr.label || rr.name || rr.ref || ref,
+      resultMultiplier: n(rr.resultMultiplier != null ? rr.resultMultiplier : rr.correctMultiplier, 2),
+      exactScoreBonus: n(rr.exactScoreBonus != null ? rr.exactScoreBonus : rr.exactBonus, 1.5),
+      maxStake: n(rr.maxStake != null ? rr.maxStake : s.maxStake, 4)
+    };
+  }
+
+  function displayedRule(day){
+    var d = n(day,1);
+
+    // Source de vérité validée par test console : bpTestR2FromDay7() => J7 = R2.
+    try{
+      if(typeof window.bpRuleForDayR2Safe === 'function'){
+        var r2 = window.bpRuleForDayR2Safe(d);
+        if(r2){
+          return {
+            ref: r2.ref || r2.id || 'R2',
+            label: r2.label || r2.name || r2.ref || 'R2',
+            resultMultiplier: n(r2.resultMultiplier != null ? r2.resultMultiplier : r2.correctMultiplier, 2),
+            exactScoreBonus: n(r2.exactScoreBonus != null ? r2.exactScoreBonus : r2.exactBonus, 2),
+            maxStake: n(r2.maxStake != null ? r2.maxStake : (window.state && window.state.maxStake), 4)
+          };
+        }
+      }
+    }catch(e){}
+
+    return stateRuleFallback(d);
+  }
+
+  function ensureModal(){
+    var el = document.getElementById('bpV212Modal') || document.getElementById('bpV211Modal');
+    if(el) return el;
+
+    el = document.createElement('div');
+    el.id = 'bpV252RuleModal';
+    el.className = 'bp-v212-modal-backdrop';
+    el.innerHTML = '<div class="bp-v212-modal">' +
+      '<div class="bp-v212-modal-head">' +
+        '<div class="bp-v212-modal-icon">📘</div>' +
+        '<div>' +
+          '<div class="bp-v212-modal-title">Règle active</div>' +
+          '<div class="bp-v212-modal-sub">Paramètres de gains actuellement appliqués</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="bp-v212-modal-body" id="bpV252RuleModalBody"></div>' +
+      '<div class="bp-v212-modal-actions">' +
+        '<button type="button" id="bpV252RuleModalOk">OK</button>' +
+      '</div>' +
+    '</div>';
+    document.body.appendChild(el);
+
+    el.addEventListener('click', function(e){
+      if(e.target === el) el.style.display = 'none';
+    });
+    var ok = document.getElementById('bpV252RuleModalOk');
+    if(ok) ok.onclick = function(){ el.style.display = 'none'; };
+    return el;
+  }
+
+  function bodyId(modal){
+    if(modal.id === 'bpV212Modal') return 'bpV212ModalBody';
+    if(modal.id === 'bpV211Modal') return 'bpV211ModalBody';
+    return 'bpV252RuleModalBody';
+  }
+
+  function showRule(day){
+    var d = n(day,1);
+    var r = displayedRule(d);
+    var modal = ensureModal();
+    var body = document.getElementById(bodyId(modal));
+
+    if(!body) return alert(
+      'Règle active — Journée ' + d + '\n\n' +
+      'Référence : ' + (r.ref || '-') + '\n' +
+      'Nom : ' + (r.label || '-') + '\n' +
+      'Résultat correct : mise × ' + fmt(r.resultMultiplier) + '\n' +
+      'Score exact : bonus +' + fmt(r.exactScoreBonus) + ' FID\n' +
+      'Mise maximale : ' + fmt(r.maxStake || 4) + ' FID'
+    );
+
+    body.innerHTML =
+      '<div class="bp-v212-rule-row"><span>Journée</span><b>' + d + '</b></div>' +
+      '<div class="bp-v212-rule-row"><span>Référence</span><b>' + esc(r.ref || '-') + '</b></div>' +
+      '<div class="bp-v212-rule-row"><span>Nom</span><b>' + esc(r.label || r.name || r.ref || '-') + '</b></div>' +
+      '<div class="bp-v212-rule-row"><span>Résultat correct</span><b>Mise × ' + fmt(r.resultMultiplier) + '</b></div>' +
+      '<div class="bp-v212-rule-row"><span>Score exact</span><b>Bonus +' + fmt(r.exactScoreBonus) + ' FID</b></div>' +
+      '<div class="bp-v212-rule-row"><span>Mise maximale</span><b>' + fmt(r.maxStake || 4) + ' FID</b></div>';
+
+    modal.style.display = 'flex';
+  }
+
+  window.bpV208ShowRule = showRule;
+  window.bpV210ShowRule = showRule;
+  window.bpV211ShowRule = showRule;
+  window.bpV212ShowRule = showRule;
+  window.bpV252DisplayedRule = displayedRule;
+})();
+</script>
+
 </body></html>
 
 
@@ -25942,13 +26097,13 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
       return Number.isFinite(x) ? x : NaN;
     }
     function isCalculatedBet(b,calc){
-      if(!calc) return false;
+      calc = calc || {};
       const official=cleanScore(calc.officialScore || b.officialScore);
       if(!official) return false;
       const gain=finiteNum(b.gain ?? calc.gain ?? calc.totalGain);
       const net=finiteNum(b.netGain ?? calc.netGain ?? calc.net);
       if(!Number.isFinite(gain) && !Number.isFinite(net)) return false;
-      if(!(b.calculatedAt || calc.calculatedAt || b.resultStatus || calc.status)) return false;
+      if(!(b.calculatedAt || calc.calculatedAt || b.resultStatus || calc.status || calc.resultStatus)) return false;
       return true;
     }
     function statusOf(b,calc){
@@ -25980,8 +26135,8 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
       return String(b.matchId || b.match_id || b.idMatch || 'Match');
     }
     const seen=new Set();
-    const rows=arr(S().bets).map(b=>({b,calc:parseCalc(b.calculation)}))
-      .filter(x=>x.calc && isCalculatedBet(x.b,x.calc))
+    const rows=arr(S().bets).map(b=>({b,calc:parseCalc(b.calculation) || {}}))
+      .filter(x=>isCalculatedBet(x.b,x.calc))
       .filter(x=>norm(playerName(x.b))===norm(name))
       .filter(x=>{
         const id=matchIdOf(x.b);
@@ -27122,5 +27277,74 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
 
   document.addEventListener('DOMContentLoaded', function(){ setTimeout(applyAll,0); setTimeout(applyAll,500); setTimeout(applyAll,1500); });
   console.log('[V242 CLOSEDAYS RENDER WATCHDOG ACTIVE]');
+})();
+</script>
+
+
+<script>
+/* V251 — NAV SPINNER FIX
+   Les anciens patchs V80/V81 ajoutaient un spinner global sur tous les boutons,
+   y compris les onglets de navigation. Si un render intervenait pendant le timeout,
+   les onglets restaient disabled avec "Traitement…". Ce patch exclut et restaure
+   définitivement les boutons de menu. */
+(function(){
+  'use strict';
+  if(window.__BP_V251_NAV_SPINNER_FIX__) return;
+  window.__BP_V251_NAV_SPINNER_FIX__ = true;
+
+  function isNavButton(btn){
+    if(!btn) return false;
+    return btn.classList.contains('user-nav') || /^nav/i.test(btn.id || '');
+  }
+
+  function restoreNavButton(btn){
+    if(!isNavButton(btn)) return;
+    var old = btn.dataset.v80Old || btn.dataset.v81Old || btn.getAttribute('data-v80-old') || btn.getAttribute('data-v81-old');
+    if(old) btn.innerHTML = old;
+    delete btn.dataset.v80Old;
+    delete btn.dataset.v81Old;
+    btn.removeAttribute('data-v80-old');
+    btn.removeAttribute('data-v81-old');
+    btn.classList.remove('bp-v80-loading','bp-v81-loading','bp-v79-loading','is-loading','loading');
+    btn.disabled = false;
+  }
+
+  function restoreAllNavButtons(){
+    document.querySelectorAll('button.user-nav, button[id^="nav"]').forEach(restoreNavButton);
+  }
+
+  document.addEventListener('click', function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('button') : null;
+    if(!isNavButton(btn)) return;
+    // Les anciens listeners capture sont déjà passés : on restaure tout de suite.
+    restoreNavButton(btn);
+    setTimeout(restoreAllNavButtons, 0);
+    setTimeout(restoreAllNavButtons, 50);
+    setTimeout(restoreAllNavButtons, 250);
+    setTimeout(restoreAllNavButtons, 1200);
+  }, true);
+
+  ['tab','showSection','renderAll','renderHeader'].forEach(function(name){
+    var old = window[name];
+    if(typeof old !== 'function' || old.__bpV251NavWrapped) return;
+    window[name] = function(){
+      var r = old.apply(this, arguments);
+      restoreAllNavButtons();
+      setTimeout(restoreAllNavButtons, 0);
+      setTimeout(restoreAllNavButtons, 100);
+      return r;
+    };
+    window[name].__bpV251NavWrapped = true;
+    try{ eval(name + ' = window[name]'); }catch(e){}
+  });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    restoreAllNavButtons();
+    setTimeout(restoreAllNavButtons, 250);
+    setTimeout(restoreAllNavButtons, 1000);
+  });
+  setInterval(restoreAllNavButtons, 1000);
+  window.bpV251RestoreNavButtons = restoreAllNavButtons;
+  console.log('[V251 NAV SPINNER FIX ACTIVE]');
 })();
 </script>
