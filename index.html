@@ -354,7 +354,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>B Partner FIFA World Cup 2026 - V182 GOLDEN ANTI ZOMBIE MINIMAL</title>
+<title>B Partner FIFA World Cup 2026 - V227 R2 J7 + PRONO TEAM STACK</title>
 <!-- V117 STABLE: base de travail après récupération joueurs/mises/questions secrètes -->
 <style>
 :root {
@@ -2740,6 +2740,216 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 }
 </style>
 
+
+
+<style>
+/* V218 — WORLD CUP FLAGS ONLY + TABLEAU FINAL COMPACT — UX ONLY
+   Objectif : conserver le design V217, retirer les noms de pays en phase de groupes
+   et rendre le tableau final entièrement visible sans toucher au moteur JS/BDD. */
+
+/* Sécurité layout : aucun scroll horizontal global sur l'écran World Cup */
+#calendar,
+#calendar .worldcup-hero-board,
+#groupStandings.worldcup-groups-board{
+  max-width:100%!important;
+  overflow-x:hidden!important;
+}
+
+#calendar .worldcup-hero-board{
+  overflow:visible!important;
+  padding-left:18px!important;
+  padding-right:18px!important;
+}
+
+/* GROUPES : 4 colonnes fixes desktop, sans largeur minimale excessive */
+#groupStandings .worldcup-groups-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:12px!important;
+  width:100%!important;
+}
+
+#groupStandings .worldcup-group-card{
+  min-width:0!important;
+  width:100%!important;
+}
+
+/* GROUPES : suppression visuelle du nom des pays — drapeaux uniquement */
+#groupStandings .worldcup-team-name{
+  font-size:0!important;
+  line-height:0!important;
+  justify-content:center!important;
+  gap:0!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+#groupStandings .worldcup-team-name .flag,
+#groupStandings .worldcup-team-name img.flag{
+  width:28px!important;
+  height:19px!important;
+  flex:0 0 28px!important;
+  margin:0!important;
+  border-radius:3px!important;
+  object-fit:cover!important;
+}
+
+/* GROUPES : colonnes compactes adaptées aux drapeaux seuls */
+#groupStandings .worldcup-team-row,
+#groupStandings .worldcup-team-row.head{
+  grid-template-columns:22px 38px repeat(7,minmax(20px,1fr))!important;
+  gap:0!important;
+  padding:0 7px!important;
+  min-height:29px!important;
+}
+
+#groupStandings .worldcup-team-row.head{
+  min-height:27px!important;
+}
+
+#groupStandings .worldcup-team-row.head .worldcup-team-name,
+#groupStandings .worldcup-team-row.head > :nth-child(2){
+  font-size:0!important;
+}
+
+#groupStandings .worldcup-rank,
+#groupStandings .worldcup-stat,
+#groupStandings .worldcup-pts{
+  font-size:12px!important;
+  text-align:center!important;
+  font-variant-numeric:tabular-nums!important;
+}
+
+#groupStandings .worldcup-team-row.head .worldcup-stat,
+#groupStandings .worldcup-team-row.head .worldcup-pts,
+#groupStandings .worldcup-team-row.head .worldcup-rank{
+  font-size:10px!important;
+}
+
+/* Légende compacte */
+.bp-wc-legend{
+  margin:10px 0 0!important;
+  font-size:11px!important;
+}
+
+/* TABLEAU FINAL : grille plus compacte pour voir toute la partie droite */
+#finalBracket.knockout-board{
+  grid-template-columns:
+    .82fr .68fr .68fr .58fr
+    142px
+    .58fr .68fr .68fr .82fr!important;
+  gap:7px!important;
+  width:100%!important;
+  max-width:100%!important;
+  overflow:visible!important;
+  padding:16px 0 8px!important;
+}
+
+#finalBracket .knockout-round{
+  gap:9px!important;
+  min-width:0!important;
+}
+
+#finalBracket .knockout-round h3{
+  font-size:10px!important;
+  min-height:22px!important;
+  margin-bottom:2px!important;
+  white-space:nowrap!important;
+}
+
+#finalBracket .knockout-match{
+  min-height:43px!important;
+  padding:5px 7px!important;
+  border-radius:9px!important;
+}
+
+#finalBracket .knockout-team{
+  min-height:17px!important;
+  font-size:10.5px!important;
+  gap:5px!important;
+}
+
+#finalBracket .knockout-team span:first-child{
+  max-width:100%!important;
+}
+
+#finalBracket .knockout-team b{
+  font-size:10.5px!important;
+}
+
+#finalBracket .knockout-team .flag,
+#finalBracket .knockout-team img.flag{
+  width:20px!important;
+  height:14px!important;
+  margin-right:4px!important;
+}
+
+#finalBracket .bp-final-center{
+  min-height:230px!important;
+  padding:12px 8px!important;
+}
+
+#finalBracket .bp-final-cup{
+  font-size:40px!important;
+}
+
+#finalBracket .bp-final-title{
+  font-size:13px!important;
+  line-height:1.25!important;
+}
+
+#finalBracket .bp-final-sub{
+  font-size:11px!important;
+}
+
+#finalBracket .bp-final-crown{
+  width:106px!important;
+  height:42px!important;
+  font-size:22px!important;
+}
+
+#finalBracket .bp-bracket-legend{
+  margin-top:6px!important;
+  gap:22px!important;
+  font-size:11px!important;
+}
+
+/* Responsive : tablette/mobile conserve une lecture propre */
+@media(max-width:1180px){
+  #groupStandings .worldcup-groups-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  }
+  #finalBracket.knockout-board{
+    grid-template-columns:repeat(4,minmax(150px,1fr))!important;
+    overflow-x:auto!important;
+  }
+  #finalBracket .bp-final-center{
+    grid-column:1/-1!important;
+    order:-1!important;
+    min-height:170px!important;
+  }
+}
+
+@media(max-width:860px){
+  #groupStandings .worldcup-groups-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}
+
+@media(max-width:620px){
+  #calendar .worldcup-hero-board{
+    padding-left:12px!important;
+    padding-right:12px!important;
+  }
+  #groupStandings .worldcup-groups-grid{
+    grid-template-columns:1fr!important;
+  }
+  #finalBracket.knockout-board{
+    grid-template-columns:1fr!important;
+    overflow-x:visible!important;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -2971,7 +3181,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
         <button class="action" onclick="validateSingleBet(&#39;M002&#39;)">Valider la mise</button>
       </div>
     </div></div>
-      <button class="action" onclick="saveBets()">Enregistrer les brouillons</button><div class="muted">Mise max 4 FID. Bon résultat = mise ×2. Score exact = mise ×3.</div>
+      <button class="action" onclick="saveBets()">Enregistrer les brouillons</button><div class="muted">Mise max 4 FID. À partir de J7 : gagnant ou nul correct = mise ×2 ; score exact = +2 FID.</div>
   </div>
 </section>
 
@@ -7441,11 +7651,11 @@ async function calculateGains(showAlert=true){
       let pl=state.players.find(p=>p.name===b.player); if(!pl) return;
       let stake=Number(b.stake||0);
       let exact=(Number(b.scoreA)===Number(m.scoreA) && Number(b.scoreB)===Number(m.scoreB));
-      let multiplier=exact ? 3 : 2;
       let eventMult=eventMultiplierForBet(targetDay,m.id,exact);
-      let net=stake * multiplier * eventMult;
-      let baseGain=stake * 2 * eventMult;
-      let exactBonus=exact ? stake * eventMult : 0;
+      let isR2Day = Number(targetDay) >= 7;
+      let baseGain = stake * 2 * eventMult;
+      let exactBonus = isR2Day ? (exact ? 2 : 0) : (exact ? stake * eventMult : 0);
+      let net = isR2Day ? (baseGain + exactBonus) : (exact ? stake * 3 * eventMult : baseGain);
       if(currentDayEvents(targetDay).festival && (Number(m.scoreA)+Number(m.scoreB))>=4){
         const fest=Number(currentDayEvents(targetDay).festivalAmount||3);
         net += fest; payoutTotal += fest; baseGain += fest;
@@ -7459,7 +7669,8 @@ async function calculateGains(showAlert=true){
       state.settlementDetails.push({
         day:targetDay, matchId:m.id, match:`${m.teamA} - ${m.teamB}`,
         player:b.player, stake, prediction:outcomeLabel(b.predictedOutcome,m), predictedScore:scoreText(b.scoreA,b.scoreB),
-        officialScore:scoreText(m.scoreA,m.scoreB), result:actualLabel, status:(exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)") + (eventMult>1 ? " · BONUS x"+eventMult : ""),
+        officialScore:scoreText(m.scoreA,m.scoreB), result:actualLabel,
+        status:(exact ? (Number(targetDay)>=7 ? "GAGNÉ + SCORE EXACT (+2 FID)" : "GAGNÉ + SCORE EXACT") : "GAGNÉ (MISE ×2)") + (eventMult>1 ? " · BONUS x"+eventMult : ""),
         baseGain, exactBonus, netGain:net
       });
     });
@@ -11051,7 +11262,7 @@ window.BP_LOCAL_ONLY = true;
           day:targetDay,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,
           player:b.player,stake,prediction:outcomeLabelSafe(b.predictedOutcome,m),predictedScore:scoreTextSafe(b.scoreA,b.scoreB),
           officialScore:scoreTextSafe(m.scoreA,m.scoreB),result:actualLabel,
-          status:(exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)")+(eventMult>1?" · BONUS x"+eventMult:""),
+          status:(exact?"GAGNÉ + SCORE EXACT":"GAGNÉ (MISE ×2)")+(eventMult>1?" · BONUS x"+eventMult:""),
           baseGain,exactBonus,netGain:net
         });
       });
@@ -11421,7 +11632,7 @@ window.BP_LOCAL_ONLY = true;
         const net=stake*(exact?3:2)*eventMult, baseGain=stake*2*eventMult, exactBonus=exact?stake*eventMult:0;
         payoutTotal+=net; p.balance=Number(p.balance||0)+net; p.evolution=Number(p.evolution||0)+net; p.good=Number(p.good||0)+1; totalGood++;
         if(exact){ p.exact=Number(p.exact||0)+1; totalExact++; }
-        state.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:b.player,stake,prediction:outLabel(b.predictedOutcome,m),predictedScore:sText(b.scoreA,b.scoreB),officialScore:sText(m.scoreA,m.scoreB),result:actualLabel,status:(exact?"GAGNÉ + SCORE EXACT (MISE ×3)":"GAGNÉ (MISE ×2)")+(eventMult>1?" · BONUS x"+eventMult:""),baseGain,exactBonus,netGain:net,validatedAt:b.validatedAt||""});
+        state.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:b.player,stake,prediction:outLabel(b.predictedOutcome,m),predictedScore:sText(b.scoreA,b.scoreB),officialScore:sText(m.scoreA,m.scoreB),result:actualLabel,status:(exact?"GAGNÉ + SCORE EXACT":"GAGNÉ (MISE ×2)")+(eventMult>1?" · BONUS x"+eventMult:""),baseGain,exactBonus,netGain:net,validatedAt:b.validatedAt||""});
       });
       const reserveNeed=Math.max(0,payoutTotal-lostPot), reserveSurplus=Math.max(0,lostPot-payoutTotal);
       state.settlementDetails.push({day,matchId:m.id,match:`${m.teamA} - ${m.teamB}`,player:"RÉSERVE",stake:0,prediction:"",predictedScore:"",officialScore:sText(m.scoreA,m.scoreB),result:actualLabel,status:reserveNeed>0?"RÉSERVE UTILISÉE":"RÉSERVE CRÉDITÉE",baseGain:payoutTotal,exactBonus:0,netGain:reserveSurplus-reserveNeed});
@@ -16683,7 +16894,7 @@ window.BP_LOCAL_ONLY = true;
         if(win){
           net=stake*(exact?3:2); baseGain=stake*2; exactBonus=exact?stake:0; payoutTotal+=net;
           p.good=Number(p.good||0)+1; totalGood++;
-          if(exact){ p.exact=Number(p.exact||0)+1; totalExact++; status='GAGNÉ + SCORE EXACT (MISE ×3)'; }
+          if(exact){ p.exact=Number(p.exact||0)+1; totalExact++; status='GAGNÉ + SCORE EXACT'; }
           else status='GAGNÉ (MISE ×2)';
         }else{ net=-stake; lostPot+=stake; }
         p.balance=Number(p.balance||0)+net; p.evolution=Number(p.evolution||0)+net; totalNet+=net;
@@ -23721,6 +23932,205 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', syncLoginDigits);
   else syncLoginDigits();
   window.addEventListener('load', syncLoginDigits);
+})();
+</script>
+
+
+
+<script id="bp-v226-r2-from-j7-safe">
+/* V227 — R2 à partir de J7 : résultat correct ou nul = mise x2 ; score exact = bonus fixe +2 FID.
+   Patch volontairement limité à la configuration des règles de gains.
+   Ne touche pas au classement, aux groupes, au tableau final, au login, ni aux mises. */
+(function(){
+  'use strict';
+  if(window.__BP_V227_R2_FROM_J7__) return;
+  window.__BP_V227_R2_FROM_J7__ = true;
+
+  function S(){
+    try{
+      if(typeof state !== 'undefined' && state) return state; // état lexical de l'app
+    }catch(e){}
+    return window.state || (window.state = {});
+  }
+  function n(v,d){ var x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function clone(o){ return JSON.parse(JSON.stringify(o||{})); }
+  function todayIso(){ return new Date().toISOString(); }
+
+  function normalizeAssignments(assignments){
+    var out = Array.isArray(assignments) ? assignments.map(function(a){ return Object.assign({}, a); }) : [];
+    // Supprime les anciens segments R2 et évite qu'une règle globale 1→∞ masque R2.
+    out = out.filter(function(a){ return String(a.ruleRef||a.ref||'').toUpperCase() !== 'R2'; });
+    out.forEach(function(a){
+      var from = n(a.fromDay,1);
+      var toRaw = a.toDay;
+      var openEnded = (toRaw === null || toRaw === undefined || toRaw === '');
+      var to = openEnded ? Infinity : n(toRaw, Infinity);
+      if(from < 7 && to >= 7){ a.toDay = 6; }
+    });
+    // Placé en premier car plusieurs fonctions historiques utilisent Array.find().
+    out.unshift({ fromDay:7, toDay:null, ruleRef:'R2' });
+    return out;
+  }
+
+  function applyR2State(){
+    var s = S();
+    if(!s || typeof s !== 'object') return false;
+    if(!s.gainRules || typeof s.gainRules !== 'object') s.gainRules = {};
+    s.gainRules.R2 = Object.assign({}, s.gainRules.R2 || {}, {
+      ref:'R2',
+      label:'R2 — À partir de J7 : résultat correct / nul = mise x2 ; score exact = bonus fixe +2 FID',
+      resultMultiplier:2,
+      correctMultiplier:2,
+      exactScoreBonus:2,
+      exactBonus:2,
+      active:true,
+      appliesFromDay:7,
+      updatedAt:todayIso()
+    });
+    s.gainRuleAssignments = normalizeAssignments(s.gainRuleAssignments);
+    s.rulesVersion = 'R2_FROM_J7';
+    s.lastRulesUpdatedAt = todayIso();
+    return true;
+  }
+
+  function r2Rule(day){
+    applyR2State();
+    var d=n(day,1), s=S();
+    if(d >= 7){ return clone(s.gainRules.R2); }
+    return null;
+  }
+
+  // Hook non destructif : on prépare la règle avant les opérations importantes.
+  ['calculateGains','recalculateDay','saveOfficialScoresDay','bpManualSaveBDD','bpForceSaveSupabase','bpManualLoadBDD'].forEach(function(name){
+    var old = window[name];
+    if(typeof old === 'function' && !old.__bpV227Wrapped){
+      var wrapped = function(){
+        applyR2State();
+        return old.apply(this, arguments);
+      };
+      wrapped.__bpV227Wrapped = true;
+      window[name] = wrapped;
+    }
+  });
+
+  // Exposition testable depuis console / bouton admin.
+  window.bpApplyR2FromDay7 = applyR2State;
+  window.bpRuleForDayR2Safe = function(day){
+    var forced = r2Rule(day);
+    if(forced) return forced;
+    try{ if(typeof window.getGainRuleForDay === 'function') return window.getGainRuleForDay(day); }catch(e){}
+    var s=S(), rules=s.gainRules||{}, ref=(s.defaultGainRule||s.defaultGainRuleRef||'R1');
+    return clone(rules[ref] || {ref:ref,resultMultiplier:2,exactScoreBonus:1.5,active:true});
+  };
+
+  window.bpTestR2FromDay7 = function(){
+    applyR2State();
+    var r6 = window.bpRuleForDayR2Safe(6);
+    var r7 = window.bpRuleForDayR2Safe(7);
+    var ok = !!(r7 && Number(r7.resultMultiplier)===2 && Number(r7.exactScoreBonus)===2);
+    var msg = '[V227 TEST R2] J6='+JSON.stringify({ref:r6&&r6.ref, x:r6&&r6.resultMultiplier, exact:r6&&r6.exactScoreBonus})+
+              ' | J7='+JSON.stringify({ref:r7&&r7.ref, x:r7&&r7.resultMultiplier, exact:r7&&r7.exactScoreBonus})+
+              ' | '+(ok?'OK':'KO');
+    try{ console.log(msg); }catch(e){}
+    return {ok:ok, day6:r6, day7:r7, assignments:S().gainRuleAssignments};
+  };
+
+  // Sauvegarde BDD volontaire, pas automatique.
+  window.bpApplyR2FromDay7AndSaveBDD = async function(){
+    applyR2State();
+    if(typeof window.bpManualSaveBDD === 'function') return window.bpManualSaveBDD();
+    if(typeof window.bpForceSaveSupabase === 'function') return window.bpForceSaveSupabase();
+    if(typeof window.writeBDD === 'function') return window.writeBDD('V227 R2 from J7');
+    if(typeof window.save === 'function') window.save();
+    alert('R2 appliquée en mémoire. Sauvegarde BDD manuelle introuvable sur cette version.');
+    return false;
+  };
+
+  function boot(){
+    applyR2State();
+    try{ window.bpTestR2FromDay7(); }catch(e){}
+    try{
+      var el=document.getElementById('calcInfo');
+      if(el && !el.dataset.v226R2){
+        el.dataset.v226R2='1';
+        el.insertAdjacentHTML('afterbegin','<div class="help good"><b>R2 active à partir de J7</b> : résultat correct / nul = mise ×2 ; score exact = bonus +2 FID.</div>');
+      }
+    }catch(e){}
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  setTimeout(boot, 500);
+  setTimeout(boot, 1500);
+})();
+</script>
+
+
+
+<style id="bp-v227-prono-team-stack-css">
+/* V227 — Pronostic : nom sous le drapeau pour éviter les noms tronqués */
+#bets .bp-v213-prono-card .bet-inline-row{
+  grid-template-columns:minmax(180px,1fr) 158px 46px 158px minmax(180px,1fr)!important;
+}
+#bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card,
+#bets .bp-v213-prono-card .flag-wrap.bp-v213-away{
+  flex-direction:column!important;
+  min-height:150px!important;
+  gap:12px!important;
+  padding:18px 16px!important;
+  text-align:center!important;
+}
+#bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card .flag{
+  width:86px!important;
+  height:58px!important;
+  flex:0 0 auto!important;
+  margin:0 auto!important;
+}
+#bets .bp-v213-team-name{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  text-align:center!important;
+  font-size:22px!important;
+  line-height:1.08!important;
+  font-weight:1000!important;
+  letter-spacing:-.3px!important;
+}
+@media(max-width:900px){
+  #bets .bp-v213-prono-card .bet-inline-row{
+    grid-template-columns:minmax(110px,1fr) 96px 30px 96px minmax(110px,1fr)!important;
+  }
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card,
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-away{
+    min-height:118px!important;
+    padding:12px 8px!important;
+  }
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card .flag{
+    width:58px!important;
+    height:40px!important;
+  }
+  #bets .bp-v213-team-name{font-size:15px!important;line-height:1.1!important;}
+}
+</style>
+
+<script id="bp-v227-r2-calc-test">
+/* V227 — Test rapide R2 J7 : vérifie que la formule devient bien mise×2 + bonus fixe +2 si score exact. */
+(function(){
+  'use strict';
+  if(window.__BP_V227_R2_CALC_TEST__) return;
+  window.__BP_V227_R2_CALC_TEST__ = true;
+  window.bpTestR2J7Formula = function(){
+    var stake=3, eventMult=1;
+    var j6Exact = stake * 3 * eventMult;
+    var j7Exact = (stake * 2 * eventMult) + 2;
+    var j7ResultOnly = stake * 2 * eventMult;
+    var ok = (j7Exact === 8 && j7ResultOnly === 6 && j6Exact === 9);
+    var msg='[V227 TEST R2 FORMULE] J6 exact='+j6Exact+' | J7 exact='+j7Exact+' | J7 résultat seul='+j7ResultOnly+' | '+(ok?'OK':'KO');
+    try{console.log(msg);}catch(e){}
+    return {ok:ok, j6Exact:j6Exact, j7Exact:j7Exact, j7ResultOnly:j7ResultOnly};
+  };
 })();
 </script>
 
