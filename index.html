@@ -27348,3 +27348,345 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
   console.log('[V251 NAV SPINNER FIX ACTIVE]');
 })();
 </script>
+
+
+
+<script id="bp-v253-zero-zero-save-bdd-fix">
+/* V253 — FIX sauvegarde mise 0-0 + erreurs BDD lisibles
+   Source vérifiée : les derniers handlers de sauvegarde passent par window.validateSingleBet(matchId).
+   Le score 0-0 était bien lu côté UI, mais les anciens chemins de sauvegarde/erreur masquaient l'échec BDD
+   avec "Erreur BDD : [object Object]". Ce patch remplace le chemin final de sauvegarde USER.
+   Points clés :
+   - 0 est conservé comme valeur valide (aucun || sur scoreA / scoreB).
+   - écriture directe dans app_state avec __BP_ALLOW_BDD_WRITE__ temporaire.
+   - vérification post-écriture avec ?? pour ne pas confondre 0 et vide.
+   - message d'erreur Supabase détaillé au lieu de [object Object].
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V253_ZERO_ZERO_SAVE_BDD_FIX__) return;
+  window.__BP_V253_ZERO_ZERO_SAVE_BDD_FIX__ = true;
+
+  var sbClient = null;
+  var saving = false;
+
+  function S(){ return window.state || (window.state = {}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d){
+    var x = Number(v);
+    return Number.isFinite(x) ? x : (d === undefined ? 0 : d);
+  }
+  function norm(v){ return String(v === undefined || v === null ? '' : v).trim(); }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v).replace(/[&<>"']/g,function(m){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+  }
+  function clone(v){
+    try{ return JSON.parse(JSON.stringify(v || {})); }
+    catch(e){ return v || {}; }
+  }
+  function errText(e){
+    if(!e) return 'Erreur inconnue';
+    if(typeof e === 'string') return e;
+    var parts = [];
+    if(e.message) parts.push(e.message);
+    if(e.details) parts.push(e.details);
+    if(e.hint) parts.push(e.hint);
+    if(e.code) parts.push('code '+e.code);
+    if(e.error_description) parts.push(e.error_description);
+    if(e.error) parts.push(typeof e.error === 'string' ? e.error : JSON.stringify(e.error));
+    if(parts.length) return parts.join(' · ');
+    try{
+      var json = JSON.stringify(e);
+      if(json && json !== '{}') return json;
+    }catch(_){}
+    try{
+      var keys = Object.keys(e);
+      if(keys.length) return keys.map(function(k){ return k+': '+String(e[k]); }).join(' · ');
+    }catch(_){}
+    return String(e);
+  }
+
+  function appId(){
+    return window.BP_SUPABASE_APP_ID || window.BP_MANUAL_APP_ID || 'bp-world-cup-2026';
+  }
+  function supa(){
+    var url = window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL;
+    var key = window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY;
+    if(!window.supabase || !url || !key) throw new Error('Supabase non configuré.');
+    if(!sbClient) sbClient = window.supabase.createClient(url, key);
+    return sbClient;
+  }
+  async function readRemote(){
+    var r = await supa().from('app_state').select('data,updated_at').eq('id', appId()).maybeSingle();
+    if(r.error) throw r.error;
+    return clone(r.data && r.data.data ? r.data.data : {});
+  }
+  async function writeRemote(data, reason){
+    var old = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      data = data && typeof data === 'object' ? data : {};
+      data.lastSavedAt = new Date().toISOString();
+      data.lastSaveReason = reason || 'mise user';
+      var r = await supa().from('app_state').upsert({
+        id: appId(),
+        data: data,
+        updated_at: new Date().toISOString()
+      }, {onConflict:'id'});
+      if(r.error) throw r.error;
+      return true;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = old;
+    }
+  }
+
+  function currentDay(){
+    try{ if(typeof window.currentPronoDay === 'function') return n(window.currentPronoDay(),1); }catch(e){}
+    try{ if(typeof currentPronoDay === 'function') return n(currentPronoDay(),1); }catch(e){}
+    var el = document.getElementById('pronoDaySelect');
+    if(el && el.value !== '') return n(el.value,1);
+    return n(S().currentDay ?? S().activeDay,1);
+  }
+  function dayOpen(day){
+    day = n(day, currentDay());
+    try{ if(typeof window.pronoDayIsAvailable === 'function') return !!window.pronoDayIsAvailable(day); }catch(e){}
+    try{ if(typeof pronoDayIsAvailable === 'function') return !!pronoDayIsAvailable(day); }catch(e){}
+    var s=S();
+    if(s.openDays && Object.prototype.hasOwnProperty.call(s.openDays, String(day))) return !!s.openDays[String(day)];
+    if(s.closedDays && Object.prototype.hasOwnProperty.call(s.closedDays, String(day))) return !s.closedDays[String(day)];
+    return true;
+  }
+  function currentPlayer(){
+    try{
+      if(typeof window.player === 'function'){
+        var p0 = window.player();
+        if(p0 && p0.name) return p0;
+      }
+    }catch(e){}
+    var idx = n(window.currentUserIndex, NaN);
+    if(Number.isFinite(idx) && arr(S().players)[idx]) return arr(S().players)[idx];
+    var code = norm(window.currentUserCode || sessionStorage.getItem('bpwc_current_user_code') || localStorage.getItem('bpwc_current_user_code'));
+    if(code) return arr(S().players).find(function(p){ return norm(p.code) === code; }) || null;
+    return arr(S().players)[0] || null;
+  }
+  function cardFor(matchId){
+    return document.getElementById('betCard_' + matchId) ||
+      (document.activeElement && document.activeElement.closest ? document.activeElement.closest('#betRows .bet-card') : null);
+  }
+  function matchById(matchId){
+    return arr(S().matches).find(function(m){ return String(m.id) === String(matchId); }) || {};
+  }
+  function scoreValue(card, selector, fallback){
+    var el = card && card.querySelector(selector);
+    if(!el) return fallback;
+    var raw = el.value;
+    // IMPORTANT : "0" est une valeur valide, on ne teste jamais raw avec ||.
+    if(raw === undefined || raw === null || raw === '') return fallback;
+    var x = Number(raw);
+    return Number.isFinite(x) ? x : fallback;
+  }
+  function stakeValue(card){
+    var el = card && card.querySelector('.stake');
+    var raw = el ? el.value : '';
+    if(raw === undefined || raw === null || raw === '') return 1;
+    var x = Number(raw);
+    return Number.isFinite(x) && x > 0 ? x : 1;
+  }
+  function outcome(a,b){ return a>b ? 'A' : a<b ? 'B' : 'N'; }
+  function predLabel(pred,m){ return pred === 'A' ? (m.teamA || 'Équipe A') : pred === 'B' ? (m.teamB || 'Équipe B') : 'Nul'; }
+  function readForm(card, matchId){
+    var scoreA = scoreValue(card, '.scoreA', 0);
+    var scoreB = scoreValue(card, '.scoreB', 0);
+    var stake = stakeValue(card);
+    var pred = outcome(scoreA, scoreB);
+    var m = matchById(matchId);
+    return {
+      scoreA: scoreA,
+      scoreB: scoreB,
+      score: scoreA + ' - ' + scoreB,
+      stake: stake,
+      mise: stake,
+      prediction: pred,
+      predictedOutcome: pred,
+      predictionLabel: predLabel(pred,m)
+    };
+  }
+  function betKey(day, matchId, playerName){
+    return String(n(day,0))+'|'+String(matchId)+'|'+norm(playerName).toLowerCase();
+  }
+  function playerOfBet(b){
+    return norm(b && (b.player || b.playerName || b.user || b.username));
+  }
+  function findBet(data, day, matchId, playerName){
+    var key = betKey(day, matchId, playerName);
+    return arr(data.bets).find(function(b){ return betKey(b.day, b.matchId, playerOfBet(b)) === key; }) || null;
+  }
+  function upsertBet(data, day, matchId, playerName, form, status){
+    data.bets = arr(data.bets);
+    var key = betKey(day, matchId, playerName);
+    var old = data.bets.find(function(b){ return betKey(b.day, b.matchId, playerOfBet(b)) === key; }) || {};
+    data.bets = data.bets.filter(function(b){ return betKey(b.day, b.matchId, playerOfBet(b)) !== key; });
+    var bet = Object.assign({}, old, {
+      day: n(day,1),
+      matchId: String(matchId),
+      player: String(playerName),
+      playerName: String(playerName),
+      scoreA: n(form.scoreA,0),
+      scoreB: n(form.scoreB,0),
+      score: String(form.score),
+      stake: n(form.stake,1),
+      mise: n(form.stake,1),
+      prediction: form.prediction,
+      predictedOutcome: form.predictedOutcome,
+      predictionLabel: form.predictionLabel,
+      status: status || 'VALIDATED',
+      validatedAt: (status || 'VALIDATED') === 'DRAFT' ? (old.validatedAt || null) : (old.validatedAt || new Date().toISOString()),
+      updatedAt: new Date().toISOString(),
+      savedAt: new Date().toISOString()
+    });
+    data.bets.push(bet);
+    return bet;
+  }
+  function setStatus(card, html, cls){
+    var el = card && card.querySelector('.bet-status');
+    if(el){ el.className = 'bet-status ' + (cls || 'muted'); el.innerHTML = html; }
+  }
+  function setBusy(btn,on,label){
+    if(!btn) return;
+    if(on){
+      if(!btn.dataset.bpV253OldHtml) btn.dataset.bpV253OldHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:bpSpin .8s linear infinite;margin-right:8px;vertical-align:-2px"></span>'+(label || 'Sauvegarde…');
+    }else{
+      btn.disabled = false;
+      if(btn.dataset.bpV253OldHtml){ btn.innerHTML = btn.dataset.bpV253OldHtml; delete btn.dataset.bpV253OldHtml; }
+    }
+  }
+  function primaryButton(card){
+    if(!card) return null;
+    var btns = Array.prototype.slice.call(card.querySelectorAll('.bet-actions button, button.action'));
+    return btns.find(function(b){
+      var t = norm(b.textContent).toLowerCase();
+      return t.indexOf('sauvegarder') >= 0 || t.indexOf('valider') >= 0 || t.indexOf('modifier') >= 0;
+    }) || btns[0] || null;
+  }
+  function updateUiValidated(card, bet){
+    if(!card) return;
+    var badge = card.querySelector('.bet-title .badge');
+    if(badge){ badge.textContent = '✅ Validée'; badge.className = 'badge ok'; }
+    card.classList.add('lockedCard','bp-bet-validated-v253');
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){ el.disabled = true; el.setAttribute('disabled','disabled'); });
+    var when = bet && bet.validatedAt ? new Date(bet.validatedAt).toLocaleString('fr-FR') : '';
+    setStatus(card, when ? ('Validée le '+when) : 'Mise validée et sauvegardée en BDD.', 'good');
+    var btn = primaryButton(card);
+    if(btn){
+      btn.className = 'action editBtn';
+      btn.textContent = '✏️ Modifier la mise';
+      btn.onclick = function(ev){ if(ev) ev.preventDefault(); return window.editBet ? window.editBet(String(bet.matchId)) : false; };
+    }
+  }
+  function replaceLocal(data){
+    Object.keys(S()).forEach(function(k){ delete S()[k]; });
+    Object.assign(S(), clone(data));
+    window.state = S();
+    try{ sessionStorage.setItem('bp_wc_session_state', JSON.stringify(S())); }catch(e){}
+  }
+  async function confirmBet(info){
+    if(typeof window.bpConfirmBet === 'function') return await window.bpConfirmBet(info);
+    return window.confirm('Confirmer la mise ?\n\n'+info.match+'\nScore : '+info.score+'\nRésultat : '+info.result+'\nMise : '+info.stake+' FID');
+  }
+
+  window.validateSingleBet = async function(matchId){
+    if(saving) return false;
+    saving = true;
+    var card = cardFor(matchId);
+    var btn = primaryButton(card);
+    try{
+      matchId = String(matchId || (card && card.id ? card.id.replace('betCard_','') : ''));
+      if(!card || !matchId) throw new Error('Carte de mise introuvable.');
+      var p = currentPlayer();
+      if(!p || !p.name) throw new Error('Joueur introuvable.');
+      var day = currentDay();
+      if(!dayOpen(day)) throw new Error('Mise non disponible : la journée '+day+' n’est pas ouverte.');
+
+      var form = readForm(card, matchId);
+      var m = matchById(matchId);
+
+      var ok = await confirmBet({
+        match: (m.teamA || 'Équipe A') + ' vs ' + (m.teamB || 'Équipe B'),
+        result: form.predictionLabel,
+        score: form.score,
+        stake: form.stake
+      });
+      if(!ok) return false;
+
+      setBusy(btn, true, 'Sauvegarde mise…');
+      setStatus(card, '<span class="warn">⏳ Sauvegarde BDD en cours…</span>', 'warn');
+
+      var remote = await readRemote();
+      if(!arr(remote.players).length && arr(S().players).length) remote.players = clone(S().players);
+      if(!arr(remote.matches).length && arr(S().matches).length) remote.matches = clone(S().matches);
+      if(!remote.closedDays && S().closedDays) remote.closedDays = clone(S().closedDays);
+      if(!remote.adminForcedOpenDays && S().adminForcedOpenDays) remote.adminForcedOpenDays = clone(S().adminForcedOpenDays);
+
+      var saved = upsertBet(remote, day, matchId, p.name, form, 'VALIDATED');
+      await writeRemote(remote, 'mise '+p.name+' '+matchId);
+
+      var check = await readRemote();
+      var rb = findBet(check, day, matchId, p.name);
+      if(!rb) throw new Error('Vérification BDD échouée : mise absente après sauvegarde.');
+
+      var rbA = n(rb.scoreA ?? 0, NaN);
+      var rbB = n(rb.scoreB ?? 0, NaN);
+      var rbStake = n((rb.stake ?? rb.mise), NaN);
+
+      if(rbA !== form.scoreA || rbB !== form.scoreB || rbStake !== form.stake || String(rb.status || '').toUpperCase() !== 'VALIDATED'){
+        throw new Error(
+          'Vérification BDD échouée : valeurs différentes après sauvegarde. '+
+          'Attendu '+form.scoreA+'-'+form.scoreB+' mise '+form.stake+
+          ' / BDD '+String(rb.scoreA)+'-'+String(rb.scoreB)+' mise '+String(rb.stake ?? rb.mise)
+        );
+      }
+
+      replaceLocal(check);
+      updateUiValidated(card, rb || saved);
+      try{ if(typeof window.renderAll === 'function') setTimeout(function(){ window.renderAll(); }, 80); }catch(e){}
+      try{ if(typeof window.bpV132RefreshSavedBets === 'function') setTimeout(window.bpV132RefreshSavedBets, 180); }catch(e){}
+      try{ if(typeof window.bpV242ApplyClosedDaysTruth === 'function') setTimeout(window.bpV242ApplyClosedDaysTruth, 220); }catch(e){}
+
+      if(typeof window.bpAlert === 'function') setTimeout(function(){ window.bpAlert('Mise validée et sauvegardée en BDD.', {icon:'✅'}); }, 120);
+      return true;
+    }catch(e){
+      var msg = errText(e);
+      console.error('[V253 ZERO ZERO SAVE ERROR]', e, msg);
+      setStatus(card, '❌ Mise non sauvegardée : '+esc(msg), 'bad');
+      alert('Erreur BDD : '+msg);
+      return false;
+    }finally{
+      saving = false;
+      setBusy(btn, false);
+    }
+  };
+  try{ validateSingleBet = window.validateSingleBet; }catch(e){}
+
+  // Les boutons "Sauvegarder la mise" existants appellent maintenant forcément le handler V253.
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('#betRows .bet-card button') : null;
+    if(!btn) return;
+    var txt = norm(btn.textContent).toLowerCase();
+    if(txt.indexOf('sauvegarder') < 0 && txt.indexOf('valider') < 0) return;
+    var card = btn.closest('.bet-card');
+    if(!card || !/^betCard_/.test(card.id || '')) return;
+    var mid = card.id.replace('betCard_','');
+    ev.preventDefault();
+    ev.stopPropagation();
+    if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    window.validateSingleBet(mid);
+    return false;
+  }, true);
+
+  console.log('[V253 ZERO ZERO SAVE BDD FIX ACTIVE]');
+})();
+</script>
