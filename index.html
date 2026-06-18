@@ -28277,7 +28277,7 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
 </script>
 
 
-<script id="bp-v259-day-nav-spinner-result-fast-fix">
+<script id="bp-v262-nav-stuck-audit-precision">
 /* V259 — STEP 2 SAFE : flèches journée + couleur carte immédiate
    Périmètre limité : aucun write BDD, aucun recalcul, aucune modification des règles.
    1) Les anciens V80/V81 mettent parfois "Traitement..." sur les flèches de journée.
@@ -28285,8 +28285,8 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
    2) Après changement de journée/rendu, on repeint vite les cartes vert/rouge/or depuis les données déjà chargées. */
 (function(){
   'use strict';
-  if(window.__BP_V259_DAY_NAV_FIX__) return;
-  window.__BP_V259_DAY_NAV_FIX__ = true;
+  if(window.__BP_V262_NAV_STUCK_FIX__) return;
+  window.__BP_V262_NAV_STUCK_FIX__ = true;
 
   function S(){ return window.state || {}; }
   function arr(v){ return Array.isArray(v) ? v : []; }
@@ -28302,24 +28302,43 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
     if(btn.closest && btn.closest('.login-card,.bp-modal,.bet-actions,.admin-finance-actions,.admin-day-score-actions')) return true;
     return /sauvegarde|sauvegarder|valider|calcul|ouvrir|fermer|supprimer|sceller|connexion|entrer/.test(t);
   }
-  function mustRestore(btn){
+  function oldHtml(btn){
+    return (btn && btn.dataset && (btn.dataset.v80Old || btn.dataset.v81Old || btn.dataset.v79Old)) ||
+      (btn && (btn.getAttribute('data-v80-old') || btn.getAttribute('data-v81-old') || btn.getAttribute('data-v79-old'))) || '';
+  }
+  function hasLoadingClass(btn){
+    return !!btn && btn.classList && (
+      btn.classList.contains('bp-v80-loading') ||
+      btn.classList.contains('bp-v81-loading') ||
+      btn.classList.contains('bp-v79-loading') ||
+      btn.classList.contains('bp-btn-loading') ||
+      btn.classList.contains('is-loading') ||
+      btn.classList.contains('loading') ||
+      btn.classList.contains('busy')
+    );
+  }
+  function looksStuck(btn){
     if(!btn) return false;
     var t=txt(btn.textContent||btn.innerText||'');
-    return isMenu(btn) || isDayArrow(btn) ||
-      ((t.indexOf('Traitement') !== -1 || btn.disabled) && !isRealLongCta(btn));
+    return t.indexOf('Traitement') !== -1 || !!oldHtml(btn) || hasLoadingClass(btn);
   }
-  function oldHtml(btn){
-    return (btn.dataset && (btn.dataset.v80Old || btn.dataset.v81Old || btn.dataset.v79Old)) ||
-      btn.getAttribute('data-v80-old') || btn.getAttribute('data-v81-old') || btn.getAttribute('data-v79-old') || '';
+  function mustRestore(btn){
+    if(!btn) return false;
+    if(isRealLongCta(btn)) return false;
+    if(!(isMenu(btn) || isDayArrow(btn) || btn.closest && btn.closest('#bets'))) return false;
+    return looksStuck(btn);
   }
   function cleanBtn(btn){
     if(!btn) return;
+    var wasStuck=mustRestore(btn);
     var old=oldHtml(btn);
     if(old) btn.innerHTML=old;
     if(btn.dataset){ delete btn.dataset.v80Old; delete btn.dataset.v81Old; delete btn.dataset.v79Old; }
     btn.removeAttribute('data-v80-old'); btn.removeAttribute('data-v81-old'); btn.removeAttribute('data-v79-old');
     btn.classList.remove('bp-v80-loading','bp-v81-loading','bp-v79-loading','bp-btn-loading','is-loading','loading','busy');
-    if(mustRestore(btn)){ btn.disabled=false; btn.style.pointerEvents=''; btn.style.opacity=''; }
+    btn.style.pointerEvents=''; btn.style.opacity='';
+    // Ne jamais réactiver une flèche légitimement disabled sauf si elle était vraiment en état loading.
+    if(wasStuck && !isDayArrow(btn)) btn.disabled=false;
   }
   function cleanUi(){
     document.querySelectorAll('button').forEach(function(b){ if(mustRestore(b)) cleanBtn(b); });
@@ -28440,11 +28459,12 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
     var stuck=[];
     document.querySelectorAll('button').forEach(function(b){ if(mustRestore(b)) stuck.push({id:b.id||'', text:txt(b.textContent), cls:b.className||'', disabled:!!b.disabled}); });
     var out={stuck:stuck, paint:paintCards(), section:(document.querySelector('section.active')||{}).id||''};
-    console.log('[V259 AUDIT]', out);
+    console.log('[V262 AUDIT]', out);
     return out;
   };
+  window.bpV262Audit=window.bpV259Audit;
 
   pulse();
-  console.log('[V259 DAY NAV SPINNER RESULT FAST FIX ACTIVE]');
+  console.log('[V262 NAV STUCK AUDIT PRECISION ACTIVE]');
 })();
 </script>
