@@ -25900,6 +25900,306 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
 })();
 </script>
 
+
+
+<!-- V265 — Derniers matchs équipe : design premium + suppression labels pays bas — journée ouverte uniquement -->
+<style id="bp-v265-team-recent-premium-css">
+/* V265 — UX only. Affiche les derniers matchs sous le drapeau uniquement si la journée affichée est ouverte. */
+#bets .team-label-row,
+#bets .bet-form.score-only label > div[style*="justify-content:space-between"]{
+  display:none!important;
+}
+
+#bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card,
+#bets .bet-inline-row .flag-wrap{
+  position:relative!important;
+}
+
+#bets .bp-v265-team-form{
+  width:100%!important;
+  margin-top:14px!important;
+  padding:12px 12px 13px!important;
+  border-radius:16px!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(122,0,25,.20), transparent 58%),
+    linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 10px 24px rgba(0,0,0,.18)!important;
+  text-align:center!important;
+}
+
+#bets .bp-v265-form-head{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  margin-bottom:8px!important;
+  color:rgba(255,255,255,.82)!important;
+  font-size:10px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+  text-transform:uppercase!important;
+  letter-spacing:1.05px!important;
+}
+
+#bets .bp-v265-form-dot{
+  width:7px!important;
+  height:7px!important;
+  border-radius:50%!important;
+  background:#4ade80!important;
+  box-shadow:0 0 12px rgba(74,222,128,.72)!important;
+  flex:0 0 7px!important;
+}
+
+#bets .bp-v265-form-list{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:6px!important;
+}
+
+#bets .bp-v265-form-line{
+  display:grid!important;
+  grid-template-columns:1fr auto!important;
+  gap:8px!important;
+  align-items:center!important;
+  min-height:28px!important;
+  padding:6px 8px!important;
+  border-radius:11px!important;
+  background:rgba(0,0,0,.32)!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  color:rgba(255,255,255,.86)!important;
+  font-size:12px!important;
+  line-height:1.15!important;
+  font-weight:900!important;
+}
+
+#bets .bp-v265-form-opp{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  text-align:left!important;
+}
+
+#bets .bp-v265-form-score{
+  min-width:46px!important;
+  padding:4px 7px!important;
+  border-radius:999px!important;
+  text-align:center!important;
+  font-variant-numeric:tabular-nums!important;
+  font-size:12px!important;
+  font-weight:1000!important;
+  color:#fff!important;
+  background:linear-gradient(135deg,#7A0019,#2a0a11)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  box-shadow:0 0 16px rgba(122,0,25,.22)!important;
+}
+
+#bets .bp-v265-team-form.is-empty{
+  opacity:.72!important;
+}
+#bets .bp-v265-team-form.is-empty .bp-v265-form-dot{
+  background:#9ca3af!important;
+  box-shadow:none!important;
+}
+#bets .bp-v265-empty{
+  color:rgba(255,255,255,.58)!important;
+  font-size:12px!important;
+  font-weight:800!important;
+}
+
+@media(min-width:900px){
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card{
+    min-height:190px!important;
+    padding-bottom:16px!important;
+  }
+}
+
+@media(max-width:720px){
+  #bets .bp-v265-team-form{
+    margin-top:9px!important;
+    padding:9px!important;
+    border-radius:13px!important;
+  }
+  #bets .bp-v265-form-head{
+    font-size:8px!important;
+    letter-spacing:.7px!important;
+    margin-bottom:6px!important;
+  }
+  #bets .bp-v265-form-line{
+    grid-template-columns:1fr!important;
+    gap:3px!important;
+    min-height:0!important;
+    padding:6px!important;
+    font-size:10px!important;
+    text-align:center!important;
+  }
+  #bets .bp-v265-form-opp{
+    text-align:center!important;
+  }
+  #bets .bp-v265-form-score{
+    justify-self:center!important;
+    min-width:42px!important;
+    font-size:10px!important;
+    padding:3px 6px!important;
+  }
+}
+</style>
+<script id="bp-v265-team-recent-premium-js">
+(function(){
+  'use strict';
+  if(window.__BP_V265_TEAM_RECENT_PREMIUM__) return;
+  window.__BP_V265_TEAM_RECENT_PREMIUM__ = true;
+
+  function S(){ return window.state || {}; }
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>'"]/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];
+    });
+  }
+  function norm(v){ return String(v || '').trim().toLowerCase(); }
+  function currentDay(){
+    try{ if(typeof window.currentPronoDay === 'function') return Number(window.currentPronoDay()); }catch(e){}
+    try{ return Number(S().currentDay || 1); }catch(e){ return 1; }
+  }
+  function isDayOpen(day){
+    day = Number(day || 0);
+    try{ if(typeof window.pronoDayIsAvailable === 'function') return !!window.pronoDayIsAvailable(day); }catch(e){}
+    try{ if(typeof window.onlyOpenDay === 'function') return Number(window.onlyOpenDay()) === day; }catch(e){}
+    try{ return day === Number(S().currentDay || 1) && !S().dayClosed; }catch(e){ return false; }
+  }
+  function scoreForMatch(m){
+    if(!m) return null;
+    const s = S();
+    const id = String(m.id || '');
+    const day = String(m.day || '');
+    const candidates = [
+      s.officialScoresByMatch && s.officialScoresByMatch[id],
+      s.officialScores && s.officialScores[day] && s.officialScores[day][id],
+      s.officialScoresByDay && s.officialScoresByDay[day] && s.officialScoresByDay[day][id],
+      m
+    ].filter(Boolean);
+    for(const x of candidates){
+      const a = x.a ?? x.scoreA ?? x.homeScore ?? x.home_score;
+      const b = x.b ?? x.scoreB ?? x.awayScore ?? x.away_score;
+      if(a !== null && a !== undefined && b !== null && b !== undefined && String(a) !== '' && String(b) !== ''){
+        return {a:Number(a), b:Number(b)};
+      }
+    }
+    return null;
+  }
+  function recentForTeam(teamName, beforeDay, limit){
+    const team = norm(teamName);
+    if(!team) return [];
+    return (S().matches || [])
+      .filter(function(m){
+        return Number(m.day || 0) < Number(beforeDay || 0)
+          && (norm(m.teamA) === team || norm(m.teamB) === team)
+          && scoreForMatch(m);
+      })
+      .sort(function(a,b){
+        return Number(b.day || 0) - Number(a.day || 0) || Number(b.matchNo || 0) - Number(a.matchNo || 0);
+      })
+      .slice(0, limit || 2)
+      .map(function(m){
+        const sc = scoreForMatch(m);
+        const a = String(m.teamA || '');
+        const b = String(m.teamB || '');
+        const home = norm(a) === team;
+        return {
+          opponent: home ? b : a,
+          score: home ? (sc.a + '-' + sc.b) : (sc.b + '-' + sc.a),
+          day: Number(m.day || 0)
+        };
+      });
+  }
+  function teamNamesFromCard(card,row){
+    const out = [];
+    const labels = card.querySelectorAll('.team-label-row span');
+    labels.forEach(function(x){ const t=(x.textContent||'').trim(); if(t) out.push(t); });
+    if(out.length < 2){
+      (row || card).querySelectorAll('.flag-wrap img.flag').forEach(function(img){
+        const t=(img.getAttribute('alt')||'').trim(); if(t) out.push(t);
+      });
+    }
+    if(out.length < 2){
+      const txt = (card.querySelector('.bet-title h3')?.textContent || '').replace(/\s+/g,' ').trim();
+      if(txt.indexOf(' vs ') > -1) txt.split(' vs ').forEach(function(t){ if(t.trim()) out.push(t.trim()); });
+    }
+    return [out[0] || '', out[1] || ''];
+  }
+  function box(teamName, day){
+    const rows = recentForTeam(teamName, day, 2);
+    if(!rows.length){
+      return '<div class="bp-v265-team-form is-empty" data-v265-recent="1">'
+        + '<div class="bp-v265-form-head"><span class="bp-v265-form-dot"></span><span>March récent</span></div>'
+        + '<div class="bp-v265-empty">Aucun match joué</div>'
+      + '</div>';
+    }
+    return '<div class="bp-v265-team-form" data-v265-recent="1">'
+      + '<div class="bp-v265-form-head"><span class="bp-v265-form-dot"></span><span>Match récent</span></div>'
+      + '<div class="bp-v265-form-list">'
+      + rows.map(function(r){
+        return '<div class="bp-v265-form-line"><span class="bp-v265-form-opp">vs '+esc(r.opponent)+'</span><span class="bp-v265-form-score">'+esc(r.score)+'</span></div>';
+      }).join('')
+      + '</div></div>';
+  }
+  function applyRecent(){
+    const day = currentDay();
+    const open = isDayOpen(day);
+    document.querySelectorAll('#bets [data-v263-recent="1"],#bets [data-v265-recent="1"]').forEach(function(x){ x.remove(); });
+    document.querySelectorAll('#bets .team-label-row').forEach(function(x){ x.style.display = 'none'; });
+    if(!open) return;
+    document.querySelectorAll('#bets .bet-card').forEach(function(card){
+      const row = card.querySelector('.bet-inline-row');
+      if(!row) return;
+      const names = teamNamesFromCard(card,row);
+      const wraps = row.querySelectorAll('.flag-wrap');
+      wraps.forEach(function(w,i){
+        if(i > 1) return;
+        w.insertAdjacentHTML('beforeend', box(names[i], day));
+      });
+    });
+  }
+  function later(){ try{ applyRecent(); }catch(e){ console.warn('[V265 TEAM RECENT]', e); } }
+
+  const oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function'){
+    window.renderBets = function(){
+      const r = oldRenderBets.apply(this, arguments);
+      window.setTimeout(later, 0);
+      window.setTimeout(later, 160);
+      return r;
+    };
+    try{ renderBets = window.renderBets; }catch(e){}
+  }
+  const oldChangePronoDay = window.changePronoDay;
+  if(typeof oldChangePronoDay === 'function'){
+    window.changePronoDay = function(){
+      const r = oldChangePronoDay.apply(this, arguments);
+      window.setTimeout(later, 0);
+      window.setTimeout(later, 160);
+      return r;
+    };
+    try{ changePronoDay = window.changePronoDay; }catch(e){}
+  }
+  window.bpV265RecentAudit = function(){
+    const day = currentDay();
+    const open = isDayOpen(day);
+    const cards = document.querySelectorAll('#bets .bet-card').length;
+    const boxes = document.querySelectorAll('#bets [data-v265-recent="1"]').length;
+    const labels = Array.from(document.querySelectorAll('#bets .team-label-row')).map(x=>getComputedStyle(x).display);
+    const out = {day:day, open:open, cards:cards, boxes:boxes, labels:labels};
+    console.log('[V265 RECENT AUDIT]', out);
+    return out;
+  };
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ window.setTimeout(later, 300); });
+  }else{
+    window.setTimeout(later, 300);
+  }
+})();
+</script>
 </body></html>
 
 
