@@ -36635,4 +36635,782 @@ body.bp-admin .admin-only{
 })();
 </script>
 
+
+
+<!-- V357 CLASSEMENT CLEAN — affichage groupes + qualification dynamique KO uniquement (aucun changement moteur gains) -->
+<style id="bp-v357-classement-clean-css">
+  #groupStandings .worldcup-team-row,
+  #groupStandings .worldcup-team-row.head{
+    grid-template-columns:30px minmax(110px,1fr) 34px 34px 34px 34px 34px 38px 38px!important;
+  }
+  #groupStandings .worldcup-team-row.head > div:first-child{justify-content:center!important;text-align:center!important;}
+  #finalBracket .knockout-match.unresolved{opacity:.78;}
+  #finalBracket .knockout-placeholder{color:#b7b7b7!important;font-style:italic;}
+  #finalBracket .bp-ko-source{display:block;color:#8f8f8f;font-size:10px;margin-top:1px;line-height:1.15;}
+  #finalBracket .knockout-match.played{border-color:rgba(74,222,128,.45)!important;}
+</style>
+<script id="bp-v357-classement-clean-js">
+(function(){
+  'use strict';
+  if(window.__BP_V357_CLASSEMENT_CLEAN__) return;
+  window.__BP_V357_CLASSEMENT_CLEAN__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  }
+  function num(v){ return Number(v || 0); }
+  function hasScore(m){ return m && m.scoreA !== null && m.scoreA !== undefined && m.scoreB !== null && m.scoreB !== undefined && m.scoreA !== '' && m.scoreB !== ''; }
+  function flagName(team){ return (typeof window.f === 'function') ? window.f(team) : esc(team); }
+  function flagOnlySafe(team){ return (typeof window.flagOnly === 'function') ? window.flagOnly(team) : ''; }
+  function groupLetterFromName(group){
+    const m = String(group || '').match(/^Groupe\s+([A-L])$/i);
+    return m ? m[1].toUpperCase() : null;
+  }
+  function groupName(letter){ return 'Groupe ' + String(letter || '').toUpperCase(); }
+  function isRealGroupNameV357(group){ return !!groupLetterFromName(group); }
+  window.isRealGroupName = isRealGroupNameV357;
+
+  function groupTeamsV357(){
+    const groups = {};
+    arr(S().matches).filter(m => isRealGroupNameV357(m.group)).forEach(m => {
+      const g = String(m.group);
+      if(!groups[g]) groups[g] = new Set();
+      if(m.teamA) groups[g].add(m.teamA);
+      if(m.teamB) groups[g].add(m.teamB);
+    });
+    return Object.fromEntries(Object.entries(groups).map(([g,set]) => [g, [...set].sort((a,b)=>String(a).localeCompare(String(b),'fr'))]));
+  }
+
+  function computeGroupStandingsV357(){
+    const teamsByGroup = groupTeamsV357();
+    const standings = {};
+    Object.entries(teamsByGroup).forEach(([group, teams]) => {
+      standings[group] = teams.map(team => ({team, played:0, won:0, drawn:0, lost:0, gf:0, ga:0, gd:0, pts:0, group}));
+    });
+    arr(S().matches).filter(m => isRealGroupNameV357(m.group)).forEach(m => {
+      if(!hasScore(m)) return;
+      const table = standings[m.group];
+      if(!table) return;
+      const a = table.find(x => x.team === m.teamA);
+      const b = table.find(x => x.team === m.teamB);
+      if(!a || !b) return;
+      const sa = Number(m.scoreA), sb = Number(m.scoreB);
+      if(!Number.isFinite(sa) || !Number.isFinite(sb)) return;
+      a.played++; b.played++;
+      a.gf += sa; a.ga += sb;
+      b.gf += sb; b.ga += sa;
+      if(sa > sb){ a.won++; b.lost++; a.pts += 3; }
+      else if(sa < sb){ b.won++; a.lost++; b.pts += 3; }
+      else { a.drawn++; b.drawn++; a.pts += 1; b.pts += 1; }
+      a.gd = a.gf - a.ga;
+      b.gd = b.gf - b.ga;
+    });
+    Object.values(standings).forEach(table => table.sort((a,b) =>
+      num(b.pts)-num(a.pts) || num(b.gd)-num(a.gd) || num(b.gf)-num(a.gf) || String(a.team).localeCompare(String(b.team),'fr')
+    ));
+    return standings;
+  }
+  window.computeGroupStandings = computeGroupStandingsV357;
+
+  function groupComplete(letter, standings){
+    const table = standings[groupName(letter)];
+    return !!(table && table.length >= 4 && table.every(r => Number(r.played) >= 3));
+  }
+  function thirdRank(standings){
+    return Object.entries(standings)
+      .map(([group, table]) => table && table[2] ? {...table[2], groupLetter: groupLetterFromName(group)} : null)
+      .filter(Boolean)
+      .sort((a,b) => num(b.pts)-num(a.pts) || num(b.gd)-num(a.gd) || num(b.gf)-num(a.gf) || String(a.team).localeCompare(String(b.team),'fr'));
+  }
+
+  function buildResolvedMatchesV357(){
+    const standings = computeGroupStandingsV357();
+    const thirdList = thirdRank(standings).filter(r => groupComplete(r.groupLetter, standings));
+    const usedThird = new Set();
+    const byNo = {};
+    const matches = [...arr(S().matches)].sort((a,b) => num(a.matchNo || a.id)-num(b.matchNo || b.id));
+
+    function unresolved(label){ return {name:String(label || 'À déterminer'), resolved:false, source:String(label || '')}; }
+    function resolved(name, source){ return {name:String(name || 'À déterminer'), resolved:true, source:String(source || '')}; }
+
+    function resolveLabel(label){
+      const raw = String(label || '').trim();
+      let m;
+      m = raw.match(/^Group\s+([A-L])\s+Winners?$/i);
+      if(m){
+        const letter = m[1].toUpperCase();
+        const table = standings[groupName(letter)];
+        return (groupComplete(letter, standings) && table && table[0]) ? resolved(table[0].team, '1er ' + groupName(letter)) : unresolved(raw);
+      }
+      m = raw.match(/^Group\s+([A-L])\s+Runners?\s+Up$/i);
+      if(m){
+        const letter = m[1].toUpperCase();
+        const table = standings[groupName(letter)];
+        return (groupComplete(letter, standings) && table && table[1]) ? resolved(table[1].team, '2e ' + groupName(letter)) : unresolved(raw);
+      }
+      m = raw.match(/^Group\s+([A-L](?:\/[A-L])*)\s+3rd\s+Place$/i);
+      if(m){
+        const eligible = m[1].toUpperCase().split('/');
+        const pick = thirdList.find(r => eligible.includes(r.groupLetter) && !usedThird.has(r.groupLetter));
+        if(pick){ usedThird.add(pick.groupLetter); return resolved(pick.team, '3e ' + groupName(pick.groupLetter)); }
+        return unresolved(raw);
+      }
+      m = raw.match(/^Match\s+(\d+)\s+Winner$/i);
+      if(m){
+        const prev = byNo[Number(m[1])];
+        if(prev && prev.hasScore){
+          const win = Number(prev.scoreA) > Number(prev.scoreB) ? prev.teamA : (Number(prev.scoreB) > Number(prev.scoreA) ? prev.teamB : null);
+          if(win && win.resolved) return resolved(win.name, 'Vainqueur match ' + m[1]);
+          if(win) return unresolved('Vainqueur match ' + m[1]);
+        }
+        return unresolved(raw);
+      }
+      return raw ? resolved(raw, '') : unresolved('À déterminer');
+    }
+
+    matches.forEach(match => {
+      const rA = resolveLabel(match.teamA);
+      const rB = resolveLabel(match.teamB);
+      const no = Number(match.matchNo || String(match.id||'').replace(/\D/g,''));
+      byNo[no] = {match, matchNo:no, teamA:rA, teamB:rB, hasScore:hasScore(match), scoreA:match.scoreA, scoreB:match.scoreB};
+    });
+    return {byNo, standings};
+  }
+  window.bpBuildResolvedMatches = buildResolvedMatchesV357;
+
+  function renderGroupStandingsV357(){
+    const el = document.getElementById('groupStandings');
+    if(!el) return;
+    const standings = computeGroupStandingsV357();
+    const groupOrder = Object.keys(standings).sort((a,b) => a.localeCompare(b,'fr',{numeric:true}));
+    el.innerHTML = '<div class="worldcup-groups-grid">' + groupOrder.map(group => {
+      const rows = standings[group].map((r,i) => `<div class="worldcup-team-row ${i<2?'qualified':(i===2?'possible':'')}">
+        <div class="worldcup-rank">${i+1}</div>
+        <div class="worldcup-team-name">${flagOnlySafe(r.team)}<span>${esc(r.team)}</span></div>
+        <div class="worldcup-stat worldcup-pts">${esc(r.pts)}</div>
+        <div class="worldcup-stat">${esc(r.played)}</div>
+        <div class="worldcup-stat">${esc(r.won)}</div>
+        <div class="worldcup-stat">${esc(r.drawn)}</div>
+        <div class="worldcup-stat">${esc(r.lost)}</div>
+        <div class="worldcup-stat">${esc(r.gf)}</div>
+        <div class="worldcup-stat">${esc(r.ga)}</div>
+      </div>`).join('');
+      return `<div class="worldcup-group-card">
+        <div class="worldcup-group-title">${esc(group)}</div>
+        <div class="worldcup-team-row head"><div>#</div><div>Pays</div><div class="worldcup-pts">NP</div><div>MJ</div><div>G</div><div>N</div><div>P</div><div>BM</div><div>BE</div></div>
+        ${rows}
+      </div>`;
+    }).join('') + '</div><div class="bp-wc-legend"><div class="bp-wc-legend-left"><span><i class="bp-wc-dot q"></i>Qualifié direct</span><span><i class="bp-wc-dot p"></i>Possible qualification</span></div><div class="bp-wc-legend-right"><span>NP : Points</span><span>MJ : Matchs joués</span><span>BM : Buts marqués</span><span>BE : Buts encaissés</span></div></div>';
+  }
+  window.renderGroupStandings = renderGroupStandingsV357;
+  window.patchRenderGroupStandings = function(){ window.renderGroupStandings = renderGroupStandingsV357; };
+
+  function renderTeamCell(t){
+    if(!t || !t.resolved) return `<span class="knockout-placeholder">${esc(t && t.name || 'À déterminer')}</span>`;
+    return `${flagName(t.name)}${t.source ? `<span class="bp-ko-source">${esc(t.source)}</span>` : ''}`;
+  }
+  function phaseOf(m){ return String((m && (m.phase || m.group)) || '').toLowerCase(); }
+  function renderKnockoutBoardV357(){
+    const el = document.getElementById('finalBracket');
+    if(!el) return;
+    const built = buildResolvedMatchesV357();
+    const resolved = Object.values(built.byNo).filter(x => x && x.match && !isRealGroupNameV357(x.match.group));
+    const defs = [
+      {phase:'round of 32', title:'1/16 de finale', count:8},
+      {phase:'round of 16', title:'1/8 de finale', count:4},
+      {phase:'quarter', title:'1/4 de finale', count:2},
+      {phase:'semi', title:'1/2 finale', count:1}
+    ];
+    function listFor(def, side){
+      const ms = resolved.filter(x => phaseOf(x.match).includes(def.phase)).sort((a,b)=>num(a.matchNo)-num(b.matchNo));
+      const half = Math.ceil(ms.length / 2);
+      return (side === 'left' ? ms.slice(0, half) : ms.slice(half)).slice(0, def.count);
+    }
+    function card(x, label, i){
+      const has = x && x.hasScore;
+      const a = x ? x.teamA : {name:label + ' · ' + (i+1), resolved:false};
+      const b = x ? x.teamB : {name:'À déterminer', resolved:false};
+      const unresolved = !x || !a.resolved || !b.resolved;
+      return `<div class="knockout-match ${has?'played':''} ${unresolved?'unresolved':''}">
+        <div class="knockout-team"><span>${renderTeamCell(a)}</span><b>${has ? esc(x.scoreA) : ''}</b></div>
+        <div class="knockout-team"><span>${renderTeamCell(b)}</span><b>${has ? esc(x.scoreB) : ''}</b></div>
+      </div>`;
+    }
+    function roundHtml(def, side){
+      const ms = listFor(def, side);
+      const cards = [];
+      for(let i=0;i<def.count;i++) cards.push(card(ms[i], def.title, i));
+      return `<div class="knockout-round ${side}"><h3>${esc(def.title)}</h3>${cards.join('')}</div>`;
+    }
+    const left = defs.map(d => roundHtml(d,'left')).join('');
+    const right = [...defs].reverse().map(d => roundHtml(d,'right')).join('');
+    el.innerHTML = `${left}<div class="bp-final-center"><div class="bp-final-cup">🏆</div><div class="bp-final-title">B Partner<br>World Cup 2026</div><div class="bp-final-sub">Champion du monde</div><div class="bp-final-crown">👑</div></div>${right}<div class="bp-bracket-legend"><span class="bp-bracket-pill">À déterminer</span><span class="bp-bracket-pill played">Match joué</span><span class="bp-bracket-pill qualified">Qualifié résolu</span></div>`;
+  }
+  window.renderKnockoutBoard = renderKnockoutBoardV357;
+
+  function refreshClassement(){
+    try{ renderGroupStandingsV357(); }catch(e){ console.warn('[V357] renderGroupStandings', e); }
+    try{ renderKnockoutBoardV357(); }catch(e){ console.warn('[V357] renderKnockoutBoard', e); }
+  }
+  const oldRenderCalendar = window.renderCalendar;
+  if(typeof oldRenderCalendar === 'function'){
+    window.renderCalendar = function(){
+      const r = oldRenderCalendar.apply(this, arguments);
+      refreshClassement();
+      return r;
+    };
+  }
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function'){
+    window.renderAll = function(){
+      const r = oldRenderAll.apply(this, arguments);
+      setTimeout(refreshClassement, 0);
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', () => setTimeout(refreshClassement, 250));
+  setTimeout(refreshClassement, 500);
+})();
+</script>
+
+
+<!-- V358 PRONOS STATUS + COULEURS — correction UI uniquement, aucun changement moteur gains -->
+<style id="bp-v358-pronos-status-colors-css">
+  #betRows .bet-card.bp-v358-grey{
+    border-color:rgba(156,163,175,.34)!important;
+    background:linear-gradient(180deg,rgba(31,31,31,.94),rgba(14,14,14,.98))!important;
+    opacity:.72!important;
+    filter:grayscale(.45)!important;
+  }
+  #betRows .bet-card.bp-v358-win{
+    border-color:rgba(74,222,128,.72)!important;
+    background:linear-gradient(180deg,rgba(74,222,128,.13),rgba(15,15,15,.98))!important;
+    box-shadow:0 0 0 1px rgba(74,222,128,.18) inset,0 0 28px rgba(74,222,128,.06)!important;
+    opacity:1!important;filter:none!important;
+  }
+  #betRows .bet-card.bp-v358-loss{
+    border-color:rgba(251,113,133,.72)!important;
+    background:linear-gradient(180deg,rgba(251,113,133,.12),rgba(15,15,15,.98))!important;
+    box-shadow:0 0 0 1px rgba(251,113,133,.16) inset,0 0 28px rgba(251,113,133,.05)!important;
+    opacity:1!important;filter:none!important;
+  }
+  #betRows .bet-card.bp-v358-exact{
+    border-color:rgba(250,204,21,.88)!important;
+    background:linear-gradient(180deg,rgba(250,204,21,.16),rgba(15,15,15,.98))!important;
+    box-shadow:0 0 0 1px rgba(250,204,21,.22) inset,0 0 34px rgba(250,204,21,.08)!important;
+    opacity:1!important;filter:none!important;
+  }
+  #betRows .bet-card.bp-v358-locked .scoreA,
+  #betRows .bet-card.bp-v358-locked .scoreB,
+  #betRows .bet-card.bp-v358-locked .stake{
+    pointer-events:none!important;
+  }
+  #betRows .bp-v358-status-pill{font-weight:900!important;}
+</style>
+<script id="bp-v358-pronos-status-colors-js">
+(function(){
+  'use strict';
+  if(window.__BP_V358_PRONOS_STATUS_COLORS__) return;
+  window.__BP_V358_PRONOS_STATUS_COLORS__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d){ var x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function norm(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+  function hasOwn(o,k){ return !!o && Object.prototype.hasOwnProperty.call(o,k); }
+  function esc(v){ return String(v == null ? '' : v).replace(/[&<>'"]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];}); }
+
+  function maxDay(){
+    return Math.max(1, ...arr(S().matches).map(function(m){return n(m.day,0);}));
+  }
+  function canonicalDay(day){
+    day = n(day, NaN);
+    if(!Number.isFinite(day) || day < 1) return 1;
+    return Math.min(Math.max(1, day), maxDay());
+  }
+  function explicitClosed(day){
+    day = canonicalDay(day);
+    var cd = S().closedDays || {};
+    if(hasOwn(cd, String(day))) return cd[String(day)] === true;
+    if(hasOwn(cd, day)) return cd[day] === true;
+    return null;
+  }
+  function openDaySafe(){
+    var cd = S().closedDays || {};
+    for(var d=1; d<=maxDay(); d++){
+      if(cd[String(d)] === false || cd[d] === false) return d;
+    }
+    return canonicalDay(S().currentDay || window.pronoDayDisplayed || 1);
+  }
+  function isClosedSafe(day){
+    day = canonicalDay(day);
+    var explicit = explicitClosed(day);
+    if(explicit !== null) return explicit;
+    var open = openDaySafe();
+    // Fallback UI : une seule journée ouverte ; les jours avant/après sont non jouables.
+    return day !== open;
+  }
+  function isAvailableSafe(day){
+    day = canonicalDay(day);
+    return day === openDaySafe() && !isClosedSafe(day);
+  }
+  function currentShownDay(){
+    try{ if(typeof window.currentPronoDay === 'function') return canonicalDay(window.currentPronoDay()); }catch(e){}
+    try{ if(typeof currentPronoDay === 'function') return canonicalDay(currentPronoDay()); }catch(e){}
+    return canonicalDay(window.pronoDayDisplayed || S().currentDay || 1);
+  }
+  function playerObj(){
+    try{ if(typeof window.player === 'function'){ var p=window.player(); if(p) return p; } }catch(e){}
+    try{ if(typeof player === 'function'){ var q=player(); if(q) return q; } }catch(e){}
+    var idx = n(window.currentUserIndex, NaN);
+    if(Number.isFinite(idx) && arr(S().players)[idx]) return arr(S().players)[idx];
+    return null;
+  }
+  function playerName(){ var p=playerObj(); return p ? norm(p.name || p.pseudo || p.player || p.playerName) : ''; }
+  function splitScore(s){
+    var m = String(s || '0-0').match(/(\d+)\s*[-:]\s*(\d+)/);
+    return m ? [n(m[1],0), n(m[2],0)] : [0,0];
+  }
+  function matchIdFromCard(card){
+    if(!card) return '';
+    var id=String(card.id||'');
+    if(id.indexOf('betCard_')===0) return id.replace('betCard_','');
+    var el=card.querySelector('[data-match]');
+    return el ? String(el.getAttribute('data-match')||'') : '';
+  }
+  function matchById(mid){ return arr(S().matches).find(function(m){ return String(m.id)===String(mid); }) || null; }
+  function betFor(mid, day){
+    var name = playerName();
+    return arr(S().bets).find(function(b){
+      return String(b.matchId)===String(mid) && n(b.day,0)===n(day,0) && (!name || norm(b.player || b.playerName || b.user)===name);
+    }) || null;
+  }
+  function isValidatedBet(b){ return !!b && (String(b.status||b.betStatus||'').toUpperCase()==='VALIDATED' || !!b.validatedAt); }
+  function settlementFor(b, mid, day){
+    if(b){
+      var d = arr(S().settlementDetails).find(function(x){
+        return String(x.matchId)===String(b.matchId) && n(x.day,0)===n(b.day,0) && norm(x.player||x.playerName||x.user)===norm(b.player||b.playerName||b.user);
+      });
+      if(d) return d;
+    }
+    var name=playerName();
+    return arr(S().settlementDetails).find(function(x){
+      return String(x.matchId)===String(mid) && n(x.day,0)===n(day,0) && (!name || norm(x.player||x.playerName||x.user)===name);
+    }) || null;
+  }
+  function detailClass(detail){
+    if(!detail) return '';
+    var st = String(detail.status || detail.resultStatus || '').toUpperCase();
+    var net = n(detail.netGain,0);
+    if(st.includes('SCORE EXACT') || st.includes('EXACT')) return 'bp-v358-exact';
+    if(st.includes('PERDU') || st.includes('KO') || net < 0) return 'bp-v358-loss';
+    if(st.includes('BON') || st.includes('GAGN') || net > 0) return 'bp-v358-win';
+    return '';
+  }
+  function outcomeHtml(detail, m){
+    if(!detail) return '';
+    var st = String(detail.status || detail.resultStatus || '').toUpperCase();
+    var net = n(detail.netGain,0);
+    var exact = st.includes('SCORE EXACT') || st.includes('EXACT');
+    var lost = st.includes('PERDU') || st.includes('KO') || net < 0;
+    var cls = exact ? 'bp-result-exact result-win' : lost ? 'bp-result-lost result-loss' : 'bp-result-win result-win';
+    var label = exact ? '⭐ SCORE EXACT' : lost ? '🔴 PERDU' : '🟢 BON RÉSULTAT';
+    var official = detail.officialScore || ((m && m.scoreA !== undefined && m.scoreA !== null) ? (m.scoreA+' - '+m.scoreB) : '');
+    return '<div class="bet-result-box '+(exact?'bp-result-exact':lost?'bp-result-lost':'bp-result-win')+'">'
+      + '<span>Résultat officiel : <b>'+esc(official)+'</b></span>'
+      + '<span class="'+cls+'">'+label+'</span>'
+      + '<span class="'+cls+'">'+(net>=0?'+':'')+esc(net)+' FID</span>'
+      + '</div>';
+  }
+  function forceStatusHeader(day){
+    var title = document.getElementById('pronoDayTitle');
+    var date = document.getElementById('pronoDayDate');
+    var status = document.getElementById('pronoDayStatus');
+    if(title) title.textContent = 'Journée '+day+' / '+maxDay();
+    if(date){
+      var m = arr(S().matches).find(function(x){return n(x.day,0)===n(day,0);});
+      date.textContent = (m && m.date) || date.textContent || '—';
+    }
+    if(status){
+      if(isAvailableSafe(day)) status.innerHTML = '<span class="day-status-open">Journée ouverte aux mises</span>';
+      else if(day > openDaySafe()) status.innerHTML = '<span class="day-status-closed">Journée future · mise non disponible</span>';
+      else status.innerHTML = '<span class="day-status-closed">Journée fermée · mise non disponible</span>';
+    }
+  }
+  function applyCardState(card, day){
+    var mid = matchIdFromCard(card); if(!mid) return;
+    var m = matchById(mid);
+    var b = betFor(mid, day);
+    var detail = settlementFor(b, mid, day);
+    var available = isAvailableSafe(day);
+    var validated = isValidatedBet(b);
+    card.classList.remove('bp-v358-grey','bp-v358-win','bp-v358-loss','bp-v358-exact','bp-v358-locked','bp-card-win','bp-card-lost','bp-card-exact');
+    var color = detailClass(detail);
+    if(color) card.classList.add(color);
+    else if(!available) card.classList.add('bp-v358-grey');
+    if(!available || validated) card.classList.add('bp-v358-locked','lockedCard');
+
+    if(!available){
+      card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){ el.disabled = true; });
+      var badge = card.querySelector('.bet-title .badge');
+      if(badge){ badge.className='badge closed'; badge.textContent = detail ? 'Calculée' : (validated ? '✅ Validée' : 'Non misé'); }
+      var btn = card.querySelector('.bet-actions button.action, .bet-actions button');
+      if(btn){ btn.disabled = true; btn.className='action secondary'; btn.textContent = 'Journée fermée'; }
+      var st = card.querySelector('.bet-status');
+      if(st){
+        st.className = 'bet-status muted bp-v358-status-pill';
+        st.textContent = detail ? 'Résultat calculé.' : (validated ? 'Mise validée · journée fermée.' : 'Journée fermée · aucun pronostic validé.');
+      }
+    }
+    if(detail){
+      card.querySelectorAll('.bet-result-box').forEach(function(x){ x.remove(); });
+      var anchor = card.querySelector('.prediction-derived') || card.querySelector('.bet-form');
+      if(anchor) anchor.insertAdjacentHTML('afterend', outcomeHtml(detail, m));
+      var badge2 = card.querySelector('.bet-title .badge');
+      if(badge2){
+        var st2=String(detail.status||detail.resultStatus||'').toUpperCase();
+        badge2.className = 'badge ' + (color==='bp-v358-loss'?'closed':'ok');
+        badge2.textContent = color==='bp-v358-exact' ? '⭐ Score exact' : color==='bp-v358-loss' ? '🔴 Perdu' : '🟢 Gagné';
+      }
+    }
+  }
+  function postRenderFix(){
+    var day = currentShownDay();
+    forceStatusHeader(day);
+    document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(function(card){ applyCardState(card, day); });
+  }
+
+  // Expose des helpers sûrs pour les futurs rendus, sans écrire en BDD.
+  window.bpV358PronoDayIsAvailable = isAvailableSafe;
+  window.bpV358IsDayClosed = isClosedSafe;
+
+  var oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function' && !oldRenderBets.__bpV358Wrapped){
+    window.renderBets = function(){
+      var r = oldRenderBets.apply(this, arguments);
+      setTimeout(postRenderFix,0);
+      setTimeout(postRenderFix,120);
+      return r;
+    };
+    window.renderBets.__bpV358Wrapped = true;
+    try{ renderBets = window.renderBets; }catch(e){}
+  }
+  var oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV358Wrapped){
+    window.renderAll = function(){
+      var r = oldRenderAll.apply(this, arguments);
+      setTimeout(postRenderFix,0);
+      setTimeout(postRenderFix,180);
+      return r;
+    };
+    window.renderAll.__bpV358Wrapped = true;
+    try{ renderAll = window.renderAll; }catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded', function(){ [100,400,1000,1800].forEach(function(ms){ setTimeout(postRenderFix,ms); }); });
+})();
+</script>
+
+
+
+<!-- V359 FORCE PRONOS PREVIOUS DAYS LOCKED + COLORS — UI only, moteur gains inchangé -->
+<style id="bp-v359-pronos-force-css">
+  #betRows .bet-card.bp-v359-grey{
+    border-color:rgba(156,163,175,.38)!important;
+    background:linear-gradient(180deg,rgba(36,36,36,.94),rgba(12,12,12,.98))!important;
+    opacity:.72!important;
+    filter:grayscale(.55)!important;
+  }
+  #betRows .bet-card.bp-v359-win{
+    border-color:rgba(74,222,128,.85)!important;
+    background:linear-gradient(180deg,rgba(74,222,128,.16),rgba(12,12,12,.98))!important;
+    box-shadow:0 0 0 1px rgba(74,222,128,.25) inset,0 0 32px rgba(74,222,128,.09)!important;
+    opacity:1!important;filter:none!important;
+  }
+  #betRows .bet-card.bp-v359-loss{
+    border-color:rgba(251,113,133,.85)!important;
+    background:linear-gradient(180deg,rgba(251,113,133,.16),rgba(12,12,12,.98))!important;
+    box-shadow:0 0 0 1px rgba(251,113,133,.24) inset,0 0 32px rgba(251,113,133,.08)!important;
+    opacity:1!important;filter:none!important;
+  }
+  #betRows .bet-card.bp-v359-exact{
+    border-color:rgba(250,204,21,.95)!important;
+    background:linear-gradient(180deg,rgba(250,204,21,.19),rgba(12,12,12,.98))!important;
+    box-shadow:0 0 0 1px rgba(250,204,21,.32) inset,0 0 38px rgba(250,204,21,.12)!important;
+    opacity:1!important;filter:none!important;
+  }
+  #betRows .bet-card.bp-v359-locked .scoreA,
+  #betRows .bet-card.bp-v359-locked .scoreB,
+  #betRows .bet-card.bp-v359-locked .stake{
+    pointer-events:none!important;
+  }
+</style>
+<script id="bp-v359-pronos-force-js">
+(function(){
+  'use strict';
+  if(window.__BP_V359_PRONOS_FORCE__) return;
+  window.__BP_V359_PRONOS_FORCE__ = true;
+
+  function S(){ return window.state || {}; }
+  function A(v){ return Array.isArray(v) ? v : []; }
+  function N(v,d){ var x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function T(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+  function esc(v){ return String(v == null ? '' : v).replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];}); }
+  function maxDay(){ return Math.max(1, ...A(S().matches).map(function(m){return N(m.day,1);})); }
+  function dayFromTitle(){
+    var el=document.getElementById('pronoDayTitle');
+    var m=el && String(el.textContent||'').match(/Journée\s+(\d+)/i);
+    return m ? N(m[1],0) : 0;
+  }
+  function shownDay(){
+    var d=dayFromTitle(); if(d) return d;
+    try{ if(typeof currentPronoDay==='function') return Math.min(Math.max(1,N(currentPronoDay(),1)),maxDay()); }catch(e){}
+    try{ if(typeof window.currentPronoDay==='function') return Math.min(Math.max(1,N(window.currentPronoDay(),1)),maxDay()); }catch(e){}
+    try{ if(typeof pronoDayDisplayed!=='undefined' && pronoDayDisplayed) return Math.min(Math.max(1,N(pronoDayDisplayed,1)),maxDay()); }catch(e){}
+    return Math.min(Math.max(1,N(S().currentDay,1)),maxDay());
+  }
+  function strictOpenDay(){
+    // UI : une seule journée est jouable. On privilégie currentDay, car des closedDays fantômes peuvent rester à false.
+    var cur=N(S().currentDay,0);
+    if(cur>=1) return Math.min(Math.max(1,cur),maxDay());
+    var cd=S().closedDays||{};
+    for(var d=1; d<=maxDay(); d++) if(cd[String(d)]===false || cd[d]===false) return d;
+    return 1;
+  }
+  function closedStrict(day){
+    day=N(day,1);
+    var cd=S().closedDays||{};
+    if(cd[String(day)]===true || cd[day]===true) return true;
+    return N(day,1)!==strictOpenDay();
+  }
+  function availableStrict(day){ return !closedStrict(day) && N(day,1)===strictOpenDay(); }
+
+  // Remplace les helpers globaux utilisés par plusieurs anciennes couches UI.
+  try{ window.pronoDayIsAvailable = availableStrict; pronoDayIsAvailable = availableStrict; }catch(e){}
+  try{ window.isDayClosed = closedStrict; isDayClosed = closedStrict; }catch(e){}
+  try{ window.viewedDayIsOpen = availableStrict; viewedDayIsOpen = availableStrict; }catch(e){}
+
+  function playerName(){
+    try{ if(typeof player==='function'){ var p=player(); if(p) return T(p.name||p.pseudo||p.player); } }catch(e){}
+    try{ if(typeof window.player==='function'){ var q=window.player(); if(q) return T(q.name||q.pseudo||q.player); } }catch(e){}
+    var idx=N(window.currentUserIndex,NaN);
+    if(Number.isFinite(idx) && A(S().players)[idx]) return T(A(S().players)[idx].name||A(S().players)[idx].pseudo);
+    return '';
+  }
+  function matchId(card){
+    var id=String(card && card.id || '');
+    if(id.indexOf('betCard_')===0) return id.slice(8);
+    var el=card && card.querySelector('[data-match]');
+    return el ? String(el.getAttribute('data-match')||'') : '';
+  }
+  function match(mid){ return A(S().matches).find(function(m){return String(m.id)===String(mid);}) || null; }
+  function split(score){ var m=String(score||'0-0').match(/(\d+)\s*[-:]\s*(\d+)/); return m?[N(m[1],0),N(m[2],0)]:[0,0]; }
+  function bet(mid,day){
+    var name=playerName();
+    return A(S().bets).find(function(b){
+      return String(b.matchId)===String(mid) && N(b.day,0)===N(day,0) && (!name || T(b.player||b.playerName||b.user)===name);
+    }) || null;
+  }
+  function detailFor(b,mid,day){
+    if(b){
+      var d=A(S().settlementDetails).find(function(x){return String(x.matchId)===String(b.matchId) && N(x.day,0)===N(b.day,0) && T(x.player||x.playerName||x.user)===T(b.player||b.playerName||b.user);});
+      if(d) return d;
+    }
+    var name=playerName();
+    return A(S().settlementDetails).find(function(x){return String(x.matchId)===String(mid) && N(x.day,0)===N(day,0) && (!name || T(x.player||x.playerName||x.user)===name);}) || null;
+  }
+  function official(m){
+    if(!m) return null;
+    if(m.scoreA!==null && m.scoreA!==undefined && m.scoreB!==null && m.scoreB!==undefined) return [N(m.scoreA,0),N(m.scoreB,0)];
+    if(m.officialScore) return split(m.officialScore);
+    return null;
+  }
+  function pred(a,b){ return a>b?'A':a<b?'B':'D'; }
+  function computedClass(b,m,d){
+    if(d){
+      var st=String(d.status||d.resultStatus||'').toUpperCase();
+      var net=N(d.netGain,0);
+      if(st.includes('EXACT')) return 'bp-v359-exact';
+      if(st.includes('KO')||st.includes('PERDU')||net<0) return 'bp-v359-loss';
+      if(st.includes('BON')||st.includes('GAGN')||net>0) return 'bp-v359-win';
+    }
+    var o=official(m);
+    if(!b || !o) return '';
+    var bs=b.scoreA!==undefined && b.scoreA!==null ? [N(b.scoreA,0),N(b.scoreB,0)] : split(b.score);
+    if(bs[0]===o[0] && bs[1]===o[1]) return 'bp-v359-exact';
+    if(pred(bs[0],bs[1])===pred(o[0],o[1])) return 'bp-v359-win';
+    return 'bp-v359-loss';
+  }
+  function outcomeBox(b,m,d){
+    var o=official(m);
+    if(!d && !o) return '';
+    var cls=computedClass(b,m,d);
+    var score=d && d.officialScore ? d.officialScore : (o ? (o[0]+' - '+o[1]) : '');
+    var label=cls==='bp-v359-exact'?'⭐ SCORE EXACT':cls==='bp-v359-win'?'🟢 BON RÉSULTAT':'🔴 PERDU';
+    var net=d ? N(d.netGain,0) : '';
+    return '<div class="bet-result-box"><span>Résultat officiel : <b>'+esc(score)+'</b></span><span class="'+(cls==='bp-v359-loss'?'result-loss':'result-win')+'">'+label+'</span>'+(d?'<span class="'+(net<0?'result-loss':'result-win')+'">'+(net>=0?'+':'')+esc(net)+' FID</span>':'')+'</div>';
+  }
+  function setHeader(day){
+    var st=document.getElementById('pronoDayStatus');
+    if(st){
+      if(availableStrict(day)) st.innerHTML='<span class="day-status-open">Journée ouverte aux mises</span>';
+      else if(N(day,1)>strictOpenDay()) st.innerHTML='<span class="day-status-closed">Journée future · mise non disponible</span>';
+      else st.innerHTML='<span class="day-status-closed">Journée fermée · mise non disponible</span>';
+    }
+  }
+  function fixCard(card,day){
+    var mid=matchId(card); if(!mid) return;
+    var m=match(mid), b=bet(mid,day), d=detailFor(b,mid,day), av=availableStrict(day);
+    var cls=computedClass(b,m,d);
+    card.classList.remove('bp-v358-grey','bp-v358-win','bp-v358-loss','bp-v358-exact','bp-v359-grey','bp-v359-win','bp-v359-loss','bp-v359-exact','bp-card-win','bp-card-lost','bp-card-exact');
+    if(cls) card.classList.add(cls); else if(!av) card.classList.add('bp-v359-grey');
+    if(!av){
+      card.classList.add('bp-v359-locked','lockedCard');
+      card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){ el.disabled=true; el.setAttribute('disabled','disabled'); });
+      var badge=card.querySelector('.bet-title .badge');
+      if(badge){
+        badge.className='badge '+(cls && cls!=='bp-v359-loss'?'ok':'closed');
+        badge.textContent=cls==='bp-v359-exact'?'⭐ Score exact':cls==='bp-v359-win'?'🟢 Gagné':cls==='bp-v359-loss'?'🔴 Perdu':(b?'✅ Validée':'Non misé');
+      }
+      var btn=card.querySelector('.bet-actions button');
+      if(btn){ btn.disabled=true; btn.className='action secondary'; btn.textContent='Journée fermée'; }
+      var status=card.querySelector('.bet-status');
+      if(status) status.textContent=cls?'Résultat calculé.':(b?'Mise validée · journée fermée.':'Journée fermée · aucun pronostic validé.');
+    }
+    if(cls){
+      card.querySelectorAll('.bet-result-box').forEach(function(x){x.remove();});
+      var anchor=card.querySelector('.prediction-derived')||card.querySelector('.bet-form');
+      if(anchor) anchor.insertAdjacentHTML('afterend', outcomeBox(b,m,d));
+    }
+  }
+  function force(){
+    var day=shownDay();
+    setHeader(day);
+    document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(function(card){ fixCard(card,day); });
+  }
+  var oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function'){
+    window.renderBets=function(){ var r=oldRenderBets.apply(this,arguments); setTimeout(force,0); setTimeout(force,80); setTimeout(force,250); return r; };
+    try{ renderBets=window.renderBets; }catch(e){}
+  }
+  var oldChange=window.changePronoDay;
+  if(typeof oldChange==='function'){
+    window.changePronoDay=function(delta){ var r=oldChange.apply(this,arguments); setTimeout(force,0); setTimeout(force,120); return r; };
+    try{ changePronoDay=window.changePronoDay; }catch(e){}
+  }
+  ['click','change','input'].forEach(function(evt){ document.addEventListener(evt,function(){ setTimeout(force,0); },true); });
+  document.addEventListener('DOMContentLoaded',function(){ [50,200,600,1200,2500].forEach(function(ms){setTimeout(force,ms);}); });
+  setTimeout(force,200);
+})();
+</script>
+
+
+<!-- V360 FIX PRONOS DAY NAV HEADER SYNC — UI only, moteur gains inchangé -->
+<script id="bp-v360-pronos-day-nav-sync-js">
+(function(){
+  'use strict';
+  if(window.__BP_V360_PRONOS_DAY_NAV_SYNC__) return;
+  window.__BP_V360_PRONOS_DAY_NAV_SYNC__ = true;
+
+  function S(){ return window.state || {}; }
+  function A(v){ return Array.isArray(v) ? v : []; }
+  function N(v,d){ var x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function maxDay(){
+    var m=A(S().matches).map(function(x){return N(x.day,0);}).filter(Boolean);
+    return Math.max(1, m.length ? Math.max.apply(null,m) : 34);
+  }
+  function openDay(){
+    try{ if(typeof window.onlyOpenDay==='function') return clamp(window.onlyOpenDay()); }catch(e){}
+    try{ if(typeof onlyOpenDay==='function') return clamp(onlyOpenDay()); }catch(e){}
+    return clamp(S().currentDay || 1);
+  }
+  function clamp(d){ return Math.min(Math.max(1,N(d,1)),maxDay()); }
+  function setLocalPronoDay(d){
+    d=clamp(d);
+    window.__BP_PRONO_VIEW_DAY__ = d;
+    try{ window.pronoDayDisplayed = d; }catch(e){}
+    try{ pronoDayDisplayed = d; }catch(e){}
+    return d;
+  }
+  function getLocalPronoDay(){
+    if(window.__BP_PRONO_VIEW_DAY__) return clamp(window.__BP_PRONO_VIEW_DAY__);
+    try{ if(typeof pronoDayDisplayed !== 'undefined' && pronoDayDisplayed !== null) return clamp(pronoDayDisplayed); }catch(e){}
+    try{ if(window.pronoDayDisplayed) return clamp(window.pronoDayDisplayed); }catch(e){}
+    return openDay();
+  }
+  function dayDate(day){
+    try{ if(typeof window.dayDate==='function') return window.dayDate(day) || ''; }catch(e){}
+    try{ if(typeof dayDate==='function') return dayDate(day) || ''; }catch(e){}
+    var m=A(S().matches).find(function(x){return N(x.day,0)===N(day,0);});
+    return (m && (m.date || m.matchDate)) || '';
+  }
+  function isClosed(day){
+    day=clamp(day);
+    var cd=S().closedDays||{};
+    if(cd[String(day)]===true || cd[day]===true) return true;
+    if(cd[String(day)]===false || cd[day]===false) return false;
+    return day !== openDay();
+  }
+  function isAvailable(day){ return clamp(day)===openDay() && !isClosed(day); }
+
+  // Force tous les anciens appels à utiliser la journée réellement sélectionnée par les flèches.
+  window.currentPronoDay = function(){ return getLocalPronoDay(); };
+  try{ currentPronoDay = window.currentPronoDay; }catch(e){}
+  window.pronoDayIsAvailable = function(day){ return isAvailable(day); };
+  try{ pronoDayIsAvailable = window.pronoDayIsAvailable; }catch(e){}
+
+  function syncHeader(day){
+    day=clamp(day || getLocalPronoDay());
+    var title=document.getElementById('pronoDayTitle');
+    var date=document.getElementById('pronoDayDate');
+    var status=document.getElementById('pronoDayStatus');
+    var prev=document.getElementById('prevPronoDayBtn');
+    var next=document.getElementById('nextPronoDayBtn');
+    if(title) title.textContent='Journée '+day+' / '+maxDay();
+    if(date) date.textContent=dayDate(day) || '—';
+    if(status){
+      if(isAvailable(day)) status.innerHTML='<span class="day-status-open">Journée ouverte aux mises</span>';
+      else if(day > openDay()) status.innerHTML='<span class="day-status-closed">Journée future · mise non disponible</span>';
+      else status.innerHTML='<span class="day-status-closed">Journée fermée · mise non disponible</span>';
+    }
+    if(prev) prev.disabled = day<=1;
+    if(next) next.disabled = day>=maxDay();
+    var h2=document.querySelector('#bets .pronos-matches-block > h2');
+    if(h2 && /journée ouverte/i.test(h2.textContent||'')) h2.textContent='2. Matchs de la journée sélectionnée';
+  }
+
+  function renderSelectedDay(day){
+    day=setLocalPronoDay(day);
+    syncHeader(day);
+    try{ if(typeof window.renderBets==='function') window.renderBets(); }catch(e){ console.warn('[V360 renderBets]',e); }
+    [0,60,160,350].forEach(function(ms){ setTimeout(function(){ setLocalPronoDay(day); syncHeader(day); },ms); });
+  }
+
+  window.changePronoDay = function(delta){
+    var next=clamp(getLocalPronoDay()+N(delta,0));
+    renderSelectedDay(next);
+  };
+  try{ changePronoDay = window.changePronoDay; }catch(e){}
+
+  var oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function' && !oldRenderBets.__bpV360Wrapped){
+    window.renderBets=function(){
+      var day=getLocalPronoDay();
+      setLocalPronoDay(day);
+      var r=oldRenderBets.apply(this,arguments);
+      [0,80,220].forEach(function(ms){ setTimeout(function(){ setLocalPronoDay(day); syncHeader(day); },ms); });
+      return r;
+    };
+    window.renderBets.__bpV360Wrapped=true;
+    try{ renderBets=window.renderBets; }catch(e){}
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    setLocalPronoDay(openDay());
+    [50,250,800].forEach(function(ms){ setTimeout(function(){ syncHeader(getLocalPronoDay()); },ms); });
+  });
+})();
+</script>
+
 </body></html>
