@@ -22445,9 +22445,38 @@ Calcul : solde actuel - mises déjà engagées sur matchs non calculés.`);
     const a = getScoreA(b);
     const c = getScoreB(b);
     const stake = Number(b.stake || 1);
-    const resultGain = r2(stake * rule.resultMultiplier);
-    const exactBonus = r2(rule.exactScoreBonus);
-    const maxGain = r2(resultGain + exactBonus);
+
+    // V297 — Gain potentiel : calcul TOTAL après événements spéciaux
+    // Ordre validé :
+    // 1) Règle de journée : résultat = mise × multiplicateur ; score exact = + bonus exact
+    // 2) Événements spéciaux : Gains doublés / Lucky Match multiplient le TOTAL
+    const s = window.state || {};
+    const events = ((s.specialEvents || {})[String(day)] || (s.specialEvents || {})[Number(day)] || {});
+    const resultBase = r2(stake * Number(rule.resultMultiplier || 0));
+    const exactBonusBase = r2(Number(rule.exactScoreBonus || 0));
+    const exactBonusAfterExactEvent = events.doubleExact ? r2(exactBonusBase * 2) : exactBonusBase;
+
+    let eventMult = 1;
+    if(events.doubleGains) eventMult *= 2;
+    if(events.luckyMatchId && String(events.luckyMatchId) === String(m.id)) eventMult *= Number(events.luckyMultiplier || 2);
+
+    const resultGain = r2(resultBase * eventMult);
+    const maxGain = r2((resultBase + exactBonusAfterExactEvent) * eventMult);
+    const exactGain = maxGain; // affichage Score exact = gain total, pas seulement bonus fixe
+
+    const eventLabels = [];
+    if(events.doubleGains) eventLabels.push('Gains doublés ×2');
+    if(events.doubleExact) eventLabels.push('Bonus exact ×2');
+    if(events.luckyMatchId && String(events.luckyMatchId) === String(m.id)) eventLabels.push('Lucky Match ×'+Number(events.luckyMultiplier || 2));
+    const eventSuffix = eventLabels.length ? ' · '+eventLabels.join(' · ') : '';
+
+    const resultFormula = eventMult > 1
+      ? `(${fid(stake)} × ${fid(rule.resultMultiplier)}) × ${fid(eventMult)}`
+      : `Mise × ${fid(rule.resultMultiplier)}`;
+    const exactFormula = eventMult > 1 || events.doubleExact
+      ? `((${fid(stake)} × ${fid(rule.resultMultiplier)}) + ${fid(exactBonusAfterExactEvent)}) × ${fid(eventMult)}`
+      : `(Résultat + ${fid(exactBonusBase)} bonus exact)`;
+
     const o = outcome(a,c);
     const p = (typeof player === 'function') ? player() : null;
     const playerName = p?.name || b.player || '';
@@ -22470,16 +22499,16 @@ Calcul : solde actuel - mises déjà engagées sur matchs non calculés.`);
         <div class="bp-v210-card-title">RÉSULTAT CORRECT</div>
         <div class="bp-v210-sub">${esc(outcomeText(o,m))}</div>
         <div class="bp-v210-main green">🏆 + ${fid(resultGain)} FID</div>
-        <div class="bp-v210-sub">(Mise x ${fid(rule.resultMultiplier)})</div>
-        <div class="bp-v210-proba">Règle ${esc(rule.ref)}</div>
+        <div class="bp-v210-sub">${esc(resultFormula)}</div>
+        <div class="bp-v210-proba">Règle ${esc(rule.ref)}${esc(eventSuffix)}</div>
       </div>
 
       <div class="bp-v210-card exact">
         <div class="bp-v210-card-title">SCORE EXACT</div>
         <div class="bp-v210-sub">${a} - ${c}</div>
-        <div class="bp-v210-main green">🎯 + ${fid(exactBonus)} FID</div>
-        <div class="bp-v210-sub">(Bonus fixe)</div>
-        <div class="bp-v210-proba">Bonus exact</div>
+        <div class="bp-v210-main green">🎯 + ${fid(exactGain)} FID</div>
+        <div class="bp-v210-sub">${esc(exactFormula)}</div>
+        <div class="bp-v210-proba">Score exact = résultat + bonus exact${esc(eventSuffix)}</div>
       </div>
 
       <div class="bp-v210-card gold">
@@ -30944,4 +30973,2713 @@ ${rows.length} joueur(s) ont déjà misé sur ce match.
 })();
 </script>
 
+
+<style>
+/* ==========================================================
+   V281 — DICE UX COMPACT + AIDE ?
+   ========================================================== */
+
+/* Reset visuel du vieux bouton dés */
+.bp-dice-score-btn-v280,
+.bp-dice-score-btn-v279,
+.bp-dice-score-btn{
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  min-height:36px!important;
+  height:36px!important;
+  border-radius:999px!important;
+  padding:0 13px!important;
+  margin:0!important;
+  font-size:12px!important;
+  line-height:1!important;
+  flex:0 0 auto!important;
+  box-shadow:none!important;
+  background:rgba(255,255,255,.075)!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  color:#fff!important;
+}
+
+.bp-dice-score-btn-v280:hover,
+.bp-dice-score-btn-v279:hover,
+.bp-dice-score-btn:hover{
+  background:rgba(122,0,25,.72)!important;
+  border-color:rgba(255,255,255,.28)!important;
+  transform:none!important;
+  filter:none!important;
+}
+
+/* Conteneur propre à côté des scores */
+.bp-dice-zone-v281{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:8px!important;
+  margin:12px 0 4px!important;
+  width:100%!important;
+}
+
+.bp-dice-help-v281{
+  position:relative!important;
+  width:24px!important;
+  height:24px!important;
+  border-radius:50%!important;
+  border:1px solid rgba(255,255,255,.22)!important;
+  background:rgba(255,255,255,.08)!important;
+  color:#fff!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  font-size:12px!important;
+  font-weight:1000!important;
+  cursor:help!important;
+  flex:0 0 24px!important;
+}
+
+.bp-dice-help-v281:hover::after{
+  content:"Les dés proposent un score plausible selon un classement FIFA indicatif : avantage au favori, nul possible, scores élevés très rares, aucun 5-0 automatique. Le score n’est pas enregistré tant que vous ne cliquez pas sur Sauvegarder la mise.";
+  position:absolute!important;
+  z-index:9999!important;
+  bottom:32px!important;
+  left:50%!important;
+  transform:translateX(-50%)!important;
+  width:310px!important;
+  max-width:80vw!important;
+  padding:12px 14px!important;
+  border-radius:14px!important;
+  background:#111!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+  color:#fff!important;
+  font-size:12px!important;
+  line-height:1.45!important;
+  text-align:left!important;
+  box-shadow:0 18px 50px rgba(0,0,0,.55)!important;
+}
+
+.bp-dice-help-v281:hover::before{
+  content:"";
+  position:absolute!important;
+  bottom:25px!important;
+  left:50%!important;
+  transform:translateX(-50%) rotate(45deg)!important;
+  width:10px!important;
+  height:10px!important;
+  background:#111!important;
+  border-right:1px solid rgba(255,255,255,.18)!important;
+  border-bottom:1px solid rgba(255,255,255,.18)!important;
+  z-index:10000!important;
+}
+
+/* Le bouton sauvegarder doit rester l'action principale */
+button[data-bp-save-mid],
+button[onclick*="validateSingleBet"]{
+  min-height:52px!important;
+}
+
+/* Si l'ancien patch a placé le bouton dans la zone actions, on le sort visuellement du mode 2 colonnes */
+.bet-actions .bp-dice-zone-v281{
+  grid-column:1 / -1!important;
+  justify-content:center!important;
+  order:-1!important;
+}
+
+.bet-actions .bp-dice-score-btn-v280,
+.bet-actions .bp-dice-score-btn-v279,
+.bet-actions .bp-dice-score-btn{
+  flex:0 0 auto!important;
+}
+
+@media(max-width:700px){
+  .bp-dice-zone-v281{
+    justify-content:flex-start!important;
+  }
+
+  .bp-dice-help-v281:hover::after{
+    left:0!important;
+    transform:none!important;
+  }
+}
+</style>
+
+<script>
+/* ==========================================================
+   V281 — REPOSITIONNE LE BOUTON DES + AJOUTE ?
+   ========================================================== */
+(function(){
+  'use strict';
+  if(window.__BP_V281_DICE_UX_COMPACT_HELP__) return;
+  window.__BP_V281_DICE_UX_COMPACT_HELP__ = true;
+
+  function enhanceDiceUx(){
+    var buttons = Array.from(document.querySelectorAll('.bp-dice-score-btn-v280,.bp-dice-score-btn-v279,.bp-dice-score-btn'));
+
+    buttons.forEach(function(btn){
+      if(btn.dataset.bpV281Enhanced === '1') return;
+
+      btn.innerHTML = '🎲 Dés';
+      btn.title = 'Proposer un score réaliste';
+      btn.dataset.bpV281Enhanced = '1';
+
+      var zone = btn.closest('.bp-dice-zone-v281');
+      if(!zone){
+        zone = document.createElement('div');
+        zone.className = 'bp-dice-zone-v281';
+
+        var parent = btn.parentNode;
+        if(parent){
+          parent.insertBefore(zone, btn);
+          zone.appendChild(btn);
+        }
+      }
+
+      if(!zone.querySelector('.bp-dice-help-v281')){
+        var help = document.createElement('span');
+        help.className = 'bp-dice-help-v281';
+        help.textContent = '?';
+        zone.appendChild(help);
+      }
+
+      /* Repositionnement : zone à placer juste avant les actions/sauvegarde,
+         mais pas en bouton pleine largeur. */
+      var card = zone.closest('.bet-card') || zone.closest('.card');
+      if(card){
+        var save = card.querySelector('button[data-bp-save-mid],button[onclick*="validateSingleBet"]');
+        var scoreArea =
+          card.querySelector('.prediction-derived') ||
+          card.querySelector('.score-helper') ||
+          card.querySelector('.bet-form.score-only') ||
+          card.querySelector('.bet-form');
+
+        if(scoreArea && zone.parentNode !== scoreArea.parentNode){
+          scoreArea.parentNode.insertBefore(zone, scoreArea.nextSibling);
+        }else if(save && save.parentNode && zone.parentNode !== save.parentNode){
+          save.parentNode.insertBefore(zone, save);
+        }
+      }
+    });
+  }
+
+  ['renderBets','renderAll','tab'].forEach(function(fnName){
+    var old = window[fnName];
+    if(typeof old === 'function' && !old.__bpV281DiceUxWrapped){
+      window[fnName] = function(){
+        var result = old.apply(this, arguments);
+        setTimeout(enhanceDiceUx, 0);
+        setTimeout(enhanceDiceUx, 200);
+        setTimeout(enhanceDiceUx, 600);
+        return result;
+      };
+      window[fnName].__bpV281DiceUxWrapped = true;
+      try{ if(fnName === 'renderBets') renderBets = window[fnName]; }catch(e){}
+      try{ if(fnName === 'renderAll') renderAll = window[fnName]; }catch(e){}
+      try{ if(fnName === 'tab') tab = window[fnName]; }catch(e){}
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(enhanceDiceUx, 300);
+    setTimeout(enhanceDiceUx, 1000);
+  });
+
+  try{
+    var mo = new MutationObserver(function(){ setTimeout(enhanceDiceUx, 60); });
+    mo.observe(document.body || document.documentElement, {childList:true, subtree:true});
+  }catch(e){}
+
+  setTimeout(enhanceDiceUx, 300);
+  setTimeout(enhanceDiceUx, 1000);
+
+  window.bpEnhanceDiceUx = enhanceDiceUx;
+
+  console.log('[V281 DICE UX COMPACT HELP ACTIVE]');
+})();
+</script>
+
+
+<style>
+/* =====================================================
+   V285 — DÉS INLINE JS FIXED
+   Le dé n'est plus au centre : il est déplacé dans .bet-actions,
+   sur la même ligne que Sauvegarder la mise.
+   ===================================================== */
+
+#bets .bet-actions{
+  display:flex!important;
+  align-items:center!important;
+  gap:10px!important;
+  justify-content:space-between!important;
+  flex-wrap:nowrap!important;
+}
+
+/* Zone compacte : [Dés] [?] */
+#bets .bp-dice-zone-v281,
+#bets .bp-dice-gold-zone-v282,
+#bets .bp-dice-inline-zone-v285{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:8px!important;
+  width:auto!important;
+  min-width:0!important;
+  margin:0!important;
+  padding:0!important;
+  flex:0 0 auto!important;
+  order:1!important;
+  grid-column:auto!important;
+}
+
+/* Bouton dés compact */
+#bets .bp-dice-score-btn,
+#bets .bp-dice-score-btn-v279,
+#bets .bp-dice-score-btn-v280{
+  width:178px!important;
+  min-width:178px!important;
+  max-width:178px!important;
+  height:44px!important;
+  min-height:44px!important;
+  padding:0 12px!important;
+  margin:0!important;
+  border-radius:12px!important;
+  border:2px solid #facc15!important;
+  background:linear-gradient(180deg,#ffe56a 0%,#facc15 60%,#d89b00 100%)!important;
+  color:#111!important;
+  font-size:13px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+  letter-spacing:.1px!important;
+  text-transform:uppercase!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  box-shadow:0 0 14px rgba(250,204,21,.35)!important;
+  flex:0 0 178px!important;
+}
+
+/* Bouton aide compact */
+#bets .bp-dice-help-v281,
+#bets .bp-dice-help-v282,
+#bets .bp-dice-help-v285{
+  width:44px!important;
+  height:44px!important;
+  min-width:44px!important;
+  min-height:44px!important;
+  border-radius:12px!important;
+  background:linear-gradient(180deg,#184ba5,#08204a)!important;
+  border:2px solid #60a5fa!important;
+  color:#fff!important;
+  font-size:24px!important;
+  font-weight:1000!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  cursor:help!important;
+  flex:0 0 44px!important;
+}
+
+/* Sauvegarder reste action principale */
+#bets button[data-bp-save-mid],
+#bets button[onclick*="validateSingleBet"]{
+  order:2!important;
+  flex:1 1 auto!important;
+  width:auto!important;
+  min-width:220px!important;
+  min-height:54px!important;
+}
+
+/* Supprime le hint gris qui prend de la place */
+#bets .bp-dice-score-hint-v279,
+#bets .bp-dice-score-hint-v280,
+#bets .bp-dice-score-hint{
+  display:none!important;
+}
+
+@media(max-width:700px){
+  #bets .bet-actions{
+    flex-wrap:wrap!important;
+  }
+  #bets .bp-dice-inline-zone-v285,
+  #bets .bp-dice-zone-v281,
+  #bets .bp-dice-gold-zone-v282{
+    width:100%!important;
+  }
+  #bets .bp-dice-score-btn,
+  #bets .bp-dice-score-btn-v279,
+  #bets .bp-dice-score-btn-v280{
+    flex:1 1 auto!important;
+    width:auto!important;
+    max-width:none!important;
+  }
+  #bets button[data-bp-save-mid],
+  #bets button[onclick*="validateSingleBet"]{
+    width:100%!important;
+    min-width:0!important;
+  }
+}
+</style>
+
+<script>
+/* =====================================================
+   V285 — FIX JS POSITION DÉS
+   Force le bloc dés dans .bet-actions, immédiatement avant
+   Sauvegarder la mise, même si V281 l'a mis au centre.
+   ===================================================== */
+(function(){
+  'use strict';
+  if(window.__BP_V285_DICE_INLINE_JS_FIXED__) return;
+  window.__BP_V285_DICE_INLINE_JS_FIXED__ = true;
+
+  function fixDiceInline(){
+    var cards = Array.from(document.querySelectorAll('#bets .bet-card, #bets .card'));
+
+    cards.forEach(function(card){
+      var saveBtn = card.querySelector('button[data-bp-save-mid], button[onclick*="validateSingleBet"]');
+      if(!saveBtn) return;
+
+      var actions = saveBtn.closest('.bet-actions') || saveBtn.parentNode;
+      if(!actions) return;
+
+      var diceBtn =
+        card.querySelector('.bp-dice-score-btn-v280') ||
+        card.querySelector('.bp-dice-score-btn-v279') ||
+        card.querySelector('.bp-dice-score-btn');
+
+      if(!diceBtn) return;
+
+      diceBtn.innerHTML = '🎲 Dés réaliste';
+      diceBtn.title = 'Générer un score plausible selon le classement FIFA indicatif';
+
+      var zone =
+        diceBtn.closest('.bp-dice-inline-zone-v285') ||
+        diceBtn.closest('.bp-dice-zone-v281') ||
+        diceBtn.closest('.bp-dice-gold-zone-v282');
+
+      if(!zone){
+        zone = document.createElement('div');
+        zone.className = 'bp-dice-inline-zone-v285';
+        diceBtn.parentNode.insertBefore(zone, diceBtn);
+        zone.appendChild(diceBtn);
+      }
+
+      zone.classList.add('bp-dice-inline-zone-v285');
+
+      var help =
+        zone.querySelector('.bp-dice-help-v281') ||
+        zone.querySelector('.bp-dice-help-v282') ||
+        zone.querySelector('.bp-dice-help-v285');
+
+      if(!help){
+        help = document.createElement('span');
+        help.className = 'bp-dice-help-v285';
+        help.textContent = '?';
+        help.title = 'Les dés proposent un score réaliste selon un classement FIFA indicatif. Le score n’est pas sauvegardé tant que vous ne cliquez pas sur Sauvegarder la mise.';
+        zone.appendChild(help);
+      }else{
+        help.classList.add('bp-dice-help-v285');
+        help.textContent = '?';
+      }
+
+      /* C'EST LE FIX : on met vraiment la zone à côté du bouton rouge */
+      if(zone.parentNode !== actions){
+        actions.insertBefore(zone, saveBtn);
+      }else if(zone.nextElementSibling !== saveBtn){
+        actions.insertBefore(zone, saveBtn);
+      }
+
+      zone.style.order = '1';
+      saveBtn.style.order = '2';
+
+      actions.style.display = 'flex';
+      actions.style.alignItems = 'center';
+      actions.style.gap = '10px';
+      actions.style.justifyContent = 'space-between';
+      actions.style.flexWrap = 'nowrap';
+
+      saveBtn.style.flex = '1 1 auto';
+      diceBtn.style.flex = '0 0 178px';
+      help.style.flex = '0 0 44px';
+    });
+  }
+
+  ['renderBets','renderAll','tab'].forEach(function(fnName){
+    var old = window[fnName];
+    if(typeof old === 'function' && !old.__bpV285DiceInlineFixed){
+      window[fnName] = function(){
+        var result = old.apply(this, arguments);
+        setTimeout(fixDiceInline, 0);
+        setTimeout(fixDiceInline, 120);
+        setTimeout(fixDiceInline, 400);
+        return result;
+      };
+      window[fnName].__bpV285DiceInlineFixed = true;
+      try{ if(fnName === 'renderBets') renderBets = window[fnName]; }catch(e){}
+      try{ if(fnName === 'renderAll') renderAll = window[fnName]; }catch(e){}
+      try{ if(fnName === 'tab') tab = window[fnName]; }catch(e){}
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(fixDiceInline, 200);
+    setTimeout(fixDiceInline, 700);
+    setTimeout(fixDiceInline, 1500);
+  });
+
+  try{
+    var mo = new MutationObserver(function(){ setTimeout(fixDiceInline, 80); });
+    mo.observe(document.body || document.documentElement, {childList:true, subtree:true});
+  }catch(e){}
+
+  setTimeout(fixDiceInline, 300);
+  setTimeout(fixDiceInline, 1000);
+
+  window.bpFixDiceInlineV285 = fixDiceInline;
+
+  console.log('[V285 DICE INLINE JS FIXED ACTIVE]');
+})();
+</script>
+
+
+<style>
+/* =====================================================
+   V289 — DÉS STABLE / NE TOUCHE PAS AU BOUTON SAUVEGARDER
+   ===================================================== */
+
+#bets .bp-dice-stable-zone-v289{
+  display:inline-flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  margin:0!important;
+  padding:0!important;
+  flex:0 0 auto!important;
+}
+
+#bets .bp-dice-stable-btn-v289{
+  width:178px!important;
+  height:44px!important;
+  min-height:44px!important;
+  border-radius:12px!important;
+  border:2px solid #facc15!important;
+  background:linear-gradient(180deg,#ffe56a 0%,#facc15 60%,#d89b00 100%)!important;
+  color:#111!important;
+  font-size:13px!important;
+  font-weight:1000!important;
+  text-transform:uppercase!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  cursor:pointer!important;
+  box-shadow:0 0 14px rgba(250,204,21,.35)!important;
+  padding:0 12px!important;
+  margin:0!important;
+  flex:0 0 178px!important;
+  position:relative!important;
+  z-index:40!important;
+}
+
+#bets .bp-dice-stable-help-v289{
+  width:44px!important;
+  min-width:44px!important;
+  height:44px!important;
+  min-height:44px!important;
+  border-radius:12px!important;
+  border:2px solid #60a5fa!important;
+  background:linear-gradient(180deg,#184ba5,#08204a)!important;
+  color:#fff!important;
+  font-size:24px!important;
+  font-weight:1000!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  cursor:help!important;
+  position:relative!important;
+  z-index:40!important;
+}
+
+#bets .bp-dice-stable-help-v289:hover::after{
+  content:"Les dés proposent un score plausible selon un classement FIFA indicatif. Le favori gagne plus souvent, le nul reste possible, les gros écarts sont évités. Rien n’est sauvegardé tant que vous ne cliquez pas sur Sauvegarder la mise.";
+  position:absolute!important;
+  left:54px!important;
+  top:-10px!important;
+  width:360px!important;
+  max-width:70vw!important;
+  padding:14px 16px!important;
+  border-radius:14px!important;
+  border:1px solid rgba(250,204,21,.75)!important;
+  background:#111!important;
+  color:#fff!important;
+  font-size:12px!important;
+  line-height:1.45!important;
+  text-align:left!important;
+  box-shadow:0 18px 50px rgba(0,0,0,.65)!important;
+  z-index:99999!important;
+}
+
+/* Position propre : dés à gauche, sauvegarde garde sa largeur normale */
+#bets .bet-actions{
+  display:flex!important;
+  align-items:center!important;
+  gap:10px!important;
+  justify-content:space-between!important;
+}
+
+/* Sécurité : on masque les anciens dés V278/V288 pour éviter les doublons */
+#bets .bp-dice-zone-v281,
+#bets .bp-dice-gold-zone-v282,
+#bets .bp-dice-inline-zone-v285,
+#bets .bp-dice-inline-zone-v287,
+#bets .bp-dice-v288-zone,
+#bets .bp-dice-score-btn,
+#bets .bp-dice-score-btn-v279,
+#bets .bp-dice-score-btn-v280,
+#bets .bp-dice-help-v281,
+#bets .bp-dice-help-v282,
+#bets .bp-dice-help-v285,
+#bets .bp-dice-help-v287{
+  display:none!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
+@media(max-width:760px){
+  #bets .bet-actions{flex-wrap:wrap!important;}
+  #bets .bp-dice-stable-zone-v289{width:100%!important;}
+  #bets .bp-dice-stable-btn-v289{flex:1 1 auto!important;width:auto!important;}
+}
+</style>
+
+<script>
+/* =====================================================
+   V289 — DÉS STABLE
+   - Ne remplace pas validateSingleBet.
+   - Ne touche pas au bouton sauvegarder.
+   - N'utilise pas de MutationObserver.
+   - Ajoute 1 seul bouton dés par carte.
+   ===================================================== */
+(function(){
+  'use strict';
+  if(window.__BP_V289_DICE_STABLE__) return;
+  window.__BP_V289_DICE_STABLE__ = true;
+
+  function clean(v){ return String(v == null ? '' : v).trim(); }
+
+  function cardOf(el){
+    return el && el.closest ? el.closest('#bets [id^="betCard_"], #bets .bet-card') : null;
+  }
+
+  function midFromCard(card){
+    if(!card) return '';
+    var id = clean(card.id);
+    if(id.indexOf('betCard_') === 0) return id.slice(8);
+    var x = card.querySelector('[data-match]');
+    if(x) return clean(x.getAttribute('data-match'));
+    var s = card.querySelector('.scoreA,.scoreB,.stake');
+    return s ? clean(s.getAttribute('data-match')) : '';
+  }
+
+  function matchById(mid){
+    var arr = (window.state && Array.isArray(state.matches)) ? state.matches : [];
+    return arr.find(function(m){
+      return clean(m.id || m.matchId || m.mid) === clean(mid);
+    }) || null;
+  }
+
+  function rank(team){
+    var r = {
+      'Argentine':1,'France':2,'Espagne':3,'Angleterre':4,'Brésil':5,'Portugal':6,'Pays-Bas':7,'Belgique':8,
+      'Allemagne':9,'Croatie':10,'Maroc':12,'Uruguay':13,'Colombie':14,'États-Unis':15,'Mexique':16,
+      'Suisse':17,'Japon':18,'Sénégal':19,'Danemark':20,'Iran':21,'Corée du Sud':22,'Autriche':23,
+      'Australie':24,'Tchéquie':25,'Turquie':26,'Équateur':27,'Suède':28,'Pologne':30,'Serbie':31,
+      'Égypte':33,'Côte d’Ivoire':34,'Tunisie':35,'Algérie':36,'Canada':37,'Norvège':38,'Écosse':39,
+      'Paraguay':40,'Qatar':41,'Arabie saoudite':42,'Ghana':43,'Panama':44,'Afrique du Sud':45,
+      'Iraq':46,'Ouzbékistan':47,'Bosnie-Herzégovine':48,'Jordanie':49,'Cap-Vert':50,'Nouvelle-Zélande':51,
+      'Haïti':52,'Curaçao':53,'République démocratique du Congo':54
+    };
+    return r[clean(team)] || 60;
+  }
+
+  function weighted(items){
+    var total = items.reduce(function(s,x){ return s + x.w; },0);
+    var n = Math.random() * total;
+    for(var i=0;i<items.length;i++){
+      n -= items[i].w;
+      if(n <= 0) return items[i].v;
+    }
+    return items[items.length-1].v;
+  }
+
+  function generateScore(teamA, teamB){
+    var diff = rank(teamB) - rank(teamA);
+    var adv = Math.max(-0.24, Math.min(0.24, diff / 160));
+    var pA = 0.38 + adv;
+    var pB = 0.38 - adv;
+    var pD = 1 - pA - pB;
+
+    if(Math.abs(diff) < 8){
+      pD += 0.08;
+      pA -= 0.04;
+      pB -= 0.04;
+    }
+
+    var rnd = Math.random();
+    var outcome = rnd < pA ? 'A' : rnd < pA + pD ? 'D' : 'B';
+
+    var total = weighted([
+      {v:0,w:4},{v:1,w:16},{v:2,w:30},{v:3,w:27},{v:4,w:15},{v:5,w:6},{v:6,w:2}
+    ]);
+
+    if(outcome === 'D' && total % 2 === 1) total = Math.max(0, total - 1);
+
+    var a = 0, b = 0, w, l;
+
+    if(outcome === 'D'){
+      if(total < 2){ a = 0; b = 0; }
+      else if(total < 4){ a = 1; b = 1; }
+      else { a = 2; b = 2; }
+    }else{
+      if(total <= 1){ w = 1; l = 0; }
+      else if(total === 2){ w = 2; l = 0; }
+      else if(total === 3){ Math.random() < 0.70 ? (w = 2, l = 1) : (w = 3, l = 0); }
+      else if(total === 4){ Math.random() < 0.74 ? (w = 3, l = 1) : (w = 2, l = 2); }
+      else if(total === 5){ Math.random() < 0.72 ? (w = 3, l = 2) : (w = 4, l = 1); }
+      else { w = 4; l = 2; }
+
+      if(outcome === 'A'){ a = w; b = l; }
+      else { a = l; b = w; }
+    }
+
+    if(a === 0 && b === 0 && Math.random() < 0.55){ a = 1; b = 1; }
+
+    return [Math.min(a,4), Math.min(b,3)];
+  }
+
+  function scoreSelects(card, mid){
+    var a = card.querySelector('.scoreA[data-match="'+mid+'"]') || card.querySelector('.scoreA');
+    var b = card.querySelector('.scoreB[data-match="'+mid+'"]') || card.querySelector('.scoreB');
+    if(a && b) return [a,b];
+
+    var selects = Array.from(card.querySelectorAll('select')).filter(function(s){
+      var vals = Array.from(s.options || []).map(function(o){ return clean(o.value); });
+      return vals.indexOf('0') >= 0 && vals.indexOf('1') >= 0 && vals.indexOf('2') >= 0 && vals.indexOf('3') >= 0;
+    });
+
+    return selects.length >= 2 ? [selects[0], selects[1]] : [null,null];
+  }
+
+  function applyDice(mid, btn){
+    var card = cardOf(btn) || document.getElementById('betCard_' + mid);
+    var match = matchById(mid);
+
+    if(!card || !match){
+      alert('Match introuvable pour générer un score.');
+      return false;
+    }
+
+    var pair = scoreSelects(card, mid);
+    if(!pair[0] || !pair[1]){
+      alert('Champs score introuvables.');
+      return false;
+    }
+
+    var s = generateScore(match.teamA, match.teamB);
+
+    pair[0].value = String(s[0]);
+    pair[1].value = String(s[1]);
+
+    ['input','change'].forEach(function(type){
+      pair[0].dispatchEvent(new Event(type,{bubbles:true}));
+      pair[1].dispatchEvent(new Event(type,{bubbles:true}));
+    });
+
+    var derived = card.querySelector('.prediction-derived');
+    if(derived){
+      derived.textContent = '🎲 Score proposé : ' + match.teamA + ' ' + s[0] + ' - ' + s[1] + ' ' + match.teamB + '. À confirmer avant clôture.';
+    }
+
+    return false;
+  }
+
+  function injectOne(card){
+    var mid = midFromCard(card);
+    if(!mid) return;
+
+    if(card.querySelector('.bp-dice-stable-zone-v289')) return;
+
+    var saveBtn = Array.from(card.querySelectorAll('button')).find(function(b){
+      var t = clean(b.textContent).toLowerCase();
+      return t.indexOf('sauvegarder') >= 0 || t.indexOf('valider la mise') >= 0;
+    });
+
+    if(!saveBtn) return;
+
+    var actions = saveBtn.closest('.bet-actions') || saveBtn.parentNode;
+    if(!actions) return;
+
+    var zone = document.createElement('div');
+    zone.className = 'bp-dice-stable-zone-v289';
+
+    var dice = document.createElement('button');
+    dice.type = 'button';
+    dice.className = 'bp-dice-stable-btn-v289';
+    dice.textContent = '🎲 Dés réaliste';
+    dice.addEventListener('click', function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      return applyDice(mid, dice);
+    }, true);
+
+    var help = document.createElement('span');
+    help.className = 'bp-dice-stable-help-v289';
+    help.textContent = '?';
+    help.title = 'Score réaliste selon classement FIFA. Rien n’est sauvegardé avant Sauvegarder la mise.';
+
+    zone.appendChild(dice);
+    zone.appendChild(help);
+
+    actions.insertBefore(zone, saveBtn);
+  }
+
+  function injectAll(){
+    document.querySelectorAll('#bets [id^="betCard_"], #bets .bet-card').forEach(injectOne);
+  }
+
+  ['renderBets','renderAll','tab','showSection'].forEach(function(fn){
+    var old = window[fn];
+    if(typeof old === 'function' && !old.__bpV289DiceStableWrapped){
+      window[fn] = function(){
+        var r = old.apply(this, arguments);
+        setTimeout(injectAll, 80);
+        setTimeout(injectAll, 400);
+        return r;
+      };
+      window[fn].__bpV289DiceStableWrapped = true;
+      try{
+        if(fn === 'renderBets') renderBets = window[fn];
+        if(fn === 'renderAll') renderAll = window[fn];
+        if(fn === 'tab') tab = window[fn];
+        if(fn === 'showSection') showSection = window[fn];
+      }catch(e){}
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(injectAll, 300);
+    setTimeout(injectAll, 1000);
+  });
+
+  setTimeout(injectAll, 500);
+  setTimeout(injectAll, 1500);
+
+  console.log('[V289 DICE STABLE NO SAVE TOUCH ACTIVE]');
+})();
+</script>
+
+
+
+<script>
+/* V290 — Admin Penalty Day
+   - Checkbox Admin ☠️ Penalty Day
+   - Champs Non misé penalty / Mauvais prono penalty
+   - Stockage state.specialEvents[day]
+   - Affichage bandeau joueur + carte match
+   - Application dans calculateGains / recalculateDay via settlementDetails
+*/
+(function(){
+  if(window.__BP_V290_PENALTY_DAY__) return;
+  window.__BP_V290_PENALTY_DAY__ = true;
+
+  const STYLE_ID='bp-v290-penalty-style';
+  function addStyle(){
+    if(document.getElementById(STYLE_ID)) return;
+    const css=document.createElement('style');
+    css.id=STYLE_ID;
+    css.textContent=`
+      .bp-v290-penalty-admin{border-color:rgba(251,113,133,.55)!important;background:linear-gradient(180deg,rgba(80,12,24,.22),rgba(20,20,20,.95))!important}
+      .bp-v290-penalty-banner{margin:12px 0;padding:13px 15px;border-radius:14px;border:1px solid rgba(251,113,133,.55);background:linear-gradient(90deg,rgba(127,29,29,.72),rgba(24,24,27,.96));color:#fff;font-weight:900;box-shadow:0 10px 28px rgba(0,0,0,.28)}
+      .bp-v290-penalty-banner small{display:block;margin-top:4px;color:#ffd7df;font-weight:800;line-height:1.35}
+      .bp-v290-match-penalty{margin:12px 22px 0;padding:10px 13px;border-radius:12px;border:1px solid rgba(251,113,133,.52);background:rgba(127,29,29,.22);color:#ffd7df;font-size:13px;font-weight:900;text-align:center}
+      .bp-v290-field-note{display:block;color:#b7b7b7;font-size:12px;margin-top:5px;line-height:1.35}
+    `;
+    document.head.appendChild(css);
+  }
+
+  function st(){ return window.state || (window.state={}); }
+  function num(v,d){ const n=Number(v); return Number.isFinite(n)?n:d; }
+  function dayKey(day){ return String(Number(day||1)); }
+  function ensureEvents(){
+    const s=st();
+    if(!s.specialEvents || typeof s.specialEvents!=='object') s.specialEvents={};
+    const days=[...new Set((s.matches||[]).map(m=>Number(m.day||1)))];
+    if(!days.length) days.push(Number(s.currentDay||1));
+    days.forEach(d=>{
+      const k=dayKey(d);
+      if(!s.specialEvents[k]) s.specialEvents[k]={};
+      if(typeof s.specialEvents[k].penaltyDay==='undefined') s.specialEvents[k].penaltyDay=false;
+      if(typeof s.specialEvents[k].nonBetPenalty==='undefined') s.specialEvents[k].nonBetPenalty=1;
+      if(typeof s.specialEvents[k].wrongBetPenalty==='undefined') s.specialEvents[k].wrongBetPenalty=2;
+    });
+  }
+  function ev(day){ ensureEvents(); return st().specialEvents[dayKey(day)] || {}; }
+  function adminDay(){ return Number(st().currentDay||1); }
+  function scoreDay(){
+    try{ if(typeof window.scoreEntryDay==='function') return Number(window.scoreEntryDay())||adminDay(); }catch(e){}
+    try{ if(typeof window.bpV68ScoreDay==='function') return Number(window.bpV68ScoreDay())||adminDay(); }catch(e){}
+    return adminDay();
+  }
+  function matchesOf(day){ return (st().matches||[]).filter(m=>Number(m.day)===Number(day)); }
+  function outcome(a,b){ a=Number(a); b=Number(b); return a>b?'A':a<b?'B':'N'; }
+  function scoreTxt(a,b){ return `${Number(a)} - ${Number(b)}`; }
+  function outLabel(o,m){ return o==='A'?m.teamA:o==='B'?m.teamB:'Nul'; }
+  function parsedBet(b){
+    const parts=String(b.score||'0-0').split(/[-–]/);
+    const a=Number(b.scoreA ?? parts[0] ?? 0);
+    const c=Number(b.scoreB ?? parts[1] ?? 0);
+    return {a,b:c,out:outcome(a,c)};
+  }
+  function playerName(p){ return String(p.name||p.pseudo||p.code||''); }
+  function validatedBetFor(player,matchId,day){
+    const pname=playerName(player);
+    return (st().bets||[]).find(b=>Number(b.day)===Number(day) && String(b.matchId)===String(matchId) && String(b.player||'')===pname && String(b.status||'').toUpperCase()==='VALIDATED');
+  }
+
+  function injectAdminFields(){
+    addStyle(); ensureEvents();
+    const grid=document.querySelector('.special-events-grid');
+    if(grid && !document.getElementById('evtPenaltyDay')){
+      const label=document.createElement('label');
+      label.className='bp-v290-penalty-admin';
+      label.innerHTML='<input type="checkbox" id="evtPenaltyDay"> ☠️ Penalty Day';
+      grid.appendChild(label);
+    }
+    const settings=document.querySelector('.special-events-settings');
+    if(settings && !document.getElementById('evtNonBetPenalty')){
+      const a=document.createElement('label');
+      a.innerHTML='☠️ Non misé penalty <input type="number" id="evtNonBetPenalty" min="0" step="1" value="1"><span class="bp-v290-field-note">Pénalité appliquée par match sans mise validée.</span>';
+      const b=document.createElement('label');
+      b.innerHTML='☠️ Mauvais prono penalty <input type="number" id="evtWrongBetPenalty" min="0" step="1" value="2"><span class="bp-v290-field-note">Pénalité appliquée par mise validée KO.</span>';
+      settings.appendChild(a); settings.appendChild(b);
+    }
+    const cur=ev(adminDay());
+    const chk=document.getElementById('evtPenaltyDay'); if(chk) chk.checked=!!cur.penaltyDay;
+    const nb=document.getElementById('evtNonBetPenalty'); if(nb) nb.value=num(cur.nonBetPenalty,1);
+    const wb=document.getElementById('evtWrongBetPenalty'); if(wb) wb.value=num(cur.wrongBetPenalty,2);
+  }
+
+  function mergePenaltyFromAdmin(day){
+    ensureEvents();
+    const e=ev(day);
+    const chk=document.getElementById('evtPenaltyDay');
+    const nb=document.getElementById('evtNonBetPenalty');
+    const wb=document.getElementById('evtWrongBetPenalty');
+    e.penaltyDay=!!(chk && chk.checked);
+    e.nonBetPenalty=num(nb && nb.value,1);
+    e.wrongBetPenalty=num(wb && wb.value,2);
+    st().specialEvents[dayKey(day)]={...e};
+  }
+
+  const oldSaveEvents=window.saveSpecialEventsFromAdmin;
+  window.saveSpecialEventsFromAdmin=function(){
+    const d=adminDay();
+    mergePenaltyFromAdmin(d);
+    let r=true;
+    if(typeof oldSaveEvents==='function') r=oldSaveEvents.apply(this,arguments);
+    mergePenaltyFromAdmin(d);
+    try{ if(typeof window.save==='function') window.save(); else if(typeof window.saveLocal==='function') window.saveLocal(); }catch(e){}
+    try{ if(typeof window.renderAll==='function') window.renderAll(); }catch(e){}
+    return r;
+  };
+
+  const oldClearEvents=window.clearSpecialEventsForCurrentDay;
+  window.clearSpecialEventsForCurrentDay=function(){
+    const r=typeof oldClearEvents==='function'?oldClearEvents.apply(this,arguments):true;
+    const d=adminDay(); ensureEvents();
+    st().specialEvents[dayKey(d)]={...(st().specialEvents[dayKey(d)]||{}), penaltyDay:false, nonBetPenalty:1, wrongBetPenalty:2};
+    try{ if(typeof window.save==='function') window.save(); }catch(e){}
+    try{ if(typeof window.renderAll==='function') window.renderAll(); }catch(e){}
+    return r;
+  };
+
+  const oldRenderAdminEvents=window.renderSpecialEventsAdmin;
+  window.renderSpecialEventsAdmin=function(){
+    const r=typeof oldRenderAdminEvents==='function'?oldRenderAdminEvents.apply(this,arguments):undefined;
+    injectAdminFields();
+    const preview=document.getElementById('specialEventsAdminPreview');
+    const e=ev(adminDay());
+    if(preview && e.penaltyDay && !preview.innerHTML.includes('Penalty Day')){
+      preview.innerHTML += `<br><b>☠️ Penalty Day</b> · non misé : -${num(e.nonBetPenalty,1)} FID / mauvais prono : -${num(e.wrongBetPenalty,2)} FID`;
+    }
+    return r;
+  };
+
+  const oldActiveEventsList=window.activeEventsList;
+  window.activeEventsList=function(day){
+    const list=typeof oldActiveEventsList==='function'?oldActiveEventsList(day):[];
+    const e=ev(day);
+    if(e.penaltyDay) list.push(`☠️ Penalty Day : -${num(e.nonBetPenalty,1)} FID si non misé, -${num(e.wrongBetPenalty,2)} FID si mauvais prono`);
+    return list;
+  };
+  try{ activeEventsList=window.activeEventsList; }catch(e){}
+
+  function currentPronoDaySafe(){
+    try{ if(typeof window.currentPronoDay==='function') return Number(window.currentPronoDay())||adminDay(); }catch(e){}
+    return adminDay();
+  }
+  const oldRenderBanner=window.renderSpecialEventsBanner;
+  window.renderSpecialEventsBanner=function(){
+    const r=typeof oldRenderBanner==='function'?oldRenderBanner.apply(this,arguments):undefined;
+    const d=currentPronoDaySafe(); const e=ev(d); const box=document.getElementById('specialEventsBanner');
+    if(box && e.penaltyDay && !box.innerHTML.includes('bp-v290-penalty-banner')){
+      box.innerHTML += `<div class="bp-v290-penalty-banner">☠️ PENALTY DAY ACTIF — Journée ${d}<small>Non misé : -${num(e.nonBetPenalty,1)} FID par match · Mauvais prono : -${num(e.wrongBetPenalty,2)} FID par match.</small></div>`;
+    }
+    return r;
+  };
+
+  function decoratePenaltyCards(){
+    const d=currentPronoDaySafe(); const e=ev(d);
+    document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(card=>{
+      const old=card.querySelector('.bp-v290-match-penalty'); if(old) old.remove();
+      if(!e.penaltyDay) return;
+      const mid=String(card.id||'').replace('betCard_','');
+      const m=(st().matches||[]).find(x=>String(x.id)===String(mid));
+      if(!m || Number(m.day)!==Number(d)) return;
+      const div=document.createElement('div');
+      div.className='bp-v290-match-penalty';
+      div.innerHTML=`☠️ Penalty Day sur ce match · non misé -${num(e.nonBetPenalty,1)} FID · mauvais prono -${num(e.wrongBetPenalty,2)} FID`;
+      const info=card.querySelector('.match-info-panel');
+      if(info && info.parentNode) info.parentNode.insertBefore(div, info.nextSibling);
+      else card.insertBefore(div, card.firstChild);
+    });
+  }
+  const oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function'){
+    window.renderBets=function(){ const r=oldRenderBets.apply(this,arguments); setTimeout(decoratePenaltyCards,0); return r; };
+    try{ renderBets=window.renderBets; }catch(e){}
+  }
+
+  function removeExistingPenaltyDetails(day){
+    const s=st();
+    const details=(s.settlementDetails||[]).filter(x=>Number(x.day)===Number(day) && String(x.status||'').includes('PENALTY DAY'));
+    details.forEach(x=>{
+      const p=(s.players||[]).find(pp=>playerName(pp)===String(x.player||''));
+      if(!p) return;
+      const amt=num(x.netGain,0);
+      p.balance=num(p.balance,0)-amt;
+      p.evolution=num(p.evolution,0)-amt;
+    });
+    s.settlementDetails=(s.settlementDetails||[]).filter(x=>!(Number(x.day)===Number(day) && String(x.status||'').includes('PENALTY DAY')));
+  }
+
+  function applyPenaltyDay(day){
+    const e=ev(day);
+    if(!e.penaltyDay) return {count:0,total:0};
+    const s=st(); ensureEvents();
+    if(!Array.isArray(s.settlementDetails)) s.settlementDetails=[];
+    removeExistingPenaltyDetails(day);
+    const ms=matchesOf(day);
+    let count=0,total=0;
+    (s.players||[]).forEach(p=>{
+      const pname=playerName(p); if(!pname) return;
+      ms.forEach(m=>{
+        const official=outcome(m.scoreA,m.scoreB);
+        const b=validatedBetFor(p,m.id,day);
+        let penalty=0, status='', pred='', predScore='';
+        if(!b){
+          penalty=num(e.nonBetPenalty,1);
+          status='☠️ PENALTY DAY — NON MISÉ';
+          pred='Aucune mise'; predScore='';
+        }else{
+          const pb=parsedBet(b);
+          pred=outLabel(pb.out,m); predScore=scoreTxt(pb.a,pb.b);
+          if(pb.out!==official){ penalty=num(e.wrongBetPenalty,2); status='☠️ PENALTY DAY — MAUVAIS PRONO'; }
+        }
+        if(penalty>0){
+          const net=-penalty;
+          p.balance=num(p.balance,0)+net;
+          p.evolution=num(p.evolution,0)+net;
+          count++; total+=penalty;
+          s.settlementDetails.push({
+            day:Number(day), matchId:m.id, match:`${m.teamA} - ${m.teamB}`, player:pname,
+            stake:b?num(b.stake,0):0, prediction:pred, predictedScore:predScore,
+            officialScore:scoreTxt(m.scoreA,m.scoreB), result:outLabel(official,m),
+            status, baseGain:0, exactBonus:0, netGain:net, validatedAt:b?.validatedAt||'', penaltyDay:true
+          });
+        }
+      });
+    });
+    return {count,total};
+  }
+
+  async function cloudSavePenalty(reason){
+    try{
+      if(!(window.supabase && window.BP_SUPABASE_URL && window.BP_SUPABASE_ANON_KEY && window.bpGetSupabaseClient)) return false;
+      const payload=JSON.parse(JSON.stringify(st()));
+      payload.logs=(payload.logs||[]).slice(-150);
+      payload.settlementDetails=(payload.settlementDetails||[]).slice(-1800);
+      payload.lastSavedAt=new Date().toISOString();
+      payload.schemaVersion='v290-penalty-day';
+      const oldAllow=window.__BP_ALLOW_BDD_WRITE__;
+      window.__BP_ALLOW_BDD_WRITE__=true;
+      const res=await window.bpGetSupabaseClient().from('app_state').upsert({id:(window.BP_SUPABASE_APP_ID||'bp-world-cup-2026'),data:payload,updated_at:new Date().toISOString()},{onConflict:'id'});
+      window.__BP_ALLOW_BDD_WRITE__=oldAllow;
+      if(res && res.error) throw res.error;
+      return true;
+    }catch(e){ console.warn('[V290] sauvegarde pénalités BDD KO',e); return false; }
+  }
+
+  const oldCalc=window.calculateGains;
+  if(typeof oldCalc==='function'){
+    window.calculateGains=async function(showAlert=true, force=false){
+      const d=scoreDay();
+      const r=await oldCalc.call(this,showAlert,force);
+      if(r===false) return r;
+      const applied=applyPenaltyDay(d);
+      if(applied.count>0){
+        try{ if(typeof window.saveLocal==='function') window.saveLocal(); else if(typeof window.save==='function') window.save(); }catch(e){}
+        await cloudSavePenalty('penalty day J'+d);
+        const info=document.getElementById('calcInfo');
+        if(info) info.innerHTML += `<br>☠️ Penalty Day J${d} appliqué : ${applied.count} pénalité(s), -${applied.total} FID au total.`;
+        try{ if(typeof window.renderAll==='function') window.renderAll(); }catch(e){}
+      }
+      return r;
+    };
+    try{ calculateGains=window.calculateGains; }catch(e){}
+  }
+
+  window.bpApplyPenaltyDayNow=function(day){ const d=Number(day||scoreDay()); const r=applyPenaltyDay(d); try{ if(typeof renderAll==='function') renderAll(); }catch(e){} return r; };
+
+  document.addEventListener('DOMContentLoaded',function(){
+    addStyle(); ensureEvents(); injectAdminFields(); setTimeout(()=>{ injectAdminFields(); decoratePenaltyCards(); try{ if(typeof window.renderSpecialEventsBanner==='function') window.renderSpecialEventsBanner(); }catch(e){} },300);
+  });
+})();
+</script>
+
+
+<script>
+/* V291 — PENALTY DAY RULES + PREVIEW FIX
+   Corrige V290 :
+   - la modale Règle active affiche aussi Penalty Day
+   - le contrôle avant calcul affiche Penalty Day
+   - la prévisualisation calcule les pénalités sans les appliquer immédiatement
+   - la validation BDD applique les pénalités via settlementDetails, joueurs et réserve
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V291_PENALTY_DAY_RULES_FIXED__) return;
+  window.__BP_V291_PENALTY_DAY_RULES_FIXED__ = true;
+
+  function S(){ try{ if(typeof state!=='undefined' && state) return state; }catch(e){} return window.state || (window.state={}); }
+  function arr(v){ return Array.isArray(v)?v:[]; }
+  function num(v,d){ var x=Number(v); return Number.isFinite(x)?x:(d||0); }
+  function round(v){ return Math.round(num(v,0)*100)/100; }
+  function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function dayKey(d){ return String(Number(d)||1); }
+  function now(){ return new Date().toISOString(); }
+  function selectedDaySafe(){
+    try{ if(typeof selectedDay==='function') return Number(selectedDay())||1; }catch(e){}
+    try{ var el=document.getElementById('adminDaySelect')||document.getElementById('scoreDaySelect'); if(el) return Number(el.value)||1; }catch(e){}
+    return Number(S().currentDay||S().openDay||1)||1;
+  }
+  function pronoDaySafe(){
+    try{ if(typeof currentPronoDay==='function') return Number(currentPronoDay())||selectedDaySafe(); }catch(e){}
+    return selectedDaySafe();
+  }
+  function eventFor(day){
+    var s=S(); if(!s.specialEvents || typeof s.specialEvents!=='object' || Array.isArray(s.specialEvents)) s.specialEvents={};
+    var k=dayKey(day); var e=s.specialEvents[k]||s.specialEvents[Number(day)]||{};
+    if(e.penaltyDay){ e.nonBetPenalty=num(e.nonBetPenalty,1); e.wrongBetPenalty=num(e.wrongBetPenalty,2); }
+    return e;
+  }
+  function isPenalty(day){ return !!eventFor(day).penaltyDay; }
+  function penaltyLabel(day){
+    var e=eventFor(day);
+    if(!e.penaltyDay) return '';
+    return '☠️ Penalty Day : non misé -'+num(e.nonBetPenalty,1)+' FID / mauvais prono -'+num(e.wrongBetPenalty,2)+' FID';
+  }
+  function playerName(p){ return String((p&& (p.name||p.pseudo||p.player||p.code))||'').trim(); }
+  function outcome(a,b){ a=num(a,0); b=num(b,0); return a>b?'A':(a<b?'B':'D'); }
+  function outLabel(o,m){ return o==='A'?m.teamA:(o==='B'?m.teamB:'Nul'); }
+  function scoreTxt(a,b){ return num(a,0)+'-'+num(b,0); }
+  function betA(b){ if(b.scoreA!=null) return num(b.scoreA,0); var p=String(b.score||'0-0').split(/[-–]/); return num(p[0],0); }
+  function betB(b){ if(b.scoreB!=null) return num(b.scoreB,0); var p=String(b.score||'0-0').split(/[-–]/); return num(p[1],0); }
+  function isValidBet(b){ return String((b&&b.status)||'').toUpperCase()==='VALIDATED' || b.validated===true; }
+  function matchesOf(day){ return arr(S().matches).filter(function(m){ return Number(m.day)===Number(day); }); }
+  function validBetFor(pname,mid,day){ return arr(S().bets).find(function(b){ return Number(b.day)===Number(day) && String(b.matchId)===String(mid) && String(b.player||b.playerName||'')===String(pname) && isValidBet(b); }); }
+
+  function readPenaltyAdmin(day){
+    var s=S(); if(!s.specialEvents || typeof s.specialEvents!=='object' || Array.isArray(s.specialEvents)) s.specialEvents={};
+    var e=Object.assign({}, eventFor(day));
+    var chk=document.getElementById('evtPenaltyDay');
+    var nb=document.getElementById('evtNonBetPenalty');
+    var wb=document.getElementById('evtWrongBetPenalty');
+    if(chk) e.penaltyDay=!!chk.checked;
+    if(nb) e.nonBetPenalty=num(nb.value,1);
+    if(wb) e.wrongBetPenalty=num(wb.value,2);
+    s.specialEvents[dayKey(day)]=e;
+    return e;
+  }
+
+  function syncPenaltyAdminFields(){
+    var d=selectedDaySafe(); var e=eventFor(d);
+    var chk=document.getElementById('evtPenaltyDay'); if(chk) chk.checked=!!e.penaltyDay;
+    var nb=document.getElementById('evtNonBetPenalty'); if(nb) nb.value=num(e.nonBetPenalty,1);
+    var wb=document.getElementById('evtWrongBetPenalty'); if(wb) wb.value=num(e.wrongBetPenalty,2);
+    var prev=document.getElementById('specialEventsAdminPreview');
+    var line=penaltyLabel(d);
+    if(prev && line && !prev.innerHTML.includes('Penalty Day')) prev.innerHTML += '<br><b>'+esc(line)+'</b>';
+  }
+
+  document.addEventListener('change',function(ev){
+    if(ev.target && /evtPenaltyDay|evtNonBetPenalty|evtWrongBetPenalty/.test(ev.target.id||'')){
+      var d=selectedDaySafe(); readPenaltyAdmin(d);
+      try{ if(typeof save==='function') save(); else if(typeof saveLocal==='function') saveLocal(); }catch(e){}
+      syncPenaltyAdminFields(); renderPenaltyBanners();
+    }
+  },true);
+
+  var oldSaveEvents=window.saveSpecialEventsFromAdmin;
+  window.saveSpecialEventsFromAdmin=function(){
+    var d=selectedDaySafe(); readPenaltyAdmin(d);
+    var r=true; if(typeof oldSaveEvents==='function') r=oldSaveEvents.apply(this,arguments);
+    readPenaltyAdmin(d);
+    try{ if(typeof save==='function') save(); else if(typeof saveLocal==='function') saveLocal(); }catch(e){}
+    syncPenaltyAdminFields(); renderPenaltyBanners();
+    return r;
+  };
+
+  function renderPenaltyBanners(){
+    var d=pronoDaySafe(); var line=penaltyLabel(d);
+    var box=document.getElementById('specialEventsBanner');
+    if(box){
+      var old=box.querySelector('.bp-v291-penalty-banner'); if(old) old.remove();
+      if(line) box.insertAdjacentHTML('beforeend','<div class="bp-v291-penalty-banner" style="margin-top:10px;padding:12px 14px;border-radius:14px;border:1px solid rgba(251,113,133,.55);background:rgba(122,16,32,.25);font-weight:900">'+esc(line)+'</div>');
+    }
+    document.querySelectorAll('#betRows .bet-card').forEach(function(card){
+      var old=card.querySelector('.bp-v291-card-penalty'); if(old) old.remove();
+      if(line) card.insertAdjacentHTML('afterbegin','<div class="bp-v291-card-penalty" style="padding:10px 14px;border-bottom:1px solid rgba(251,113,133,.35);background:rgba(122,16,32,.22);font-weight:900">'+esc(line)+'</div>');
+    });
+  }
+
+  var oldRenderAdmin=window.renderAdmin;
+  if(typeof oldRenderAdmin==='function') window.renderAdmin=function(){ var r=oldRenderAdmin.apply(this,arguments); setTimeout(syncPenaltyAdminFields,0); return r; };
+  var oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function') window.renderBets=function(){ var r=oldRenderBets.apply(this,arguments); setTimeout(renderPenaltyBanners,0); return r; };
+  var oldRenderAll=window.renderAll;
+  if(typeof oldRenderAll==='function') window.renderAll=function(){ var r=oldRenderAll.apply(this,arguments); setTimeout(function(){syncPenaltyAdminFields();renderPenaltyBanners();},0); return r; };
+
+  // 1) Modale règle active : surcharge finale compatible V252.
+  function showRuleWithPenalty(day){
+    var d=Number(day)||pronoDaySafe();
+    var base=null;
+    try{ if(typeof window.bpV252DisplayedRule==='function') base=window.bpV252DisplayedRule(d); }catch(e){}
+    if(!base){ try{ if(typeof window.getGainRuleForDay==='function') base=window.getGainRuleForDay(d); }catch(e){} }
+    base=base||{ref:'R?',label:'Règle active',resultMultiplier:2,exactScoreBonus:2,maxStake:4};
+    var line=penaltyLabel(d);
+    var modal=document.getElementById('bpV212Modal')||document.getElementById('bpV211Modal')||document.getElementById('bpV252RuleModal');
+    if(!modal){
+      var old=document.createElement('div'); old.id='bpV252RuleModal'; old.className='bp-v212-modal-backdrop'; old.innerHTML='<div class="bp-v212-modal"><div class="bp-v212-modal-head"><div class="bp-v212-modal-icon">📘</div><div><div class="bp-v212-modal-title">Règle active</div><div class="bp-v212-modal-sub">Paramètres de gains actuellement appliqués</div></div></div><div class="bp-v212-modal-body" id="bpV252RuleModalBody"></div><div class="bp-v212-modal-actions"><button type="button" onclick="this.closest(\'.bp-v212-modal-backdrop\').style.display=\'none\'">OK</button></div></div>'; document.body.appendChild(old); modal=old;
+    }
+    var body=document.getElementById('bpV212ModalBody')||document.getElementById('bpV211ModalBody')||document.getElementById('bpV252RuleModalBody');
+    var html='<div class="bp-v212-rule-row"><span>Journée</span><b>'+d+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Référence</span><b>'+esc(base.ref||'-')+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Nom</span><b>'+esc(base.label||base.name||base.ref||'-')+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Résultat correct</span><b>Mise × '+esc(base.resultMultiplier||2)+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Score exact</span><b>Bonus +'+esc(base.exactScoreBonus||2)+' FID</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Mise maximale</span><b>'+esc(base.maxStake||4)+' FID</b></div>';
+    if(line){
+      html += '<div class="bp-v212-rule-row" style="border-color:rgba(251,113,133,.45);background:rgba(122,16,32,.22)"><span>Événement spécial</span><b>'+esc(line)+'</b></div>';
+    }
+    if(body){ body.innerHTML=html; modal.style.display='flex'; }
+    else alert('Règle active — Journée '+d+'\n'+(base.label||base.ref||'')+(line?'\n'+line:''));
+  }
+  window.bpV208ShowRule=showRuleWithPenalty;
+  window.bpV210ShowRule=showRuleWithPenalty;
+  window.bpV211ShowRule=showRuleWithPenalty;
+  window.bpV212ShowRule=showRuleWithPenalty;
+
+  // 2) Preview : ajoute les pénalités au moteur sans écrire en BDD.
+  var basePreview=window.bpPreviewGainCalculation;
+  if(typeof basePreview==='function'){
+    window.bpPreviewGainCalculation=function(day){
+      var p=basePreview.call(this,day);
+      var d=Number((p&&p.day)||day||selectedDaySafe());
+      var e=eventFor(d);
+      if(!e.penaltyDay) return p;
+      var players=arr(S().players).filter(function(pl){ return playerName(pl) && playerName(pl)!=='RÉSERVE'; });
+      var matches=matchesOf(d);
+      var penaltyTotal=0, penaltyCount=0, wrongCount=0, missedCount=0;
+      var summary={}; arr(p.players).forEach(function(r){ summary[String(r.player)] = r; });
+      matches.forEach(function(m){
+        var official=outcome(m.scoreA,m.scoreB);
+        players.forEach(function(pl){
+          var pname=playerName(pl); var b=validBetFor(pname,m.id,d); var penalty=0, status='', pred='', predScore='', stake=0;
+          if(!b){ penalty=num(e.nonBetPenalty,1); status='☠️ PENALTY DAY — NON MISÉ'; pred='Aucune mise'; missedCount++; }
+          else { stake=num(b.stake,0); var a=betA(b), bb=betB(b); var po=outcome(a,bb); pred=outLabel(po,m); predScore=scoreTxt(a,bb); if(po!==official){ penalty=num(e.wrongBetPenalty,2); status='☠️ PENALTY DAY — MAUVAIS PRONO'; wrongCount++; } }
+          if(penalty>0){
+            penaltyTotal=round(penaltyTotal+penalty); penaltyCount++;
+            if(!summary[pname]) summary[pname]={player:pname, stake:0, gain:0, net:0, exact:0, won:0, lost:0, bets:0};
+            summary[pname].net=round(num(summary[pname].net,0)-penalty);
+            summary[pname].lost=num(summary[pname].lost,0)+1;
+            p.details.push({day:d, matchId:m.id, match:m.teamA+' - '+m.teamB, player:pname, stake:stake, prediction:pred, predictedScore:predScore, officialScore:scoreTxt(m.scoreA,m.scoreB), officialScoreA:num(m.scoreA,0), officialScoreB:num(m.scoreB,0), result:outLabel(official,m), actualOutcome:official, status:status, baseGain:0, exactBonus:0, gain:0, netGain:-penalty, penaltyDay:true, penaltyAmount:penalty, ruleRef:p.rule&&p.rule.ref, gainRuleRef:p.rule&&p.rule.ref, gainRuleLabel:p.rule&&p.rule.label});
+          }
+        });
+      });
+      p.players=Object.values(summary).sort(function(a,b){ return num(b.net,0)-num(a.net,0) || String(a.player).localeCompare(String(b.player)); });
+      p.penaltyDay=true; p.penaltyTotal=penaltyTotal; p.penaltyCount=penaltyCount; p.penaltyMissed=missedCount; p.penaltyWrong=wrongCount;
+      p.totalNet=round(num(p.totalNet,0)-penaltyTotal);
+      p.reserveImpact=round(num(p.reserveImpact,0)-penaltyTotal);
+      p.reserveAfter=round(num(p.reserveBefore,0)-p.reserveImpact);
+      p.rule=Object.assign({},p.rule||{}, {penaltyLabel:penaltyLabel(d)});
+      return p;
+    };
+  }
+
+  function renderPreviewV291(p){
+    var ci=document.getElementById('calcInfo'); if(!ci) return;
+    ci.dataset.previewActive='1';
+    var playerRows=arr(p.players).map(function(r){ return '<tr><td><b>'+esc(r.player)+'</b></td><td>'+num(r.bets,0)+'</td><td>'+num(r.stake,0)+' FID</td><td>'+num(r.gain,0)+' FID</td><td class="'+(num(r.net,0)>=0?'good':'bad')+'">'+(num(r.net,0)>=0?'+':'')+num(r.net,0)+' FID</td><td>'+num(r.exact,0)+'</td><td>'+num(r.won,0)+'</td><td>'+num(r.lost,0)+'</td></tr>'; }).join('');
+    var detailRows=arr(p.details).filter(function(d){return d.player&&d.player!=='RÉSERVE';}).map(function(d){ return '<tr><td><b>'+esc(d.player)+'</b></td><td>'+esc(d.match||d.matchId||'')+'</td><td>'+esc(d.predictedScore||d.prediction||'')+'</td><td>'+esc(d.officialScore||'')+'</td><td>'+esc(d.status||'')+'</td><td class="'+(num(d.netGain,0)>=0?'good':'bad')+'">'+(num(d.netGain,0)>=0?'+':'')+num(d.netGain,0)+' FID</td></tr>'; }).join('');
+    ci.innerHTML='<h3>🧮 Prévisualisation du calcul J'+esc(p.day)+'</h3>'+
+      '<div class="muted">Aucune écriture BDD à ce stade. Les pénalités Penalty Day sont intégrées dans cette prévisualisation.</div>'+
+      (p.penaltyDay?'<div class="help bad"><b>'+esc(p.rule.penaltyLabel||penaltyLabel(p.day))+'</b><br>Pénalités détectées : '+num(p.penaltyCount,0)+' · non misés : '+num(p.penaltyMissed,0)+' · mauvais pronos : '+num(p.penaltyWrong,0)+' · total : -'+num(p.penaltyTotal,0)+' FID.</div>':'')+
+      '<div class="summary" style="margin:12px 0"><div class="tile"><span>Règle</span><strong>'+esc(p.rule&&p.rule.ref||'')+'</strong><div class="muted">'+esc(p.rule&&p.rule.label||'')+'</div></div><div class="tile"><span>Mises validées</span><strong>'+num(p.validBets,0)+'</strong><div class="muted">Matchs scorés : '+num(p.scoredMatches,0)+'/'+num(p.matchesCount,0)+'</div></div><div class="tile"><span>Total gains</span><strong>'+num(p.totalGain,0)+' FID</strong><div class="muted">Hors penalties</div></div><div class="tile"><span>Penalty Day</span><strong class="bad">-'+num(p.penaltyTotal,0)+' FID</strong><div class="muted">Impact joueurs</div></div></div>'+
+      '<div class="summary" style="margin:12px 0"><div class="tile"><span>Impact réserve</span><strong class="'+(num(p.reserveImpact,0)>0?'bad':'good')+'">'+(num(p.reserveImpact,0)>0?'-':'+')+Math.abs(num(p.reserveImpact,0))+' FID</strong><div class="muted">Réserve après : '+num(p.reserveAfter,0)+' FID</div></div><div class="tile"><span>Scores exacts</span><strong>'+num(p.exactScores,0)+'</strong></div><div class="tile"><span>Mises gagnantes</span><strong>'+num(p.winningBets,0)+'</strong></div><div class="tile"><span>Mises perdues</span><strong>'+num(p.losingBets,0)+'</strong></div></div>'+
+      '<h3>Résumé par joueur</h3><div style="overflow:auto;margin-bottom:14px"><table><thead><tr><th>Joueur</th><th>Mises</th><th>Total misé</th><th>Gains</th><th>Net</th><th>Exact</th><th>Gagnées</th><th>Perdues</th></tr></thead><tbody>'+(playerRows||'<tr><td colspan="8" class="muted">Aucun joueur.</td></tr>')+'</tbody></table></div>'+
+      '<h3>Détail calculé</h3><div style="overflow:auto"><table><thead><tr><th>Joueur</th><th>Match</th><th>Prono</th><th>Officiel</th><th>Statut</th><th>Net</th></tr></thead><tbody>'+(detailRows||'<tr><td colspan="6" class="muted">Aucune ligne.</td></tr>')+'</tbody></table></div>'+
+      '<div class="admin-finance-actions" style="margin-top:14px"><button class="action" id="bpValidateGainPreviewBtn" onclick="bpValidateGainPreview()">✅ Valider et appliquer en BDD</button><button class="action secondary" onclick="bpCancelGainPreview&&bpCancelGainPreview()">Annuler</button></div>';
+  }
+
+  window.calculateGains=async function(showAlert,force){
+    try{ var p=window.bpPreviewGainCalculation(selectedDaySafe()); window.__BP_LAST_GAIN_PREVIEW__=p; renderPreviewV291(p); return true; }
+    catch(e){ alert(e.message||String(e)); return false; }
+  };
+  window.recalculateDay=async function(){ return window.calculateGains(true,true); };
+
+  // 3) Validation BDD : remplace la validation finale pour prendre les penalty details du preview.
+  window.bpValidateGainPreview=window.validateGainPreviewAndPersist=async function(){
+    var p=window.__BP_LAST_GAIN_PREVIEW__; if(!p){ alert('Aucune prévisualisation disponible.'); return false; }
+    if(!confirm('Valider et enregistrer en BDD ?\n\nJournée : J'+p.day+'\nRègle : '+((p.rule&&p.rule.ref)||'')+(p.penaltyDay?'\nPenalty Day : -'+num(p.penaltyTotal,0)+' FID':'')+'\nImpact réserve : '+num(p.reserveImpact,0)+' FID')) return false;
+    var s=S(), day=Number(p.day), ts=now();
+    if(!Array.isArray(s.settlementDetails)) s.settlementDetails=[];
+    // rollback simple de toutes les lignes déjà calculées sur la journée
+    arr(s.settlementDetails).filter(function(d){return Number(d.day)===day && d.player && d.player!=='RÉSERVE';}).forEach(function(d){ var pl=arr(s.players).find(function(x){return playerName(x)===String(d.player);}); if(pl){ pl.balance=round(num(pl.balance,0)-num(d.netGain,0)); pl.evolution=round(num(pl.evolution,0)-num(d.netGain,0)); }});
+    s.settlementDetails=arr(s.settlementDetails).filter(function(d){return Number(d.day)!==day;});
+    arr(p.details).forEach(function(d){
+      var detail=Object.assign({},d,{calculatedAt:ts,validatedAt:ts}); s.settlementDetails.push(detail);
+      if(detail.player && detail.player!=='RÉSERVE'){
+        var pl=arr(s.players).find(function(x){return playerName(x)===String(detail.player);});
+        if(pl){ pl.balance=round(num(pl.balance,0)+num(detail.netGain,0)); pl.evolution=round(num(pl.evolution,0)+num(detail.netGain,0)); if(detail.win) pl.good=num(pl.good,0)+1; if(detail.exactScore) pl.exact=num(pl.exact,0)+1; }
+        var bet=arr(s.bets).find(function(b){return Number(b.day)===day && String(b.matchId)===String(detail.matchId) && String(b.player||b.playerName||'')===String(detail.player);});
+        if(bet && !detail.penaltyDay){ Object.assign(bet,{calculation:detail,calculatedAt:ts,gainRuleRef:p.rule&&p.rule.ref,gainRuleLabel:p.rule&&p.rule.label,resultStatus:detail.status,netGain:detail.netGain,gainLoss:detail.netGain,gain:detail.gain,baseGain:detail.baseGain,exactBonus:detail.exactBonus,exactScore:detail.exactScore,officialScore:detail.officialScore,officialScoreA:detail.officialScoreA,officialScoreB:detail.officialScoreB,actualOutcome:detail.actualOutcome,win:detail.win}); }
+      }
+    });
+    s.gainsCalculatedDays=s.gainsCalculatedDays||{};
+    s.gainsCalculatedDays[dayKey(day)]={day:day,ruleRef:p.rule&&p.rule.ref,ruleLabel:p.rule&&p.rule.label,totalStake:p.totalStake,totalGain:p.totalGain,totalPayout:p.totalPayout,reserveImpact:p.reserveImpact,exactScores:p.exactScores,winningBets:p.winningBets,losingBets:p.losingBets,validBets:p.validBets,penaltyDay:!!p.penaltyDay,penaltyTotal:num(p.penaltyTotal,0),penaltyCount:num(p.penaltyCount,0),validatedAt:ts,calculatedAt:ts};
+    s.reserveBalance=round(num(s.reserveBalance,num(s.reserveTarget,500))-num(p.reserveImpact,0));
+    try{ if(typeof save==='function') save(); else if(typeof saveLocal==='function') saveLocal(); }catch(e){}
+    try{ if(typeof window.forceCloudSave==='function') await window.forceCloudSave('validation calcul gains J'+day+' V291'); else if(typeof window.writeCloud==='function') await window.writeCloud('validation calcul gains J'+day+' V291'); }catch(e){ console.warn('[V291] cloud save fallback',e); }
+    window.__BP_LAST_GAIN_PREVIEW__=null;
+    try{ if(typeof renderAll==='function') renderAll(); }catch(e){}
+    alert('Calcul J'+day+' validé. Penalty Day : '+(p.penaltyDay?('-'+num(p.penaltyTotal,0)+' FID'):'inactif'));
+    return true;
+  };
+
+  // 4) Contrôle avant calcul : ajoute Penalty Day dans le panneau existant.
+  function patchCalcInfo(){
+    var ci=document.getElementById('calcInfo'); if(!ci || ci.dataset.previewActive==='1') return;
+    var d=selectedDaySafe(); var line=penaltyLabel(d);
+    if(line && !ci.innerHTML.includes('Penalty Day')) ci.innerHTML += '<br><b>'+esc(line)+'</b>';
+  }
+  setInterval(patchCalcInfo,800);
+  document.addEventListener('DOMContentLoaded',function(){ setTimeout(function(){syncPenaltyAdminFields();renderPenaltyBanners();patchCalcInfo();},500); });
+  setTimeout(function(){syncPenaltyAdminFields();renderPenaltyBanners();patchCalcInfo();},800);
+})();
+</script>
+
+
+
+<script>
+/* V293 PENALTY DAY — sauvegarde BDD réelle de state.specialEvents[day]
+   Fix du bug constaté : l'écran affichait Penalty Day mais app_state Supabase n'était pas mis à jour.
+   Cette couche écrit directement dans app_state avec ouverture temporaire du garde V101, puis vérifie la BDD. */
+(function(){
+  'use strict';
+  if(window.__BP_V293_PENALTY_DAY_BDD_SAVE_FIXED__) return;
+  window.__BP_V293_PENALTY_DAY_BDD_SAVE_FIXED__ = true;
+
+  const TABLE = 'app_state';
+  const APP_ID = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+  let client = null;
+
+  function S(){ try { return window.state || state || {}; } catch(e){ return window.state || {}; } }
+  function arr(x){ return Array.isArray(x) ? x : []; }
+  function esc(x){ return String(x ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+  function num(x,d){ x=Number(x); return Number.isFinite(x)?x:(d||0); }
+  function bool(id){ const el=document.getElementById(id); return !!(el && el.checked); }
+  function val(id,d){ const el=document.getElementById(id); return el ? el.value : d; }
+  function iso(){ return new Date().toISOString(); }
+  function clone(x){ try { return JSON.parse(JSON.stringify(x || {})); } catch(e){ return {}; } }
+  function dayKey(day){ return String(Number(day || 1)); }
+  function adminDay(){
+    try{ if(typeof window.scoreEntryDay === 'function') return Number(window.scoreEntryDay()) || Number(S().currentDay||1) || 1; }catch(e){}
+    return Number(S().currentDay || 1) || 1;
+  }
+  function hasSupabaseConfig(){
+    return !!(window.supabase && (window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL) && (window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY));
+  }
+  function sb(){
+    if(!hasSupabaseConfig()) throw new Error('Supabase non configuré : URL/clé absente.');
+    if(!client){
+      client = window.supabase.createClient(
+        window.BP_MANUAL_SUPABASE_URL || window.BP_SUPABASE_URL,
+        window.BP_MANUAL_SUPABASE_ANON_KEY || window.BP_SUPABASE_ANON_KEY
+      );
+    }
+    return client;
+  }
+  function compactState(st){
+    const s = clone(st);
+    if(!s.specialEvents || typeof s.specialEvents !== 'object' || Array.isArray(s.specialEvents)) s.specialEvents = {};
+    if(Array.isArray(s.logs)) s.logs = s.logs.slice(-250);
+    if(Array.isArray(s.settlementDetails)) s.settlementDetails = s.settlementDetails.slice(-3000);
+    s.schemaVersion = 'v293-penalty-day-bdd-save-no-reason-column';
+    s.lastSavedAt = iso();
+    s.cloudUpdatedAt = iso();
+    delete s._cache; delete s.debug; delete s.htmlPreview;
+    return s;
+  }
+  async function readRemote(){
+    const r = await sb().from(TABLE).select('data,updated_at').eq('id', APP_ID).maybeSingle();
+    if(r.error) throw r.error;
+    return r.data && r.data.data ? r.data.data : null;
+  }
+  async function writeRemote(reason){
+    const oldGuard = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      const payload = { id: APP_ID, data: compactState(S()), updated_at: iso() };
+      // IMPORTANT : la table app_state n'a pas de colonne reason.
+      // Le motif est stocké dans data.lastSaveReason via compactState(), jamais en colonne SQL.
+      payload.data.lastSaveReason = reason || 'special events save';
+      const r = await sb().from(TABLE).upsert(payload, { onConflict:'id' });
+      if(r.error) throw r.error;
+      return true;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = oldGuard === true;
+    }
+  }
+  function normalizeEvent(e){
+    e = e || {};
+    return {
+      doubleGains: !!e.doubleGains,
+      doubleExact: !!e.doubleExact,
+      cashDay: !!e.cashDay,
+      cashAmount: num(e.cashAmount,10),
+      luckyMatchId: String(e.luckyMatchId || ''),
+      luckyMultiplier: num(e.luckyMultiplier,2),
+      kingDay: !!e.kingDay,
+      kingAmount: num(e.kingAmount,20),
+      jackpot: !!e.jackpot,
+      jackpotAmount: num(e.jackpotAmount,50),
+      festival: !!e.festival,
+      festivalAmount: num(e.festivalAmount,3),
+      penaltyDay: !!e.penaltyDay,
+      noBetPenalty: num(e.noBetPenalty,1),
+      wrongBetPenalty: num(e.wrongBetPenalty,2),
+      savedAt: e.savedAt || iso()
+    };
+  }
+  function eventFromForm(){
+    return normalizeEvent({
+      doubleGains: bool('evtDoubleGains'),
+      doubleExact: bool('evtDoubleExact'),
+      cashDay: bool('evtCashDay'),
+      cashAmount: val('evtCashAmount',10),
+      luckyMatchId: val('evtLuckyMatch','') || '',
+      luckyMultiplier: val('evtLuckyMultiplier',2),
+      kingDay: bool('evtKingDay'),
+      kingAmount: val('evtKingAmount',20),
+      jackpot: bool('evtJackpot'),
+      jackpotAmount: val('evtJackpotAmount',50),
+      festival: bool('evtFestival'),
+      festivalAmount: val('evtFestivalAmount',3),
+      penaltyDay: bool('evtPenaltyDay'),
+      noBetPenalty: val('evtNoBetPenalty',1),
+      wrongBetPenalty: val('evtWrongBetPenalty',2),
+      savedAt: iso()
+    });
+  }
+  function isActive(e){
+    e = normalizeEvent(e);
+    return !!(e.doubleGains || e.doubleExact || e.cashDay || e.luckyMatchId || e.kingDay || e.jackpot || e.festival || e.penaltyDay);
+  }
+  function activeList(e){
+    e = normalizeEvent(e);
+    const list=[];
+    if(e.doubleGains) list.push('🚀 Gains doublés');
+    if(e.doubleExact) list.push('🎯 Scores parfaits doublés');
+    if(e.cashDay) list.push('💰 Cash Day : +'+e.cashAmount+' FID');
+    if(e.luckyMatchId) list.push('🍀 Lucky Match : x'+e.luckyMultiplier);
+    if(e.kingDay) list.push('👑 King of the Day : +'+e.kingAmount+' FID');
+    if(e.jackpot) list.push('🔥 Jackpot : +'+e.jackpotAmount+' FID');
+    if(e.festival) list.push('⚽ Festival offensif : +'+e.festivalAmount+' FID');
+    if(e.penaltyDay) list.push('☠️ Penalty Day : -'+e.noBetPenalty+' FID si non misé / -'+e.wrongBetPenalty+' FID si mauvais prono');
+    return list;
+  }
+  function getEvent(day){
+    const s=S();
+    if(!s.specialEvents || typeof s.specialEvents !== 'object') s.specialEvents = {};
+    const k=dayKey(day);
+    s.specialEvents[k] = normalizeEvent(s.specialEvents[k] || {});
+    return s.specialEvents[k];
+  }
+  function setEvent(day,e){
+    const s=S();
+    if(!s.specialEvents || typeof s.specialEvents !== 'object') s.specialEvents = {};
+    s.specialEvents[dayKey(day)] = normalizeEvent(e);
+    // miroir numérique pour compatibilité avec les anciens blocs qui lisent state.specialEvents[14]
+    s.specialEvents[Number(day)] = s.specialEvents[dayKey(day)];
+    return s.specialEvents[dayKey(day)];
+  }
+  function status(msg, kind){
+    let el = document.getElementById('specialEventsAdminPreview') || document.getElementById('bpManualBDDStatus');
+    if(el){ el.className = 'help ' + (kind || ''); el.innerHTML = msg; }
+    console.log('[V293 Penalty Day]', String(msg).replace(/<[^>]+>/g,''));
+  }
+  function renderAdminPreview(day){
+    const e=getEvent(day), list=activeList(e);
+    const html = list.length ? '<b>Actifs J'+Number(day)+'</b><br>'+list.map(esc).join('<br>') : '<b>J'+Number(day)+'</b> · Aucun événement actif.';
+    status(html, list.length ? (e.penaltyDay?'bad':'good') : '');
+  }
+  function syncFormFromState(){
+    const d=adminDay(), e=getEvent(d);
+    const set=(id,v)=>{ const el=document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked=!!v; else el.value=v; };
+    set('evtDoubleGains',e.doubleGains); set('evtDoubleExact',e.doubleExact); set('evtCashDay',e.cashDay); set('evtCashAmount',e.cashAmount);
+    set('evtLuckyMatch',e.luckyMatchId); set('evtLuckyMultiplier',e.luckyMultiplier); set('evtKingDay',e.kingDay); set('evtKingAmount',e.kingAmount);
+    set('evtJackpot',e.jackpot); set('evtJackpotAmount',e.jackpotAmount); set('evtFestival',e.festival); set('evtFestivalAmount',e.festivalAmount);
+    set('evtPenaltyDay',e.penaltyDay); set('evtNoBetPenalty',e.noBetPenalty); set('evtWrongBetPenalty',e.wrongBetPenalty);
+    renderAdminPreview(d);
+  }
+  async function saveSpecialEvents(day, e){
+    day = Number(day || adminDay());
+    e = setEvent(day, e || eventFromForm());
+    try{ if(typeof window.save === 'function') window.save(); }catch(err){}
+    status('⏳ Sauvegarde événements J'+day+' en BDD…', 'warn');
+    await writeRemote('specialEvents J'+day+' V293');
+    const remote = await readRemote();
+    const saved = remote && remote.specialEvents && (remote.specialEvents[dayKey(day)] || remote.specialEvents[Number(day)]);
+    if(!saved || !!saved.penaltyDay !== !!e.penaltyDay || num(saved.noBetPenalty,1)!==num(e.noBetPenalty,1) || num(saved.wrongBetPenalty,2)!==num(e.wrongBetPenalty,2)){
+      throw new Error('Vérification BDD échouée : specialEvents['+day+'] absent ou différent.');
+    }
+    renderAdminPreview(day);
+    try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(err){}
+    setTimeout(syncFormFromState,80);
+    alert('Événements spéciaux J'+day+' enregistrés et vérifiés en BDD.');
+    return true;
+  }
+
+  window.bpV293SaveSpecialEvents = saveSpecialEvents;
+  window.saveSpecialEventsFromAdmin = async function(){
+    try{ return await saveSpecialEvents(adminDay(), eventFromForm()); }
+    catch(e){ console.error('[V293 saveSpecialEvents]', e); status('❌ Sauvegarde BDD KO : '+esc(e.message || e), 'bad'); alert('Sauvegarde BDD KO : '+(e.message || e)); return false; }
+  };
+  window.clearSpecialEventsForCurrentDay = async function(){
+    const d=adminDay();
+    const empty = normalizeEvent({});
+    setEvent(d, empty);
+    try{ if(typeof window.save === 'function') window.save(); }catch(e){}
+    try{
+      status('⏳ Désactivation événements J'+d+' en BDD…','warn');
+      await writeRemote('clear specialEvents J'+d+' V293');
+      renderAdminPreview(d);
+      try{ if(typeof window.renderAll === 'function') window.renderAll(); }catch(err){}
+      setTimeout(syncFormFromState,80);
+      alert('Événements J'+d+' désactivés et sauvegardés en BDD.');
+      return true;
+    }catch(e){ console.error('[V293 clearSpecialEvents]',e); status('❌ Désactivation BDD KO : '+esc(e.message||e),'bad'); alert('Désactivation BDD KO : '+(e.message||e)); return false; }
+  };
+
+  // Corrige les libellés contradictoires "Aucun événement actif" lorsque Penalty Day est actif.
+  const oldRenderAdmin = window.renderAdmin;
+  if(typeof oldRenderAdmin === 'function'){
+    window.renderAdmin = function(){ const r=oldRenderAdmin.apply(this,arguments); setTimeout(syncFormFromState,60); return r; };
+  }
+  const oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function'){
+    window.renderAll = function(){ const r=oldRenderAll.apply(this,arguments); setTimeout(syncFormFromState,80); return r; };
+  }
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(syncFormFromState,300); setTimeout(syncFormFromState,1200); });
+  setInterval(function(){
+    const p=document.getElementById('specialEventsAdminPreview');
+    if(p && /Aucun événement actif/i.test(p.textContent||'') && getEvent(adminDay()).penaltyDay) renderAdminPreview(adminDay());
+  }, 1000);
+})();
+</script>
+
+
+<!-- V294 — Nettoyage affichage Penalty Day : conserver uniquement la bannière événements de journée -->
+<style id="bp-v294-single-special-events-banner-style">
+  /* On garde uniquement la bannière principale "ÉVÉNEMENTS DE LA JOURNÉE".
+     Les blocs Penalty Day dédiés ajoutés en V290/V291 sont masqués/supprimés. */
+  .bp-v290-penalty-banner,
+  .bp-v290-match-penalty,
+  .bp-v291-penalty-banner,
+  .bp-v291-card-penalty{
+    display:none!important;
+    visibility:hidden!important;
+    height:0!important;
+    min-height:0!important;
+    max-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    overflow:hidden!important;
+  }
+</style>
+<script>
+/* V294 — Single source of truth UX pour les événements spéciaux.
+   Objectif : ne plus afficher Penalty Day en double/triple.
+   On conserve uniquement la bannière globale alimentée par state.specialEvents[day]. */
+(function(){
+  'use strict';
+  if(window.__BP_V294_SINGLE_SPECIAL_EVENTS_BANNER__) return;
+  window.__BP_V294_SINGLE_SPECIAL_EVENTS_BANNER__ = true;
+
+  function removePenaltyDuplicates(){
+    try{
+      document.querySelectorAll(
+        '.bp-v290-penalty-banner,' +
+        '.bp-v290-match-penalty,' +
+        '.bp-v291-penalty-banner,' +
+        '.bp-v291-card-penalty'
+      ).forEach(function(el){
+        if(el && el.parentNode) el.parentNode.removeChild(el);
+      });
+    }catch(e){}
+  }
+
+  // Neutralise la surcouche V291 qui ajoutait une bannière Penalty Day dédiée.
+  window.renderPenaltyBanners = function(){
+    removePenaltyDuplicates();
+  };
+
+  // Après chaque rendu de la bannière principale, on nettoie les anciennes insertions dédiées.
+  var oldRenderSpecialEventsBanner = window.renderSpecialEventsBanner;
+  if(typeof oldRenderSpecialEventsBanner === 'function'){
+    window.renderSpecialEventsBanner = function(){
+      var r = oldRenderSpecialEventsBanner.apply(this, arguments);
+      removePenaltyDuplicates();
+      return r;
+    };
+  }
+
+  // Après chaque rendu des pronos, on retire le bloc rouge ajouté sur chaque carte match.
+  var oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function'){
+    window.renderBets = function(){
+      var r = oldRenderBets.apply(this, arguments);
+      removePenaltyDuplicates();
+      return r;
+    };
+  }
+
+  var oldRenderBetRows = window.renderBetRows;
+  if(typeof oldRenderBetRows === 'function'){
+    window.renderBetRows = function(){
+      var r = oldRenderBetRows.apply(this, arguments);
+      removePenaltyDuplicates();
+      return r;
+    };
+  }
+
+  // Nettoyage après sauvegarde admin des événements spéciaux.
+  var oldSaveSpecialEventsFromAdmin = window.saveSpecialEventsFromAdmin;
+  if(typeof oldSaveSpecialEventsFromAdmin === 'function'){
+    window.saveSpecialEventsFromAdmin = function(){
+      var r = oldSaveSpecialEventsFromAdmin.apply(this, arguments);
+      removePenaltyDuplicates();
+      return r;
+    };
+  }
+
+  // Nettoyage opportuniste sur changements DOM, pour éviter tout retour des doublons.
+  try{
+    var obs = new MutationObserver(function(){ removePenaltyDuplicates(); });
+    obs.observe(document.documentElement, {childList:true, subtree:true});
+  }catch(e){}
+
+  document.addEventListener('DOMContentLoaded', removePenaltyDuplicates);
+  setTimeout(removePenaltyDuplicates, 0);
+  setTimeout(removePenaltyDuplicates, 250);
+  setTimeout(removePenaltyDuplicates, 1000);
+})();
+</script>
+
+
+
+<script>
+/* V295 — Gain potentiel : impact réel des événements spéciaux
+   - Le widget affiche les gains APRES application des events actifs.
+   - Ex : R2 résultat correct = mise x2 ; Gains doublés actif => mise x2 x2.
+   - Garde le Mode Voyeur existant, mais remplace les montants du bloc gain potentiel. */
+(function(){
+  if(window.__BP_V295_EVENTS_IMPACT_GAIN_WIDGET__) return;
+  window.__BP_V295_EVENTS_IMPACT_GAIN_WIDGET__ = true;
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || (window.state = {}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function num(v,d){ var n = Number(v); return Number.isFinite(n) ? n : (d || 0); }
+  function r2(v){ return Math.round(num(v,0) * 100) / 100; }
+  function fid(v){ return String(r2(v)).replace('.', ','); }
+  function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function dayKey(d){ return String(Number(d) || 1); }
+  function currentDay(){
+    try{ if(typeof currentPronoDay === 'function') return Number(currentPronoDay()) || 1; }catch(e){}
+    try{ if(typeof selectedDay === 'function') return Number(selectedDay()) || 1; }catch(e){}
+    return Number(S().currentDay || S().openDay || 1) || 1;
+  }
+  function currentPlayer(){ try{ if(typeof player === 'function') return player(); }catch(e){} return null; }
+  function eventFor(day){
+    var s=S();
+    var e=(s.specialEvents && (s.specialEvents[dayKey(day)] || s.specialEvents[Number(day)])) || {};
+    return {
+      doubleGains: !!e.doubleGains,
+      doubleExact: !!(e.doubleExact || e.perfectDouble),
+      cashDay: !!e.cashDay,
+      cashAmount: num(e.cashAmount,10),
+      luckyMatchId: String(e.luckyMatchId || ''),
+      luckyMultiplier: num(e.luckyMultiplier,2),
+      kingDay: !!e.kingDay,
+      jackpot: !!e.jackpot,
+      festival: !!e.festival,
+      penaltyDay: !!e.penaltyDay,
+      noBetPenalty: num(e.noBetPenalty ?? e.nonBetPenalty,1),
+      wrongBetPenalty: num(e.wrongBetPenalty,2)
+    };
+  }
+  function rule(day){
+    try{ if(typeof getGainRuleForDay === 'function'){ var r=getGainRuleForDay(day); if(r) return r; } }catch(e){}
+    var s=S(), rules=s.gainRules || {}, ref=s.defaultGainRule || s.defaultGainRuleRef || 'R1';
+    arr(s.gainRuleAssignments).forEach(function(a){
+      var d=Number(day)||1, from=Number(a.fromDay||1), to=(a.toDay==null||a.toDay==='')?Infinity:Number(a.toDay);
+      if(d>=from && d<=to && a.ruleRef) ref=a.ruleRef;
+    });
+    return rules[ref] || {ref:ref,label:ref,resultMultiplier:2,exactScoreBonus:2,maxStake:4};
+  }
+  function scoreAFrom(card,b){ var el=card && card.querySelector('.scoreA'); if(el) return num(el.value,0); if(b && b.scoreA!=null) return num(b.scoreA,0); var p=String((b&&b.score)||'0-0').split(/[-–]/); return num(p[0],0); }
+  function scoreBFrom(card,b){ var el=card && card.querySelector('.scoreB'); if(el) return num(el.value,0); if(b && b.scoreB!=null) return num(b.scoreB,0); var p=String((b&&b.score)||'0-0').split(/[-–]/); return num(p[1],0); }
+  function stakeFrom(card,b){ var el=card && card.querySelector('.stake'); return num(el ? el.value : (b && b.stake),1); }
+  function outcome(a,b){ a=num(a,0); b=num(b,0); return a>b?'A':(a<b?'B':'N'); }
+  function outcomeText(o,m){
+    try{ if(typeof outcomeLabel === 'function') return outcomeLabel(o,m); }catch(e){}
+    if(o==='A') return m.teamA || 'Équipe A';
+    if(o==='B') return m.teamB || 'Équipe B';
+    return 'Match nul';
+  }
+  function findBet(day, matchId, pname){
+    return arr(S().bets).find(function(b){
+      return Number(b.day)===Number(day) && String(b.matchId)===String(matchId) && String(b.player||b.playerName||'')===String(pname||'');
+    });
+  }
+  function calcImpact(day, matchId, stake, baseResult, baseExact){
+    var e=eventFor(day);
+    var resultMultiplierLabel=[];
+    var exactMultiplierLabel=[];
+    var result=baseResult;
+    var exact=baseExact;
+
+    if(e.luckyMatchId && String(e.luckyMatchId)===String(matchId)){
+      result = r2(result * e.luckyMultiplier);
+      exact = r2(exact * e.luckyMultiplier);
+      resultMultiplierLabel.push('x'+fid(e.luckyMultiplier)+' Lucky Match');
+      exactMultiplierLabel.push('x'+fid(e.luckyMultiplier)+' Lucky Match');
+    }
+    if(e.doubleExact){
+      exact = r2(exact * 2);
+      exactMultiplierLabel.push('x2 scores parfaits doublés');
+    }
+    if(e.doubleGains){
+      result = r2(result * 2);
+      exact = r2(exact * 2);
+      resultMultiplierLabel.push('x2 gains doublés');
+      exactMultiplierLabel.push('x2 gains doublés');
+    }
+    return {event:e,result:result,exact:exact,max:r2(result+exact),resultLabels:resultMultiplierLabel,exactLabels:exactMultiplierLabel};
+  }
+  function activeEventsLine(day, matchId){
+    var e=eventFor(day), out=[];
+    if(e.doubleGains) out.push('🚀 gains doublés');
+    if(e.doubleExact) out.push('🎯 scores parfaits doublés');
+    if(e.luckyMatchId && String(e.luckyMatchId)===String(matchId)) out.push('🍀 Lucky Match x'+fid(e.luckyMultiplier));
+    if(e.penaltyDay) out.push('☠️ penalty -'+fid(e.noBetPenalty)+' / -'+fid(e.wrongBetPenalty));
+    return out.join(' · ');
+  }
+  function formulaResult(stake, rm, labels){
+    return '(Mise '+fid(stake)+' × '+fid(rm)+(labels.length?' × '+labels.join(' × '):'')+')';
+  }
+  function formulaExact(base, labels){
+    return '(Bonus fixe '+fid(base)+' FID'+(labels.length?' × '+labels.join(' × '):'')+')';
+  }
+  function buildWidget(card, oldWidget, b, m, day){
+    var r=rule(day), a=scoreAFrom(card,b), c=scoreBFrom(card,b), stake=stakeFrom(card,b);
+    var rm=num(r.resultMultiplier ?? r.correctMultiplier,2);
+    var eb=num(r.exactScoreBonus ?? r.exactBonus,2);
+    var baseResult=r2(stake*rm), baseExact=r2(eb);
+    var impact=calcImpact(day, m.id, stake, baseResult, baseExact);
+    var o=outcome(a,c);
+    var voyeur = oldWidget && oldWidget.querySelector('.bp-v212-voyeur') ? oldWidget.querySelector('.bp-v212-voyeur').outerHTML : '';
+    var events=activeEventsLine(day,m.id);
+    var resultSub = formulaResult(stake, rm, impact.resultLabels);
+    var exactSub = formulaExact(eb, impact.exactLabels);
+    var maxSub = '(Résultat + score exact '+a+'-'+c+(events?' · events inclus':'')+')';
+
+    return '<div class="bp-v212-gain bp-v295-gain" data-v295-match="'+esc(m.id)+'">'+
+      '<div class="bp-v212-left">'+
+        '<div class="bp-v212-left-title">💰 GAIN POTENTIEL</div>'+
+        '<div class="bp-v212-left-sub">Règle active + événements</div>'+
+        (events?'<div class="bp-v295-events-mini">'+esc(events)+'</div>':'')+
+        '<button type="button" class="bp-v212-rule-btn" onclick="bpV212ShowRule('+(Number(day)||1)+')">ⓘ Voir les règles</button>'+
+      '</div>'+
+      '<div class="bp-v212-card correct">'+
+        '<div class="bp-v212-card-title">RÉSULTAT CORRECT</div>'+
+        '<div class="bp-v212-sub">'+esc(outcomeText(o,m))+'</div>'+
+        '<div class="bp-v212-value green">🏆 + '+fid(impact.result)+' FID</div>'+
+        '<div class="bp-v212-sub">'+esc(resultSub)+'</div>'+
+        (impact.result!==baseResult?'<div class="bp-v295-base">Base R2 : +'+fid(baseResult)+' FID</div>':'')+
+      '</div>'+
+      '<div class="bp-v212-card exact">'+
+        '<div class="bp-v212-card-title">SCORE EXACT</div>'+
+        '<div class="bp-v212-sub">'+a+' - '+c+'</div>'+
+        '<div class="bp-v212-value green">🎯 + '+fid(impact.exact)+' FID</div>'+
+        '<div class="bp-v212-sub">'+esc(exactSub)+'</div>'+
+        (impact.exact!==baseExact?'<div class="bp-v295-base">Base R2 : +'+fid(baseExact)+' FID</div>':'')+
+      '</div>'+
+      '<div class="bp-v212-card max">'+
+        '<div class="bp-v212-card-title">GAIN MAXIMUM POSSIBLE</div>'+
+        '<div class="bp-v212-value yellow">🏅 + '+fid(impact.max)+' FID</div>'+
+        '<div class="bp-v212-sub">'+esc(maxSub)+'</div>'+
+      '</div>'+
+      '<div class="bp-v212-voyeur">'+voyeur.replace(/^<div class="bp-v212-voyeur">|<\/div>$/g,'')+'</div>'+
+    '</div>';
+  }
+  function inject(){
+    try{
+      var s=S(), day=currentDay(), p=currentPlayer();
+      if(!p) return;
+      document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(function(card){
+        var matchId=String(card.id||'').replace('betCard_','');
+        var m=arr(s.matches).find(function(x){ return String(x.id)===String(matchId) && Number(x.day)===Number(day); });
+        if(!m) return;
+        var pname=p.name || p.pseudo || '';
+        var b=findBet(day,matchId,pname) || {player:pname, matchId:matchId, day:day, stake:1, scoreA:0, scoreB:0};
+        var old=card.querySelector('.bp-v212-gain');
+        if(old && old.classList.contains('bp-v295-gain')) return;
+        var html=buildWidget(card, old, b, m, day);
+        if(old) old.outerHTML=html;
+        else{
+          var anchor=card.querySelector('.prediction-derived') || card.querySelector('.bet-form') || card.querySelector('.match-info-panel');
+          if(anchor) anchor.insertAdjacentHTML('afterend',html);
+        }
+      });
+    }catch(e){ console.warn('[V295] Gain potentiel events KO', e); }
+  }
+
+  // Modale règles : afficher aussi la formule réelle après events.
+  function showRule(day){
+    var d=Number(day)||currentDay(), r=rule(d), e=eventFor(d);
+    var rm=num(r.resultMultiplier ?? r.correctMultiplier,2), eb=num(r.exactScoreBonus ?? r.exactBonus,2);
+    var resultFormula='Mise × '+fid(rm)+(e.doubleGains?' × 2 Gains doublés':'');
+    var exactFormula='Bonus +'+fid(eb)+' FID'+(e.doubleExact?' × 2 Scores parfaits doublés':'')+(e.doubleGains?' × 2 Gains doublés':'');
+    var rows=''+
+      '<div class="bp-v212-rule-row"><span>Journée</span><b>'+d+'</b></div>'+ 
+      '<div class="bp-v212-rule-row"><span>Référence</span><b>'+esc(r.ref||r.id||'-')+'</b></div>'+ 
+      '<div class="bp-v212-rule-row"><span>Nom</span><b>'+esc(r.label||r.name||r.ref||'-')+'</b></div>'+ 
+      '<div class="bp-v212-rule-row"><span>Résultat correct réel</span><b>'+esc(resultFormula)+'</b></div>'+ 
+      '<div class="bp-v212-rule-row"><span>Score exact réel</span><b>'+esc(exactFormula)+'</b></div>'+ 
+      '<div class="bp-v212-rule-row"><span>Mise maximale</span><b>'+fid(r.maxStake||4)+' FID</b></div>';
+    if(e.penaltyDay) rows += '<div class="bp-v212-rule-row" style="border-color:rgba(251,113,133,.45);background:rgba(122,16,32,.22)"><span>Penalty Day</span><b>-'+fid(e.noBetPenalty)+' FID si non misé · -'+fid(e.wrongBetPenalty)+' FID si mauvais prono</b></div>';
+    var modal=document.getElementById('bpV212Modal') || document.getElementById('bpV211Modal') || document.getElementById('bpV252RuleModal');
+    if(!modal){ alert('Règle active J'+d+'\nRésultat correct : '+resultFormula+'\nScore exact : '+exactFormula); return; }
+    var body=document.getElementById('bpV212ModalBody') || document.getElementById('bpV211ModalBody') || document.getElementById('bpV252RuleModalBody');
+    if(body) body.innerHTML=rows;
+    modal.style.display='flex';
+  }
+  window.bpV208ShowRule=showRule;
+  window.bpV210ShowRule=showRule;
+  window.bpV211ShowRule=showRule;
+  window.bpV212ShowRule=showRule;
+
+  var oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function' && !oldRenderBets.__BP_V295_WRAPPED__){
+    window.renderBets=function(){ var r=oldRenderBets.apply(this,arguments); setTimeout(inject,40); setTimeout(inject,160); return r; };
+    window.renderBets.__BP_V295_WRAPPED__=true;
+  }
+  document.addEventListener('input',function(e){ if(e.target && e.target.matches('.scoreA,.scoreB,.stake')) setTimeout(inject,40); },true);
+  document.addEventListener('change',function(e){ if(e.target && (e.target.matches('.scoreA,.scoreB,.stake') || /^evt/.test(e.target.id||''))) setTimeout(inject,80); },true);
+  document.addEventListener('DOMContentLoaded',function(){ setTimeout(inject,250); });
+  setTimeout(inject,400);
+  setTimeout(inject,1200);
+})();
+</script>
+<style>
+/* V295 — lisibilité de l'impact event dans le widget gain potentiel */
+.bp-v295-gain .bp-v295-events-mini{
+  margin:8px 0 10px!important;
+  padding:7px 9px!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.08)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  color:#fff!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  line-height:1.25!important;
+}
+.bp-v295-gain .bp-v295-base{
+  margin-top:6px!important;
+  color:#facc15!important;
+  font-size:11px!important;
+  font-weight:900!important;
+}
+</style>
+
+
+
+<script>
+/* V299 — restaure Mode Voyeur dans le widget V298 final
+   V298 remplaçait correctement les gains, mais réutilisait parfois un ancien bloc voyeur vide.
+   Ce patch reconstruit toujours le Mode Voyeur depuis state.bets + state.voyeur_unlocks.
+*/
+(function(){
+  if(window.__BP_V299_RESTORE_VOYEUR_IN_FINAL_GAIN__) return;
+  window.__BP_V299_RESTORE_VOYEUR_IN_FINAL_GAIN__ = true;
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || (window.state={}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function num(v,d){ var n=Number(v); return Number.isFinite(n) ? n : (d||0); }
+  function currentDay(){
+    try{ if(typeof currentPronoDay==='function') return Number(currentPronoDay())||1; }catch(e){}
+    return Number(S().currentDay || S().openDay || 1) || 1;
+  }
+  function currentPlayer(){
+    try{ if(typeof player==='function') return player(); }catch(e){}
+    try{ if(typeof getCurrentPlayer==='function') return getCurrentPlayer(); }catch(e){}
+    return null;
+  }
+  function unlocks(){
+    var s=S();
+    if(!Array.isArray(s.voyeur_unlocks)) s.voyeur_unlocks = [];
+    if(!Array.isArray(s.voyeurUnlocks)) s.voyeurUnlocks = s.voyeur_unlocks;
+    return s.voyeur_unlocks;
+  }
+  function legacyUnlocks(){
+    return arr(S().premiumUnlocks).filter(function(u){ return u && (u.type === 'SIMILAR_BETS_UNLOCK' || u.type === 'VOYEUR_MODE_UNLOCK'); });
+  }
+  function hasUnlock(playerName, matchId){
+    return unlocks().concat(legacyUnlocks()).some(function(u){
+      return (u.type === 'VOYEUR_MODE_UNLOCK' || u.type === 'SIMILAR_BETS_UNLOCK' || !u.type) &&
+        String(u.player) === String(playerName) &&
+        String(u.matchId || u.match_id) === String(matchId);
+    });
+  }
+  function rowsFor(playerName, matchId){
+    var byPlayer = new Map();
+    arr(S().bets).filter(function(x){
+      return String(x.matchId) === String(matchId) &&
+        String(x.player || '') !== String(playerName || '') &&
+        String(x.status || '').toUpperCase() === 'VALIDATED';
+    }).forEach(function(b){
+      if(!byPlayer.has(String(b.player||''))) byPlayer.set(String(b.player||''), b);
+    });
+    return Array.from(byPlayer.values()).sort(function(a,b){ return String(a.player||'').localeCompare(String(b.player||''),'fr'); });
+  }
+  function scoreA(b){
+    if(b.scoreA!=null) return num(b.scoreA,0);
+    var p=String(b.score||'0-0').split('-'); return num(String(p[0]||0).trim(),0);
+  }
+  function scoreB(b){
+    if(b.scoreB!=null) return num(b.scoreB,0);
+    var p=String(b.score||'0-0').split('-'); return num(String(p[1]||0).trim(),0);
+  }
+  function label(name){
+    var pl=arr(S().players).find(function(x){ return String(x.name||'')===String(name||''); });
+    return (pl && (pl.pseudo || pl.name)) || name || '-';
+  }
+  function stars(count){
+    if(count <= 0) return '☆☆☆☆☆';
+    if(count <= 3) return '★★☆☆☆';
+    if(count <= 7) return '★★★☆☆';
+    if(count <= 12) return '★★★★☆';
+    return '★★★★★';
+  }
+  function interestLabel(count){
+    if(count <= 0) return 'Aucune information disponible';
+    if(count <= 3) return 'Information confidentielle';
+    if(count <= 7) return 'Information intéressante';
+    if(count <= 12) return 'Information très recherchée';
+    return 'Information brûlante';
+  }
+  function isExpanded(playerName, matchId){
+    var s=S(); s.voyeurExpanded = s.voyeurExpanded || {};
+    return !!s.voyeurExpanded[playerName+'|'+matchId];
+  }
+
+  // Sécurise le toggle si l'ancien V212 n'est pas disponible.
+  if(typeof window.bpV212ToggleVoyeur !== 'function'){
+    window.bpV212ToggleVoyeur = function(matchId){
+      var p=currentPlayer(); if(!p) return;
+      var s=S(); s.voyeurExpanded = s.voyeurExpanded || {};
+      var k=(p.name || p.pseudo || '')+'|'+matchId;
+      s.voyeurExpanded[k]=!s.voyeurExpanded[k];
+      schedule();
+    };
+  }
+
+  function voyeurHTML(playerName, matchId){
+    var rows=rowsFor(playerName, matchId);
+    var count=rows.length;
+    var unlocked=hasUnlock(playerName, matchId);
+    var expanded=isExpanded(playerName, matchId);
+    var visible=expanded ? rows : rows.slice(0,3);
+
+    if(unlocked){
+      var list = count > 0
+        ? '<div class="bp-v212-voyeur-list">'+visible.map(function(b){
+            return '<div class="bp-v212-voyeur-row"><span>'+esc(label(b.player))+'</span><b>'+scoreA(b)+'-'+scoreB(b)+'</b></div>';
+          }).join('')+'</div>'+
+          (count > 3 ? '<button type="button" class="bp-v212-voyeur-more" onclick="bpV212ToggleVoyeur(\''+String(matchId).replace(/'/g,"\\'")+'\')">'+(expanded?'Voir moins':'Voir plus')+'</button>' : '')
+        : '<div class="bp-v212-voyeur-empty">Aucun autre joueur n’a encore misé.</div>';
+
+      return '<div class="bp-v298-voyeur bp-v212-voyeur-unlocked">'+
+        '<div class="bp-v212-voyeur-head"><div>'+ 
+          '<div class="bp-v212-voyeur-title">👁️ MODE VOYEUR DÉBLOQUÉ</div>'+ 
+          '<div class="bp-v212-voyeur-sub">'+count+' joueur(s) ont déjà misé</div>'+ 
+        '</div><div class="bp-v212-voyeur-stars">'+stars(count)+'</div></div>'+list+'</div>';
+    }
+
+    return '<div class="bp-v298-voyeur bp-v212-voyeur-locked">'+
+      '<div class="bp-v212-voyeur-top"><div>'+ 
+        '<div class="bp-v212-voyeur-title">👁️ MODE VOYEUR</div>'+ 
+        '<div class="bp-v212-voyeur-count">'+count+'</div>'+ 
+        '<div class="bp-v212-voyeur-sub">'+(count===1?'joueur a déjà misé':'joueurs ont déjà misé')+'</div>'+ 
+      '</div><div class="bp-v212-voyeur-stars">'+stars(count)+'</div></div>'+ 
+      '<div class="bp-v212-voyeur-info">'+esc(interestLabel(count))+'</div>'+ 
+      '<div class="bp-v212-voyeur-desc">'+(count>0?'Découvrez les pronostics des autres joueurs.':'Aucun autre joueur n\'a encore misé.')+'</div>'+ 
+      (count>0?'<button type="button" class="bp-v212-voyeur-unlock" onclick="bpV212UnlockVoyeur(\''+String(matchId).replace(/'/g,"\\'")+'\')">Débloquer pour 1 FID</button>':'')+
+    '</div>';
+  }
+
+  var scheduled=false;
+  function inject(){
+    scheduled=false;
+    try{
+      var p=currentPlayer();
+      var playerName=(p && (p.name || p.pseudo)) || '';
+      document.querySelectorAll('#betRows .bp-v298-gain').forEach(function(gain){
+        var matchId=gain.getAttribute('data-v298-match') || gain.getAttribute('data-v296-match') || gain.getAttribute('data-v212-match') || '';
+        if(!matchId){
+          var card=gain.closest('.bet-card[id^="betCard_"]');
+          matchId=card ? String(card.id||'').replace('betCard_','') : '';
+        }
+        if(!matchId) return;
+        var html=voyeurHTML(playerName, matchId);
+        var slot=gain.querySelector('.bp-v298-voyeur') || gain.querySelector('.bp-v212-voyeur') || gain.querySelector('[class*="voyeur"]');
+        if(slot){
+          if(slot.getAttribute('data-v299-html') !== html){
+            slot.outerHTML=html;
+            var fresh=gain.querySelector('.bp-v298-voyeur');
+            if(fresh) fresh.setAttribute('data-v299-html', html);
+          }
+        }else{
+          gain.insertAdjacentHTML('beforeend', html);
+          var fresh=gain.querySelector('.bp-v298-voyeur');
+          if(fresh) fresh.setAttribute('data-v299-html', html);
+        }
+      });
+    }catch(e){ console.warn('[V299] Restauration Mode Voyeur KO', e); }
+  }
+  function schedule(){ if(scheduled) return; scheduled=true; (window.requestAnimationFrame||setTimeout)(inject,0); }
+
+  var prev=window.renderBets;
+  if(typeof prev==='function' && !prev.__BP_V299_VOYEUR_WRAPPED__){
+    window.renderBets=function(){ var r=prev.apply(this,arguments); schedule(); return r; };
+    window.renderBets.__BP_V299_VOYEUR_WRAPPED__=true;
+  }
+  document.addEventListener('input',function(e){ if(e.target && e.target.matches('.scoreA,.scoreB,.stake')) schedule(); },true);
+  document.addEventListener('change',function(e){ if(e.target && e.target.matches('.scoreA,.scoreB,.stake')) schedule(); },true);
+  if(window.MutationObserver){ new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true}); }
+  inject(); schedule();
+})();
+</script>
+<style>
+/* V299 — le slot Mode Voyeur redevient visible dans le widget final */
+#betRows .bp-v298-gain .bp-v298-voyeur{
+  display:block!important;
+  min-height:150px!important;
+  background:rgba(17,24,39,.92)!important;
+  border:1px solid rgba(96,165,250,.45)!important;
+  border-radius:14px!important;
+  padding:14px!important;
+}
+</style>
 </body></html>
+
+
+
+/* =========================
+V286 FIX DOUBLE ?
+========================= */
+(function(){
+  if(window.__BP_V286_FIX_DOUBLE_HELP__) return;
+  window.__BP_V286_FIX_DOUBLE_HELP__ = true;
+
+  function fixHelpButtons(){
+    document.querySelectorAll(
+      '.bp-dice-inline-zone-v285,.bp-dice-zone-v281,.bp-dice-gold-zone-v282'
+    ).forEach(zone=>{
+
+      const helps = zone.querySelectorAll(
+        '.bp-dice-help-v281,.bp-dice-help-v282,.bp-dice-help-v285'
+      );
+
+      helps.forEach((el,index)=>{
+        if(index>0) el.remove();
+      });
+
+      const first = zone.querySelector(
+        '.bp-dice-help-v281,.bp-dice-help-v282,.bp-dice-help-v285'
+      );
+
+      if(first){
+        first.className='bp-dice-help-v285';
+        first.textContent='?';
+      }
+    });
+  }
+
+  setTimeout(fixHelpButtons,200);
+  setTimeout(fixHelpButtons,1000);
+  document.addEventListener('DOMContentLoaded',fixHelpButtons);
+})();
+
+
+
+<script>
+/* V296 — Correction formule Gain potentiel avec événements spéciaux
+   Règle corrigée :
+   - Résultat correct = (mise × multiplicateur règle) puis application des events globaux.
+   - Score exact = scénario TOTAL exact : (résultat correct + bonus exact) puis application des events globaux.
+   Exemple J14/R2, mise 4, gains doublés :
+   résultat correct = (4×2)×2 = 16
+   score exact = (4×2 + 2)×2 = 20
+*/
+(function(){
+  if(window.__BP_V296_GAIN_WIDGET_TOTAL_EXACT__) return;
+  window.__BP_V296_GAIN_WIDGET_TOTAL_EXACT__ = true;
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || (window.state = {}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function num(v,d){ var n = Number(v); return Number.isFinite(n) ? n : (d || 0); }
+  function round(v){ return Math.round(num(v,0) * 100) / 100; }
+  function fid(v){ return String(round(v)).replace('.', ','); }
+  function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function dayKey(d){ return String(Number(d) || 1); }
+
+  function currentDay(){
+    try{ if(typeof currentPronoDay === 'function') return Number(currentPronoDay()) || 1; }catch(e){}
+    try{ if(typeof selectedDay === 'function') return Number(selectedDay()) || 1; }catch(e){}
+    return Number(S().currentDay || S().openDay || 1) || 1;
+  }
+  function currentPlayer(){
+    try{ if(typeof player === 'function') return player(); }catch(e){}
+    try{ if(typeof getCurrentPlayer === 'function') return getCurrentPlayer(); }catch(e){}
+    return null;
+  }
+  function eventFor(day){
+    var s=S();
+    var e=(s.specialEvents && (s.specialEvents[dayKey(day)] || s.specialEvents[Number(day)])) || {};
+    return {
+      doubleGains: !!e.doubleGains,
+      doubleExact: !!(e.doubleExact || e.perfectDouble),
+      luckyMatchId: String(e.luckyMatchId || ''),
+      luckyMultiplier: num(e.luckyMultiplier,2),
+      penaltyDay: !!e.penaltyDay,
+      noBetPenalty: num(e.noBetPenalty ?? e.nonBetPenalty,1),
+      wrongBetPenalty: num(e.wrongBetPenalty,2)
+    };
+  }
+  function rule(day){
+    try{ if(typeof getGainRuleForDay === 'function'){ var rr=getGainRuleForDay(day); if(rr) return rr; } }catch(e){}
+    var s=S(), rules=s.gainRules || {}, ref=s.defaultGainRule || s.defaultGainRuleRef || 'R2';
+    arr(s.gainRuleAssignments).forEach(function(a){
+      var d=Number(day)||1, from=Number(a.fromDay||1), to=(a.toDay==null||a.toDay==='')?Infinity:Number(a.toDay);
+      if(d>=from && d<=to && a.ruleRef) ref=a.ruleRef;
+    });
+    return rules[ref] || {ref:ref,label:ref,resultMultiplier:2,exactScoreBonus:2,maxStake:4};
+  }
+  function val(card, sel, fallback){
+    var el=card && card.querySelector(sel);
+    return num(el ? el.value : fallback, 0);
+  }
+  function scoreAFrom(card,b){ if(b && b.scoreA!=null && !card.querySelector('.scoreA')) return num(b.scoreA,0); var p=String((b&&b.score)||'0-0').split(/[-–]/); return val(card,'.scoreA', b&&b.scoreA!=null?b.scoreA:p[0]); }
+  function scoreBFrom(card,b){ if(b && b.scoreB!=null && !card.querySelector('.scoreB')) return num(b.scoreB,0); var p=String((b&&b.score)||'0-0').split(/[-–]/); return val(card,'.scoreB', b&&b.scoreB!=null?b.scoreB:p[1]); }
+  function stakeFrom(card,b){ return val(card,'.stake', b && b.stake != null ? b.stake : 1); }
+  function outcome(a,b){ a=num(a,0); b=num(b,0); return a>b?'A':(a<b?'B':'N'); }
+  function outcomeText(o,m){
+    if(o==='A') return m.teamA || 'Équipe A';
+    if(o==='B') return m.teamB || 'Équipe B';
+    return 'Match nul';
+  }
+  function findBet(day, matchId, pname){
+    return arr(S().bets).find(function(b){
+      return Number(b.day)===Number(day) && String(b.matchId)===String(matchId) && String(b.player||b.playerName||'')===String(pname||'');
+    });
+  }
+
+  function computeGainScenarios(day, matchId, stake){
+    var r=rule(day), e=eventFor(day);
+    var rm=num(r.resultMultiplier ?? r.correctMultiplier,2);
+    var exactBonusBase=num(r.exactScoreBonus ?? r.exactBonus,2);
+
+    var baseResult=round(stake * rm);
+    var baseExactBonus=round(exactBonusBase);
+    var exactBonusAfterExactEvent = e.doubleExact ? round(baseExactBonus * 2) : baseExactBonus;
+
+    var resultTotal=baseResult;
+    var exactTotal=round(baseResult + exactBonusAfterExactEvent);
+
+    var resultLabels=[];
+    var exactLabels=[];
+    if(e.doubleExact) exactLabels.push('bonus exact ×2');
+
+    if(e.luckyMatchId && String(e.luckyMatchId)===String(matchId)){
+      resultTotal=round(resultTotal * e.luckyMultiplier);
+      exactTotal=round(exactTotal * e.luckyMultiplier);
+      resultLabels.push('Lucky Match ×'+fid(e.luckyMultiplier));
+      exactLabels.push('Lucky Match ×'+fid(e.luckyMultiplier));
+    }
+
+    if(e.doubleGains){
+      resultTotal=round(resultTotal * 2);
+      exactTotal=round(exactTotal * 2);
+      resultLabels.push('Gains doublés ×2');
+      exactLabels.push('Gains doublés ×2');
+    }
+
+    return {
+      rule:r, event:e, rm:rm,
+      baseResult:baseResult,
+      baseExactBonus:baseExactBonus,
+      exactBonusAfterExactEvent:exactBonusAfterExactEvent,
+      resultTotal:resultTotal,
+      exactTotal:exactTotal,
+      maxTotal:exactTotal,
+      resultLabels:resultLabels,
+      exactLabels:exactLabels
+    };
+  }
+
+  function activeEventsLine(day, matchId){
+    var e=eventFor(day), out=[];
+    if(e.doubleGains) out.push('🚀 gains doublés');
+    if(e.doubleExact) out.push('🎯 score exact bonus doublé');
+    if(e.luckyMatchId && String(e.luckyMatchId)===String(matchId)) out.push('🍀 Lucky Match ×'+fid(e.luckyMultiplier));
+    if(e.penaltyDay) out.push('☠️ penalty -'+fid(e.noBetPenalty)+' / -'+fid(e.wrongBetPenalty));
+    return out.join(' · ');
+  }
+
+  function buildWidget(card, oldWidget, b, m, day){
+    var a=scoreAFrom(card,b), c=scoreBFrom(card,b), stake=stakeFrom(card,b);
+    var o=outcome(a,c);
+    var g=computeGainScenarios(day,m.id,stake);
+    var events=activeEventsLine(day,m.id);
+    var voyeur = oldWidget && oldWidget.querySelector('.bp-v212-voyeur') ? oldWidget.querySelector('.bp-v212-voyeur').innerHTML : '';
+
+    var resultFormula = 'Base R2 : '+fid(stake)+' × '+fid(g.rm)+' = '+fid(g.baseResult)+' FID';
+    if(g.resultLabels.length) resultFormula += ' → '+fid(g.resultTotal)+' FID ('+g.resultLabels.join(' · ')+')';
+
+    var exactFormula = 'Base R2 : '+fid(g.baseResult)+' + '+fid(g.exactBonusAfterExactEvent)+' = '+fid(round(g.baseResult+g.exactBonusAfterExactEvent))+' FID';
+    if(g.exactLabels.length) exactFormula += ' → '+fid(g.exactTotal)+' FID ('+g.exactLabels.join(' · ')+')';
+
+    return '<div class="bp-v212-gain bp-v296-gain" data-v296-match="'+esc(m.id)+'">'+
+      '<div class="bp-v212-left">'+
+        '<div class="bp-v212-left-title">💰 GAIN POTENTIEL</div>'+
+        '<div class="bp-v212-left-sub">Règle active + événements</div>'+
+        (events?'<div class="bp-v296-events-mini">'+esc(events)+'</div>':'')+
+        '<button type="button" class="bp-v212-rule-btn" onclick="bpV212ShowRule('+(Number(day)||1)+')">ⓘ Voir les règles</button>'+
+      '</div>'+
+      '<div class="bp-v212-card correct">'+
+        '<div class="bp-v212-card-title">RÉSULTAT CORRECT</div>'+
+        '<div class="bp-v212-sub">'+esc(outcomeText(o,m))+'</div>'+
+        '<div class="bp-v212-value green">🏆 + '+fid(g.resultTotal)+' FID</div>'+
+        '<div class="bp-v212-sub">'+esc(resultFormula)+'</div>'+
+      '</div>'+
+      '<div class="bp-v212-card exact">'+
+        '<div class="bp-v212-card-title">SCORE EXACT</div>'+
+        '<div class="bp-v212-sub">'+a+' - '+c+'</div>'+
+        '<div class="bp-v212-value green">🎯 + '+fid(g.exactTotal)+' FID</div>'+
+        '<div class="bp-v212-sub">'+esc(exactFormula)+'</div>'+
+      '</div>'+
+      '<div class="bp-v212-card max">'+
+        '<div class="bp-v212-card-title">GAIN MAXIMUM POSSIBLE</div>'+
+        '<div class="bp-v212-value yellow">🏅 + '+fid(g.maxTotal)+' FID</div>'+
+        '<div class="bp-v212-sub">'+esc('Score exact '+a+'-'+c+' · events inclus')+'</div>'+
+      '</div>'+
+      '<div class="bp-v212-voyeur">'+voyeur+'</div>'+
+    '</div>';
+  }
+
+  function inject(){
+    try{
+      var s=S(), day=currentDay(), p=currentPlayer();
+      if(!p) return;
+      document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(function(card){
+        var matchId=String(card.id||'').replace('betCard_','');
+        var m=arr(s.matches).find(function(x){ return String(x.id)===String(matchId) && Number(x.day)===Number(day); });
+        if(!m) return;
+        var pname=p.name || p.pseudo || '';
+        var b=findBet(day,matchId,pname) || {player:pname, matchId:matchId, day:day, stake:1, scoreA:0, scoreB:0};
+        var old=card.querySelector('.bp-v212-gain,.bp-v295-gain,.bp-v296-gain');
+        var html=buildWidget(card, old, b, m, day);
+        if(old) old.outerHTML=html;
+        else{
+          var anchor=card.querySelector('.prediction-derived') || card.querySelector('.bet-form') || card.querySelector('.match-info-panel');
+          if(anchor) anchor.insertAdjacentHTML('afterend',html);
+        }
+      });
+    }catch(e){ console.warn('[V296] Gain potentiel KO', e); }
+  }
+
+  function showRule(day){
+    var d=Number(day)||currentDay(), r=rule(d), e=eventFor(d);
+    var rm=num(r.resultMultiplier ?? r.correctMultiplier,2), eb=num(r.exactScoreBonus ?? r.exactBonus,2);
+    var resultFormula='Mise × '+fid(rm)+(e.doubleGains?' × 2 Gains doublés':'');
+    var exactFormula='(Mise × '+fid(rm)+' + '+fid(eb)+' FID)'+(e.doubleExact?' avec bonus exact ×2':'')+(e.doubleGains?' × 2 Gains doublés':'');
+    var rows=''+
+      '<div class="bp-v212-rule-row"><span>Journée</span><b>'+d+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Référence</span><b>'+esc(r.ref||r.id||'-')+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Nom</span><b>'+esc(r.label||r.name||r.ref||'-')+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Résultat correct réel</span><b>'+esc(resultFormula)+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Score exact réel</span><b>'+esc(exactFormula)+'</b></div>'+
+      '<div class="bp-v212-rule-row"><span>Mise maximale</span><b>'+fid(r.maxStake||4)+' FID</b></div>';
+    if(e.penaltyDay) rows += '<div class="bp-v212-rule-row" style="border-color:rgba(251,113,133,.45);background:rgba(122,16,32,.22)"><span>Penalty Day</span><b>-'+fid(e.noBetPenalty)+' FID si non misé · -'+fid(e.wrongBetPenalty)+' FID si mauvais prono</b></div>';
+    var modal=document.getElementById('bpV212Modal') || document.getElementById('bpV211Modal') || document.getElementById('bpV252RuleModal');
+    if(!modal){ alert('Règle active J'+d+'\nRésultat correct : '+resultFormula+'\nScore exact : '+exactFormula); return; }
+    var body=document.getElementById('bpV212ModalBody') || document.getElementById('bpV211ModalBody') || document.getElementById('bpV252RuleModalBody');
+    if(body) body.innerHTML=rows;
+    modal.style.display='flex';
+  }
+
+  window.bpV208ShowRule=showRule;
+  window.bpV210ShowRule=showRule;
+  window.bpV211ShowRule=showRule;
+  window.bpV212ShowRule=showRule;
+
+  var oldRenderBets=window.renderBets;
+  if(typeof oldRenderBets==='function' && !oldRenderBets.__BP_V296_WRAPPED__){
+    window.renderBets=function(){ var res=oldRenderBets.apply(this,arguments); setTimeout(inject,50); setTimeout(inject,180); setTimeout(inject,500); return res; };
+    window.renderBets.__BP_V296_WRAPPED__=true;
+  }
+  document.addEventListener('input',function(e){ if(e.target && e.target.matches('.scoreA,.scoreB,.stake')) setTimeout(inject,20); },true);
+  document.addEventListener('change',function(e){ if(e.target && (e.target.matches('.scoreA,.scoreB,.stake') || /^evt/.test(e.target.id||''))) setTimeout(inject,50); },true);
+  document.addEventListener('DOMContentLoaded',function(){ setTimeout(inject,250); setTimeout(inject,900); });
+  setTimeout(inject,300);
+  setTimeout(inject,1200);
+})();
+</script>
+<style>
+/* V296 — lisibilité impact réel */
+.bp-v296-gain .bp-v296-events-mini{
+  margin:8px 0 10px!important;
+  padding:7px 9px!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.08)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  color:#fff!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  line-height:1.25!important;
+}
+.bp-v296-gain .bp-v212-sub{
+  line-height:1.3!important;
+}
+</style>
+
+
+<script>
+/* V298 — Gain potentiel FINAL sans flash / sans empilement
+   Objectif : ne plus afficher d'abord les anciens chiffres puis les bons.
+   - masque les anciens widgets non finaux dans #betRows
+   - remplace immédiatement tous les widgets gain potentiel par une version unique
+   - calcule le total réel : R2 puis événements spéciaux
+*/
+(function(){
+  if(window.__BP_V298_GAIN_WIDGET_NO_FLASH_FINAL__) return;
+  window.__BP_V298_GAIN_WIDGET_NO_FLASH_FINAL__ = true;
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || (window.state={}); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function num(v,d){ var n=Number(v); return Number.isFinite(n) ? n : (d||0); }
+  function r2(v){ return Math.round(num(v,0)*100)/100; }
+  function fid(v){ return String(r2(v)).replace('.', ','); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function dayKey(d){ return String(Number(d)||1); }
+  function currentDay(){
+    try{ if(typeof currentPronoDay==='function') return Number(currentPronoDay())||1; }catch(e){}
+    try{ if(typeof selectedDay==='function') return Number(selectedDay())||1; }catch(e){}
+    return Number(S().currentDay || S().openDay || 1) || 1;
+  }
+  function currentPlayer(){
+    try{ if(typeof player==='function') return player(); }catch(e){}
+    try{ if(typeof getCurrentPlayer==='function') return getCurrentPlayer(); }catch(e){}
+    return null;
+  }
+  function rule(day){
+    try{ if(typeof getGainRuleForDay==='function'){ var rr=getGainRuleForDay(day); if(rr) return rr; } }catch(e){}
+    var s=S(), rules=s.gainRules||{}, ref=s.defaultGainRule || s.defaultGainRuleRef || 'R2';
+    arr(s.gainRuleAssignments).forEach(function(a){
+      var d=Number(day)||1, from=Number(a.fromDay||1), to=(a.toDay==null||a.toDay==='')?Infinity:Number(a.toDay);
+      if(d>=from && d<=to && a.ruleRef) ref=a.ruleRef;
+    });
+    return rules[ref] || {ref:ref,label:ref,resultMultiplier:2,exactScoreBonus:2,maxStake:4};
+  }
+  function events(day){
+    var e=(S().specialEvents && (S().specialEvents[dayKey(day)] || S().specialEvents[Number(day)])) || {};
+    return {
+      doubleGains: !!e.doubleGains,
+      doubleExact: !!(e.doubleExact || e.perfectDouble),
+      luckyMatchId: String(e.luckyMatchId || ''),
+      luckyMultiplier: num(e.luckyMultiplier,2),
+      penaltyDay: !!e.penaltyDay,
+      noBetPenalty: num(e.noBetPenalty ?? e.nonBetPenalty,1),
+      wrongBetPenalty: num(e.wrongBetPenalty,2)
+    };
+  }
+  function outcome(a,b){ return Number(a)>Number(b)?'A':Number(a)<Number(b)?'B':'N'; }
+  function outcomeText(o,m){
+    try{ if(typeof outcomeLabel==='function') return outcomeLabel(o,m); }catch(e){}
+    if(o==='A') return m.teamA || 'Équipe A';
+    if(o==='B') return m.teamB || 'Équipe B';
+    return 'Match nul';
+  }
+  function scoreFromBet(b){
+    if(!b) return [0,0];
+    if(b.scoreA!=null || b.scoreB!=null) return [num(b.scoreA,0), num(b.scoreB,0)];
+    var p=String(b.score||'0 - 0').split('-');
+    return [num(String(p[0]||0).trim(),0), num(String(p[1]||0).trim(),0)];
+  }
+  function findMatch(day, matchId){
+    return arr(S().matches).find(function(m){ return String(m.id)===String(matchId) && Number(m.day)===Number(day); }) ||
+           arr(S().matches).find(function(m){ return String(m.id)===String(matchId); });
+  }
+  function findBet(day, matchId, pname){
+    return arr(S().bets).find(function(b){
+      return Number(b.day)===Number(day) && String(b.matchId)===String(matchId) && String(b.player||b.playerName||'')===String(pname||'');
+    });
+  }
+  function liveInputs(card,b){
+    var sa=card.querySelector('.scoreA'), sb=card.querySelector('.scoreB'), st=card.querySelector('.stake');
+    var sc=scoreFromBet(b);
+    return {
+      a: sa ? num(sa.value, sc[0]) : sc[0],
+      c: sb ? num(sb.value, sc[1]) : sc[1],
+      stake: st ? num(st.value, b && b.stake!=null ? b.stake : 1) : num(b && b.stake,1)
+    };
+  }
+  function activeEventText(e){
+    var out=[];
+    if(e.doubleGains) out.push('🚀 gains doublés');
+    if(e.doubleExact) out.push('🎯 exact doublé');
+    if(e.luckyMatchId) out.push('🍀 lucky match');
+    if(e.penaltyDay) out.push('☠️ penalty -'+fid(e.noBetPenalty)+' / -'+fid(e.wrongBetPenalty));
+    return out.join('<br>');
+  }
+  function calc(day, matchId, stake){
+    var r=rule(day), e=events(day);
+    var rm=num(r.resultMultiplier ?? r.correctMultiplier,2);
+    var eb=num(r.exactScoreBonus ?? r.exactBonus,2);
+    var resultBase=r2(stake*rm);
+    var exactBonus=e.doubleExact ? r2(eb*2) : eb;
+    var globalMult=1;
+    var labels=[];
+    if(e.luckyMatchId && String(e.luckyMatchId)===String(matchId)){ globalMult*=num(e.luckyMultiplier,2); labels.push('Lucky Match ×'+fid(e.luckyMultiplier)); }
+    if(e.doubleGains){ globalMult*=2; labels.push('Gains doublés ×2'); }
+    return {
+      r:r, e:e, rm:rm, eb:eb, exactBonus:exactBonus, globalMult:globalMult, labels:labels,
+      resultBase:resultBase,
+      exactBase:r2(resultBase+exactBonus),
+      result:r2(resultBase*globalMult),
+      exact:r2((resultBase+exactBonus)*globalMult)
+    };
+  }
+  function formulaResult(c, stake){
+    return c.globalMult!==1
+      ? 'Base R2 : '+fid(stake)+' × '+fid(c.rm)+' = '+fid(c.resultBase)+' FID → '+fid(c.result)+' FID<br>('+esc(c.labels.join(' · '))+')'
+      : '('+fid(stake)+' × '+fid(c.rm)+')';
+  }
+  function formulaExact(c, stake){
+    var bonusTxt = c.exactBonus!==c.eb ? fid(c.eb)+' ×2 = '+fid(c.exactBonus) : fid(c.exactBonus);
+    return c.globalMult!==1 || c.exactBonus!==c.eb
+      ? 'Base R2 : '+fid(c.resultBase)+' + '+bonusTxt+' = '+fid(c.exactBase)+' FID → '+fid(c.exact)+' FID<br>'+(c.labels.length?'('+esc(c.labels.join(' · '))+')':'')
+      : '(Résultat + bonus exact)';
+  }
+  function fallbackVoyeur(old){
+    var v=old && (old.querySelector('.bp-v212-voyeur') || old.querySelector('.bp-v210-voyeur') || old.querySelector('[class*="voyeur"]'));
+    if(v) return v.outerHTML.replace('bp-v212-voyeur','bp-v298-voyeur').replace('bp-v210-voyeur','bp-v298-voyeur');
+    return '<div class="bp-v298-voyeur"><div style="font-weight:1000">👁️ MODE VOYEUR</div><div style="font-size:32px;color:#60a5fa;font-weight:1000">?</div><div class="bp-v212-sub">Disponible après validation</div></div>';
+  }
+  function build(card, old, b, m, day){
+    var live=liveInputs(card,b||{}), a=live.a, c=live.c, stake=live.stake;
+    var x=calc(day,m.id,stake), o=outcome(a,c), ev=activeEventText(x.e);
+    return '<div class="bp-v212-gain bp-v298-gain" data-v298-match="'+esc(m.id)+'">'+
+      '<div class="bp-v212-left">'+
+        '<div class="bp-v212-left-title">💰 GAIN POTENTIEL</div>'+
+        '<div class="bp-v212-left-sub">Règle active + événements</div>'+
+        (ev?'<div class="bp-v298-events-mini">'+ev+'</div>':'')+
+        '<button type="button" class="bp-v212-rule-btn" onclick="bpV210ShowRule('+(Number(day)||1)+')">ⓘ Voir les règles</button>'+ 
+      '</div>'+ 
+      '<div class="bp-v212-card correct">'+
+        '<div class="bp-v212-card-title">RÉSULTAT CORRECT</div>'+
+        '<div class="bp-v212-sub">'+esc(outcomeText(o,m))+'</div>'+
+        '<div class="bp-v212-value green">🏆 + '+fid(x.result)+' FID</div>'+
+        '<div class="bp-v212-sub">'+formulaResult(x,stake)+'</div>'+ 
+      '</div>'+ 
+      '<div class="bp-v212-card exact">'+
+        '<div class="bp-v212-card-title">SCORE EXACT</div>'+
+        '<div class="bp-v212-sub">'+fid(a)+' - '+fid(c)+'</div>'+
+        '<div class="bp-v212-value green">🎯 + '+fid(x.exact)+' FID</div>'+
+        '<div class="bp-v212-sub">'+formulaExact(x,stake)+'</div>'+ 
+      '</div>'+ 
+      '<div class="bp-v212-card max">'+
+        '<div class="bp-v212-card-title">GAIN MAXIMUM POSSIBLE</div>'+
+        '<div class="bp-v212-value yellow">🏅 + '+fid(x.exact)+' FID</div>'+
+        '<div class="bp-v212-sub">Score exact '+fid(a)+' - '+fid(c)+' · events inclus</div>'+ 
+      '</div>'+ 
+      fallbackVoyeur(old)+
+    '</div>';
+  }
+  var scheduled=false;
+  function inject(){
+    scheduled=false;
+    try{
+      var day=currentDay(), p=currentPlayer(), pname=(p && (p.name||p.pseudo)) || '';
+      document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(function(card){
+        var matchId=String(card.id||'').replace('betCard_','');
+        var m=findMatch(day,matchId); if(!m) return;
+        var b=findBet(day,matchId,pname) || {player:pname,matchId:matchId,day:day,stake:1,scoreA:0,scoreB:0};
+        var old=card.querySelector('.bp-v298-gain') || card.querySelector('.bp-v212-gain') || card.querySelector('.bp-v211-gain') || card.querySelector('.bp-v210-gain') || card.querySelector('.bp-v208-gain');
+        var html=build(card,old,b,m,day);
+        if(old) old.outerHTML=html;
+        else{
+          var anchor=card.querySelector('.prediction-derived') || card.querySelector('.bet-form') || card.querySelector('.match-info-panel');
+          if(anchor) anchor.insertAdjacentHTML('afterend',html);
+        }
+      });
+    }catch(e){ console.warn('[V298] Gain widget final KO', e); }
+  }
+  function schedule(){ if(scheduled) return; scheduled=true; (window.requestAnimationFrame||setTimeout)(inject,0); }
+
+  var previousRender=window.renderBets;
+  if(typeof previousRender==='function' && !previousRender.__BP_V298_WRAPPED__){
+    window.renderBets=function(){
+      var r=previousRender.apply(this,arguments);
+      inject();
+      schedule();
+      return r;
+    };
+    window.renderBets.__BP_V298_WRAPPED__=true;
+  }
+  document.addEventListener('input',function(e){ if(e.target && e.target.matches('.scoreA,.scoreB,.stake')) schedule(); },true);
+  document.addEventListener('change',function(e){ if(e.target && e.target.matches('.scoreA,.scoreB,.stake')) schedule(); },true);
+  if(window.MutationObserver){
+    new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
+  }
+  inject();
+  schedule();
+})();
+</script>
+<style>
+/* V298 — anti-flash : les anciens widgets de gain ne s'affichent plus avant remplacement */
+#betRows .bp-v208-gain:not(.bp-v298-gain),
+#betRows .bp-v210-gain:not(.bp-v298-gain),
+#betRows .bp-v211-gain:not(.bp-v298-gain),
+#betRows .bp-v212-gain:not(.bp-v298-gain){
+  display:none!important;
+}
+#betRows .bp-v298-gain{display:grid!important;visibility:visible!important;}
+.bp-v298-gain .bp-v298-events-mini{
+  margin:8px 0 10px!important;
+  padding:7px 9px!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.08)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  color:#fff!important;
+  font-size:12px!important;
+  font-weight:1000!important;
+  line-height:1.25!important;
+}
+.bp-v298-voyeur{
+  background:rgba(17,24,39,.92)!important;
+  border:1px solid rgba(96,165,250,.45)!important;
+  border-radius:14px!important;
+  padding:14px!important;
+}
+</style>
+
+
+<script>
+/* V300 — Stabilisation finale widget Gain + Mode Voyeur + Dé réaliste
+   - évite le clignotement : les patchs V298/V299 ne remplacent plus les blocs complets en boucle, ils sont morphés en place.
+   - garde Mode Voyeur stable pendant la saisie des scores.
+   - réinjecte automatiquement le bouton 🎲 Dés réaliste si un refresh de carte le supprime.
+*/
+(function(){
+  if(window.__BP_V300_NO_FLICKER_VOYEUR_DICE__) return;
+  window.__BP_V300_NO_FLICKER_VOYEUR_DICE__ = true;
+
+  function hasClass(el, cls){ try{return el && el.classList && el.classList.contains(cls);}catch(e){return false;} }
+  function nativeOuterHTML(){
+    var p=Element.prototype;
+    return Object.getOwnPropertyDescriptor(p,'outerHTML') || Object.getOwnPropertyDescriptor(HTMLElement.prototype,'outerHTML');
+  }
+  var desc=nativeOuterHTML();
+  if(desc && desc.set && desc.get && !Element.prototype.__BP_V300_OUTERHTML_PATCHED__){
+    Object.defineProperty(Element.prototype,'__BP_V300_OUTERHTML_PATCHED__',{value:true});
+    Object.defineProperty(Element.prototype,'outerHTML',{
+      configurable:true,
+      enumerable:desc.enumerable,
+      get:function(){ return desc.get.call(this); },
+      set:function(value){
+        try{
+          var s=String(value||'');
+          var isGain=hasClass(this,'bp-v298-gain') && s.indexOf('bp-v298-gain')!==-1;
+          var isVoyeur=hasClass(this,'bp-v298-voyeur') && s.indexOf('bp-v298-voyeur')!==-1;
+          if(isGain || isVoyeur){
+            var cur=desc.get.call(this);
+            if(cur===s) return;
+            var t=document.createElement('template');
+            t.innerHTML=s.trim();
+            var fresh=t.content && t.content.firstElementChild;
+            if(fresh){
+              // Morph en place : pas de trou blanc, pas de clignotement.
+              Array.from(this.attributes||[]).forEach(function(a){ if(!fresh.hasAttribute(a.name)) this.removeAttribute(a.name); }, this);
+              Array.from(fresh.attributes||[]).forEach(function(a){ this.setAttribute(a.name,a.value); }, this);
+              this.innerHTML=fresh.innerHTML;
+              return;
+            }
+          }
+        }catch(e){}
+        return desc.set.call(this,value);
+      }
+    });
+  }
+
+  function clean(s){ return String(s==null?'':s).trim(); }
+  function cardMid(card){ return String((card && card.id)||'').replace(/^betCard_/,''); }
+  function scoreSelects(card, mid){
+    var a=card.querySelector('.scoreA[data-match="'+CSS.escape(mid)+'"]') || card.querySelector('.scoreA');
+    var b=card.querySelector('.scoreB[data-match="'+CSS.escape(mid)+'"]') || card.querySelector('.scoreB');
+    if(a && b) return [a,b];
+    var selects=Array.from(card.querySelectorAll('select')).filter(function(s){
+      var vals=Array.from(s.options||[]).map(function(o){return clean(o.value);});
+      return vals.indexOf('0')>=0 && vals.indexOf('1')>=0 && vals.indexOf('2')>=0 && vals.indexOf('3')>=0;
+    });
+    return selects.length>=2 ? [selects[0],selects[1]] : [null,null];
+  }
+  function findMatch(mid){
+    try{
+      var st=window.state||{};
+      return (st.matches||[]).find(function(m){return String(m.id)===String(mid);}) || null;
+    }catch(e){return null;}
+  }
+  function applyDice(mid, btn){
+    var card=(btn && btn.closest('.bet-card')) || document.getElementById('betCard_'+mid);
+    if(!card) return false;
+    var pair=scoreSelects(card, mid);
+    if(!pair[0] || !pair[1]){ alert('Champs score introuvables.'); return false; }
+    // Score plausible simple et stable : favorise 0-0 à 3-2, sans sauvegarde automatique.
+    var pool=[[1,0],[2,0],[2,1],[1,1],[0,0],[3,1],[1,2],[0,1],[3,0],[2,2]];
+    var s=pool[Math.floor(Math.random()*pool.length)];
+    pair[0].value=String(s[0]);
+    pair[1].value=String(s[1]);
+    ['input','change'].forEach(function(type){
+      pair[0].dispatchEvent(new Event(type,{bubbles:true}));
+      pair[1].dispatchEvent(new Event(type,{bubbles:true}));
+    });
+    var m=findMatch(mid), derived=card.querySelector('.prediction-derived');
+    if(derived){
+      derived.textContent='🎲 Score proposé : '+(m?m.teamA:'Équipe A')+' '+s[0]+' - '+s[1]+' '+(m?m.teamB:'Équipe B')+'. À confirmer avant clôture.';
+    }
+    setTimeout(ensureDice,60);
+    setTimeout(ensureDice,220);
+    return false;
+  }
+
+  function ensureDiceOne(card){
+    if(!card) return;
+    var mid=cardMid(card); if(!mid) return;
+    var saveBtn=Array.from(card.querySelectorAll('button')).find(function(b){
+      var t=clean(b.textContent).toLowerCase();
+      return t.indexOf('sauvegarder')>=0 || t.indexOf('valider la mise')>=0;
+    });
+    if(!saveBtn) return;
+    var actions=saveBtn.closest('.bet-actions') || saveBtn.parentNode;
+    if(!actions) return;
+    var zone=card.querySelector('.bp-dice-stable-zone-v289,.bp-dice-stable-zone-v300');
+    if(zone){
+      zone.classList.add('bp-dice-stable-zone-v300');
+      if(zone.parentNode!==actions) actions.insertBefore(zone, saveBtn);
+      return;
+    }
+    zone=document.createElement('div');
+    zone.className='bp-dice-stable-zone-v289 bp-dice-stable-zone-v300';
+    var dice=document.createElement('button');
+    dice.type='button';
+    dice.className='bp-dice-stable-btn-v289 bp-dice-stable-btn-v300';
+    dice.textContent='🎲 Dés réaliste';
+    dice.addEventListener('click',function(ev){
+      ev.preventDefault(); ev.stopPropagation(); if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+      return applyDice(mid,dice);
+    },true);
+    var help=document.createElement('span');
+    help.className='bp-dice-stable-help-v289 bp-dice-stable-help-v300';
+    help.textContent='?';
+    help.title='Score réaliste. Rien n’est sauvegardé avant Sauvegarder la mise.';
+    zone.appendChild(dice); zone.appendChild(help);
+    actions.insertBefore(zone, saveBtn);
+  }
+  var pending=false;
+  function ensureDice(){
+    pending=false;
+    document.querySelectorAll('#bets [id^="betCard_"], #bets .bet-card').forEach(ensureDiceOne);
+  }
+  function scheduleDice(){ if(pending) return; pending=true; (window.requestAnimationFrame||setTimeout)(ensureDice,0); }
+
+  ['input','change'].forEach(function(type){
+    document.addEventListener(type,function(e){
+      if(e.target && e.target.matches && e.target.matches('.scoreA,.scoreB,.stake')){
+        scheduleDice(); setTimeout(scheduleDice,120);
+      }
+    },true);
+  });
+  var oldRender=window.renderBets;
+  if(typeof oldRender==='function' && !oldRender.__BP_V300_DICE_STABLE_WRAPPED__){
+    window.renderBets=function(){ var r=oldRender.apply(this,arguments); scheduleDice(); setTimeout(scheduleDice,180); return r; };
+    window.renderBets.__BP_V300_DICE_STABLE_WRAPPED__=true;
+  }
+  if(window.MutationObserver){
+    new MutationObserver(function(muts){
+      for(var i=0;i<muts.length;i++){
+        if(muts[i].addedNodes && muts[i].addedNodes.length){ scheduleDice(); break; }
+      }
+    }).observe(document.getElementById('bets')||document.body,{childList:true,subtree:true});
+  }
+  ensureDice(); setTimeout(ensureDice,300); setTimeout(ensureDice,1200);
+})();
+</script>
+<style>
+/* V300 — stabilité visuelle Mode Voyeur + Dé */
+#betRows .bp-v298-gain .bp-v298-voyeur{opacity:1!important;transition:none!important;}
+#bets .bp-dice-stable-zone-v300{display:flex!important;align-items:center!important;gap:8px!important;flex:0 0 auto!important;}
+#bets .bp-dice-stable-btn-v300{display:inline-flex!important;align-items:center!important;justify-content:center!important;white-space:nowrap!important;}
+</style>
