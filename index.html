@@ -41288,4 +41288,290 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
 
 <!-- V413 — PENALTY DAY ENGINE SAFE FINAL -->
 
+
+
+<script id="bp-v414-profile-pseudo-owner-fix-js">
+/* ==========================================================
+   V414 — PROFILE PSEUDO OWNER FIX
+   Cause vérifiée : le patch V275 garde un brouillon global
+   window.__BP_V275_PSEUDO_DRAFT__. Quand Sandrine est dans ce
+   brouillon, il peut être réappliqué au profil de tous les joueurs.
+
+   Correctif :
+   - le joueur connecté est toujours résolu par currentRole/currentUserIndex
+     avant tout fallback DOM;
+   - le brouillon pseudo est lié au joueur courant via OWNER;
+   - à chaque changement de joueur/login/rendu, un brouillon appartenant
+     à un autre joueur est vidé;
+   - NOM = nom réel BDD, PSEUDO = pseudo du joueur courant uniquement.
+   ========================================================== */
+(function(){
+  'use strict';
+  if(window.__BP_V414_PROFILE_PSEUDO_OWNER_FIX__) return;
+  window.__BP_V414_PROFILE_PSEUDO_OWNER_FIX__ = true;
+
+  var DRAFT_KEY = '__BP_V275_PSEUDO_DRAFT__';
+  var OWNER_KEY = '__BP_V414_PSEUDO_DRAFT_OWNER__';
+
+  function clean(v){ return String(v == null ? '' : v).trim(); }
+  function S(){ return window.state || {}; }
+  function players(){ return Array.isArray(S().players) ? S().players : []; }
+  function playerKey(p){ return clean(p && (p.code || p.id || p.name)); }
+  function realName(p){ return clean(p && (p.realName || p.fullName || p.legalName || p.name)) || 'Utilisateur'; }
+  function pseudoName(p){ return clean(p && p.pseudo) || realName(p); }
+
+  function currentPlayerStrict(){
+    var ps = players();
+
+    if(window.currentRole === 'user' && window.currentUserIndex !== null && window.currentUserIndex !== undefined){
+      var idx = Number(window.currentUserIndex);
+      if(Number.isFinite(idx) && ps[idx]) return ps[idx];
+    }
+
+    if(window.currentRole === 'admin'){
+      var sel = document.getElementById('activePlayer') || window.activePlayer;
+      if(sel && sel.value !== '' && sel.value !== null && sel.value !== undefined){
+        var aidx = Number(sel.value);
+        if(Number.isFinite(aidx) && ps[aidx]) return ps[aidx];
+      }
+    }
+
+    try{
+      if(typeof window.player === 'function'){
+        var p = window.player();
+        if(p && ps.indexOf(p) >= 0) return p;
+      }
+    }catch(e){}
+
+    return ps[0] || null;
+  }
+
+  function visiblePseudoInput(){
+    return document.getElementById('bpProfilePseudoStableInput')
+        || document.querySelector('[data-bp-stable-pseudo="1"]')
+        || document.getElementById('profilePseudoInput');
+  }
+
+  function normalizeInput(){
+    var p = currentPlayerStrict();
+    var el = visiblePseudoInput();
+    if(!el) return null;
+
+    if(el.id === 'profilePseudoInput' && el.type !== 'hidden'){
+      el.id = 'bpProfilePseudoStableInput';
+      el.setAttribute('data-bp-stable-pseudo','1');
+
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.id = 'profilePseudoInput';
+      hidden.value = pseudoName(p);
+      if(el.parentNode) el.parentNode.insertBefore(hidden, el.nextSibling);
+    }
+
+    el.setAttribute('data-bp-stable-pseudo','1');
+    return el;
+  }
+
+  function clearForeignDraft(p){
+    var k = playerKey(p);
+    if(!k) return;
+    if(clean(window[OWNER_KEY]) && clean(window[OWNER_KEY]) !== k){
+      window[DRAFT_KEY] = '';
+    }
+    if(!clean(window[OWNER_KEY])) window[OWNER_KEY] = k;
+  }
+
+  function renderProfileStrict(){
+    var p = currentPlayerStrict();
+    if(!p) return;
+
+    clearForeignDraft(p);
+    var k = playerKey(p);
+
+    var nameEl = document.getElementById('profileName');
+    if(nameEl) nameEl.textContent = realName(p);
+
+    var input = normalizeInput();
+    if(input){
+      var editing = (document.activeElement === input || input.dataset.bpEditing === '1');
+      var ownerOk = clean(window[OWNER_KEY]) === k;
+      var draft = ownerOk ? clean(window[DRAFT_KEY]) : '';
+
+      if(editing && ownerOk && draft){
+        input.value = draft;
+      }else if(!editing){
+        input.value = pseudoName(p);
+        input.dataset.bpEditing = '0';
+      }
+    }
+
+    var hidden = document.getElementById('profilePseudoInput');
+    if(hidden && hidden.type === 'hidden') hidden.value = pseudoName(p);
+  }
+
+  // Remplace player() par une version stricte : impossible de retomber sur le premier joueur/Sandrine pour un user connecté.
+  window.player = currentPlayerStrict;
+  try{ player = currentPlayerStrict; }catch(e){}
+
+  document.addEventListener('focusin', function(e){
+    if(e.target && e.target.getAttribute('data-bp-stable-pseudo') === '1'){
+      var p = currentPlayerStrict();
+      window[OWNER_KEY] = playerKey(p);
+      window[DRAFT_KEY] = e.target.value;
+      e.target.dataset.bpEditing = '1';
+    }
+  }, true);
+
+  document.addEventListener('input', function(e){
+    if(e.target && e.target.getAttribute('data-bp-stable-pseudo') === '1'){
+      var p = currentPlayerStrict();
+      window[OWNER_KEY] = playerKey(p);
+      window[DRAFT_KEY] = e.target.value;
+      e.target.dataset.bpEditing = '1';
+    }
+  }, true);
+
+  document.addEventListener('focusout', function(e){
+    if(e.target && e.target.getAttribute('data-bp-stable-pseudo') === '1'){
+      setTimeout(function(){
+        try{ e.target.dataset.bpEditing = '0'; }catch(_e){}
+        renderProfileStrict();
+      }, 150);
+    }
+  }, true);
+
+  async function persistPseudoOnly(p, pseudo){
+    var url = window.BP_SUPABASE_URL || window.BP_MANUAL_SUPABASE_URL;
+    var key = window.BP_SUPABASE_ANON_KEY || window.BP_MANUAL_SUPABASE_ANON_KEY;
+    var appId = window.BP_SUPABASE_APP_ID || 'bp-world-cup-2026';
+    if(!window.supabase || !url || !key) throw new Error('Supabase non configuré.');
+
+    var client = (typeof window.bpGetSupabaseClient === 'function')
+      ? window.bpGetSupabaseClient()
+      : window.supabase.createClient(url, key, {auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false}});
+
+    var read = await client.from('app_state').select('data').eq('id', appId).single();
+    if(read.error) throw read.error;
+
+    var data = read.data && read.data.data ? read.data.data : {};
+    var ps = Array.isArray(data.players) ? data.players : [];
+    var remote = null;
+    var code = clean(p && p.code);
+    if(code) remote = ps.find(function(x){ return clean(x.code) === code; });
+    if(!remote){
+      var name = clean(p && p.name);
+      remote = ps.find(function(x){ return clean(x.name) === name; });
+    }
+    if(!remote) throw new Error('Joueur introuvable en BDD.');
+
+    remote.pseudo = pseudo;
+    remote.updatedAt = new Date().toISOString();
+    data.players = ps;
+    data.lastSavedAt = new Date().toISOString();
+    data.lastProfileUpdate = {playerCode:clean(remote.code || ''), fields:['pseudo'], at:data.lastSavedAt};
+
+    var oldAllow = window.__BP_ALLOW_BDD_WRITE__;
+    window.__BP_ALLOW_BDD_WRITE__ = true;
+    try{
+      var write = await client.from('app_state').upsert({id:appId, data:data, updated_at:new Date().toISOString()}, {onConflict:'id'});
+      if(write.error) throw write.error;
+    }finally{
+      window.__BP_ALLOW_BDD_WRITE__ = oldAllow;
+    }
+    return data;
+  }
+
+  window.saveMyPseudo = async function(){
+    var input = normalizeInput();
+    var p = currentPlayerStrict();
+    if(!input || !p) return false;
+
+    var value = clean(input.value);
+    if(value.length < 3){
+      if(window.bpAlert) await window.bpAlert('Le pseudo doit contenir au moins 3 caractères.', {icon:'👤'});
+      else alert('Le pseudo doit contenir au moins 3 caractères.');
+      return false;
+    }
+    if(value.length > 20){
+      if(window.bpAlert) await window.bpAlert('Le pseudo doit faire maximum 20 caractères.', {icon:'👤'});
+      else alert('Le pseudo doit faire maximum 20 caractères.');
+      return false;
+    }
+
+    var duplicate = players().some(function(x){
+      return x !== p && clean(x.pseudo || x.name).toLowerCase() === value.toLowerCase();
+    });
+    if(duplicate){
+      if(window.bpAlert) await window.bpAlert('Ce pseudo est déjà utilisé par un autre joueur.', {icon:'⚠️'});
+      else alert('Ce pseudo est déjà utilisé par un autre joueur.');
+      return false;
+    }
+
+    p.pseudo = value;
+    window[OWNER_KEY] = playerKey(p);
+    window[DRAFT_KEY] = '';
+    input.dataset.bpEditing = '0';
+    input.value = value;
+    renderProfileStrict();
+
+    try{
+      var data = await persistPseudoOnly(p, value);
+      if(data && typeof data === 'object'){
+        Object.keys(S()).forEach(function(k){ delete S()[k]; });
+        Object.assign(S(), data);
+        window.state = S();
+      }
+      window[OWNER_KEY] = playerKey(currentPlayerStrict());
+      window[DRAFT_KEY] = '';
+      renderProfileStrict();
+      try{ if(typeof window.renderHeader === 'function') window.renderHeader(); }catch(e){}
+      if(window.bpAlert) await window.bpAlert('Pseudo sauvegardé en BDD.', {icon:'✅'});
+      return true;
+    }catch(e){
+      console.warn('[V414 saveMyPseudo]', e);
+      renderProfileStrict();
+      if(window.bpAlert) await window.bpAlert('Sauvegarde BDD échouée : ' + (e.message || e), {icon:'⚠️'});
+      else alert('Sauvegarde BDD échouée : ' + (e.message || e));
+      return false;
+    }
+  };
+  try{ saveMyPseudo = window.saveMyPseudo; }catch(e){}
+
+  ['renderUserIdentity','renderAll','renderBets','tab'].forEach(function(fnName){
+    var old = window[fnName];
+    if(typeof old === 'function' && !old.__bpV414Wrapped){
+      window[fnName] = function(){
+        var r = old.apply(this, arguments);
+        renderProfileStrict();
+        setTimeout(renderProfileStrict, 0);
+        setTimeout(renderProfileStrict, 120);
+        return r;
+      };
+      window[fnName].__bpV414Wrapped = true;
+      try{ if(fnName === 'renderUserIdentity') renderUserIdentity = window[fnName]; }catch(e){}
+      try{ if(fnName === 'renderAll') renderAll = window[fnName]; }catch(e){}
+      try{ if(fnName === 'renderBets') renderBets = window[fnName]; }catch(e){}
+      try{ if(fnName === 'tab') tab = window[fnName]; }catch(e){}
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    window[DRAFT_KEY] = '';
+    renderProfileStrict();
+    setTimeout(renderProfileStrict, 100);
+    setTimeout(renderProfileStrict, 500);
+  });
+
+  window.bpV414ProfileAudit = function(){
+    var p = currentPlayerStrict();
+    alert('Profil courant\nNom: '+realName(p)+'\nPseudo: '+pseudoName(p)+'\nCode: '+clean(p && p.code)+'\nIndex: '+window.currentUserIndex+'\nDraftOwner: '+clean(window[OWNER_KEY])+'\nDraft: '+clean(window[DRAFT_KEY]));
+  };
+
+  renderProfileStrict();
+  console.log('[V414 PROFILE PSEUDO OWNER FIX ACTIVE]');
+})();
+</script>
+
+<!-- V414 — PROFILE PSEUDO OWNER FIX -->
+
 </body></html>
