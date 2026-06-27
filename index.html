@@ -40458,9 +40458,13 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
       card.appendChild(actions);
     }
 
+    actions.className = 'bet-actions bp-v334-actions';
     actions.innerHTML =
-      '<div class="bet-status good">'+escAttr(when)+'</div>'+
-      '<button class="action editBtn" type="button" onclick="'+editHandler(mid)+'">✏️ Modifier la mise</button>';
+      '<div class="bp-v334-status good">'+escAttr(when)+'</div>'+
+      '<div class="bp-v334-right">'+
+        '<button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button>'+
+        '<button type="button" class="bp-v334-btn bp-v334-cta bp-v334-edit" onclick="'+editHandler(mid)+'">✏️ Modifier la mise</button>'+
+      '</div>';
 
     card.classList.add('lockedCard');
     card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){ el.disabled = true; });
@@ -40532,5 +40536,232 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
 </script>
 
 <!-- V407 — PRONO CTA FIX FROM V405 -->
+
+
+
+<script>
+/* V408 — FIX FINAL CTA PRONO V334/V407
+   Le bouton Modifier doit toujours utiliser les classes V334, sinon le CSS V334 masque les boutons legacy .action/.editBtn. */
+(function(){
+  'use strict';
+  if(window.__BP_V408_PRONO_V334_CTA__) return;
+  window.__BP_V408_PRONO_V334_CTA__ = true;
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function mid(card){return String(card && card.id || '').replace(/^betCard_/,'');}
+  function isSaved(card){return card && /✅\s*Validée|Validée le|Mise sauvegardée en BDD/i.test(card.textContent||'');}
+  function editHandler(id){return "if(typeof editBet==='function'){editBet('"+String(id).replace(/'/g,"\\'")+"')}";}
+  function normalizeCard(card){
+    if(!card || !isSaved(card)) return;
+    var id=mid(card); if(!id) return;
+    var actions=card.querySelector('.bet-actions');
+    if(!actions){actions=document.createElement('div');actions.className='bet-actions bp-v334-actions';card.appendChild(actions);}
+    var currentStatus=card.querySelector('.bp-v334-status,.bet-status');
+    var statusText=currentStatus ? currentStatus.textContent : 'Validée';
+    if(!/Validée|sauvegardée/i.test(statusText)) statusText='Validée';
+    actions.className='bet-actions bp-v334-actions';
+    actions.innerHTML='<div class="bp-v334-status good">'+esc(statusText)+'</div>'+
+      '<div class="bp-v334-right"><button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button>'+
+      '<button type="button" class="bp-v334-btn bp-v334-cta bp-v334-edit" onclick="'+editHandler(id)+'">✏️ Modifier la mise</button></div>';
+    var badge=card.querySelector('.bet-title .badge');
+    if(badge){badge.className='badge ok';badge.textContent='✅ Validée';}
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){el.disabled=true;});
+  }
+  function normalizeAll(){document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(normalizeCard);}
+  ['renderBets','renderAll'].forEach(function(fn){
+    var old=window[fn];
+    if(typeof old==='function' && !old.__bpV408Wrapped){
+      window[fn]=function(){var r=old.apply(this,arguments); setTimeout(normalizeAll,60); setTimeout(normalizeAll,240); return r;};
+      window[fn].__bpV408Wrapped=true;
+      try{ if(fn==='renderBets') renderBets=window[fn]; if(fn==='renderAll') renderAll=window[fn]; }catch(e){}
+    }
+  });
+  var root=document.getElementById('betRows');
+  if(root && window.MutationObserver){new MutationObserver(function(){setTimeout(normalizeAll,40);}).observe(root,{childList:true,subtree:true,characterData:true});}
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){setTimeout(normalizeAll,300);}); else setTimeout(normalizeAll,300);
+  console.log('[V408 PRONO V334 CTA FIX ACTIVE]');
+})();
+</script>
+
+<!-- V408 — FIX FINAL CTA PRONO V334/V407 -->
+
+
+<script>
+/* V409 — PRONO CTA FIX : bouton Sauvegarder visible pour les mises non encore en BDD
+   Corrige le cas où V408 ne normalisait que les cartes validées et laissait seulement "Dés réaliste". */
+(function(){
+  'use strict';
+  if(window.__BP_V409_PRONO_SAVE_CTA__) return;
+  window.__BP_V409_PRONO_SAVE_CTA__ = true;
+
+  function esc(v){
+    return String(v == null ? '' : v)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+  function txt(v){ return String(v || '').replace(/\s+/g,' ').trim(); }
+  function mid(card){ return String(card && card.id || '').replace(/^betCard_/,''); }
+  function currentDaySafe(){
+    try{ if(typeof currentPronoDay === 'function') return Number(currentPronoDay()); }catch(e){}
+    try{ return Number(window.pronoDayDisplayed || (window.state && state.currentDay) || 1); }catch(e){}
+    return 1;
+  }
+  function openDaySafe(){
+    try{ if(typeof onlyOpenDay === 'function') return Number(onlyOpenDay()); }catch(e){}
+    try{ return Number(window.state && state.currentDay || 1); }catch(e){}
+    return currentDaySafe();
+  }
+  function isOpenDay(){
+    var d = currentDaySafe();
+    try{ if(typeof pronoDayIsAvailable === 'function') return !!pronoDayIsAvailable(d); }catch(e){}
+    try{ if(typeof isDayClosed === 'function') return Number(d) === Number(openDaySafe()) && !isDayClosed(d); }catch(e){}
+    return Number(d) === Number(openDaySafe());
+  }
+  function currentPlayerName(){
+    try{
+      if(window.currentRole === 'user' && window.currentUserIndex !== null && state.players && state.players[window.currentUserIndex]){
+        return String(state.players[window.currentUserIndex].name || '');
+      }
+      if(typeof player === 'function'){
+        var p = player();
+        return String(p && p.name || '');
+      }
+    }catch(e){}
+    return '';
+  }
+  function betOf(id){
+    try{
+      var pn = currentPlayerName();
+      var d = currentDaySafe();
+      return (state.bets || []).find(function(b){
+        return Number(b.day) === Number(d) &&
+               String(b.matchId) === String(id) &&
+               String(b.player) === String(pn);
+      }) || null;
+    }catch(e){ return null; }
+  }
+  function isValidatedBet(b){
+    return !!b && String(b.status || '').toUpperCase() === 'VALIDATED';
+  }
+  function uiLooksSaved(card){
+    return !!card && /✅\s*Validée|Validée le|Mise sauvegardée en BDD/i.test(card.textContent || '');
+  }
+  function getActions(card){
+    var a = card.querySelector(':scope > .bet-actions') || card.querySelector('.bet-actions');
+    if(!a){
+      a = document.createElement('div');
+      a.className = 'bet-actions bp-v334-actions';
+      card.appendChild(a);
+    }
+    a.className = 'bet-actions bp-v334-actions';
+    return a;
+  }
+  function lockInputs(card, yes){
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){
+      el.disabled = !!yes;
+      if(yes) el.setAttribute('disabled','disabled');
+      else el.removeAttribute('disabled');
+    });
+    card.classList.toggle('lockedCard', !!yes);
+  }
+  function renderSaved(card, id, b){
+    var actions = getActions(card);
+    var when = b && b.validatedAt ? new Date(b.validatedAt).toLocaleString('fr-FR') : '';
+    var status = 'Validée' + (when ? ' le ' + when : '');
+    actions.innerHTML =
+      '<div class="bp-v334-status good">'+esc(status)+'</div>'+
+      '<div class="bp-v334-right">'+
+        '<button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button>'+
+        '<button type="button" class="bp-v334-btn bp-v334-cta bp-v334-edit">✏️ Modifier la mise</button>'+
+      '</div>';
+    var badge = card.querySelector('.bet-title .badge');
+    if(badge){ badge.className='badge ok'; badge.textContent='✅ Validée'; }
+    lockInputs(card, true);
+    card.dataset.bpV334Mode = 'saved';
+    card.dataset.bpV334ForceSaved = '1';
+  }
+  function renderDraft(card){
+    var actions = getActions(card);
+    actions.innerHTML =
+      '<div class="bp-v334-status warn">À confirmer avant clôture.</div>'+
+      '<div class="bp-v334-right">'+
+        '<button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button>'+
+        '<button type="button" class="bp-v334-btn bp-v334-cta bp-v334-save">Sauvegarder la mise</button>'+
+      '</div>';
+    var badge = card.querySelector('.bet-title .badge');
+    if(badge && !/Mise non disponible|fermée|future/i.test(badge.textContent || '')){
+      badge.className='badge';
+      badge.textContent='Brouillon';
+    }
+    lockInputs(card, false);
+    delete card.dataset.bpV334ForceSaved;
+    delete card.dataset.bpV337Saved;
+    card.dataset.bpV334Mode = 'edit';
+  }
+  function normalizeCard(card){
+    if(!card || !card.id || !/^betCard_/.test(card.id)) return;
+    if(!isOpenDay()) return;
+
+    var id = mid(card);
+    if(!id) return;
+
+    var b = betOf(id);
+    if(isValidatedBet(b) || uiLooksSaved(card)){
+      renderSaved(card, id, b);
+    }else{
+      renderDraft(card);
+    }
+  }
+  function normalizeAll(){
+    document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(normalizeCard);
+  }
+  function schedule(){
+    setTimeout(normalizeAll, 40);
+    setTimeout(normalizeAll, 180);
+    setTimeout(normalizeAll, 500);
+  }
+
+  ['renderBets','renderAll'].forEach(function(fn){
+    var old = window[fn];
+    if(typeof old === 'function' && !old.__bpV409Wrapped){
+      window[fn] = function(){
+        var r = old.apply(this, arguments);
+        schedule();
+        return r;
+      };
+      window[fn].__bpV409Wrapped = true;
+      try{
+        if(fn === 'renderBets') renderBets = window[fn];
+        if(fn === 'renderAll') renderAll = window[fn];
+      }catch(e){}
+    }
+  });
+
+  try{
+    var root = document.getElementById('betRows');
+    if(root && window.MutationObserver){
+      new MutationObserver(schedule).observe(root,{childList:true,subtree:true,characterData:true});
+    }
+  }catch(e){}
+
+  document.addEventListener('change',function(e){
+    var card = e.target && e.target.closest ? e.target.closest('#betRows .bet-card[id^="betCard_"]') : null;
+    if(card && e.target.matches && e.target.matches('.scoreA,.scoreB,.stake')){
+      delete card.dataset.bpV334ForceSaved;
+      delete card.dataset.bpV337Saved;
+      card.dataset.bpV334Mode = 'edit';
+      setTimeout(function(){ normalizeCard(card); }, 20);
+    }
+  }, true);
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+  else schedule();
+
+  console.log('[V409 PRONO SAVE CTA FIX ACTIVE]');
+})();
+</script>
+
+<!-- V409 — PRONO SAVE CTA FIX -->
 
 </body></html>
