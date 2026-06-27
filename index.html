@@ -40764,4 +40764,189 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
 
 <!-- V409 — PRONO SAVE CTA FIX -->
 
+
+
+<script>
+/* V410 — PENALTY DAY CANONICAL FIX
+   Correctif ciblé : l'Admin affichait deux champs "mauvais prono" différents.
+   Le résumé lisait wrongBetPenalty, mais certains moteurs lisaient encore penaltyBadBet.
+   Source unique désormais : wrongBetPenalty si présent, puis synchronisation des 4 alias :
+   - nonBetPenalty / penaltyNoBet
+   - wrongBetPenalty / penaltyBadBet
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V410_PENALTY_CANONICAL_FIX__) return;
+  window.__BP_V410_PENALTY_CANONICAL_FIX__ = true;
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || (window.state = {}); }
+  function N(v,d){ var n = Number(v); return Number.isFinite(n) ? n : d; }
+  function has(v){ return v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v)); }
+  function key(day){ return String(Number(day || (S().currentDay || 1)) || 1); }
+  function events(day){
+    var st = S();
+    if(!st.specialEvents || typeof st.specialEvents !== 'object' || Array.isArray(st.specialEvents)) st.specialEvents = {};
+    var k = key(day);
+    st.specialEvents[k] = st.specialEvents[k] || st.specialEvents[Number(k)] || {};
+    return st.specialEvents[k];
+  }
+  function canonicalizePenaltyDay(day){
+    var e = events(day);
+
+    var noBet = has(e.nonBetPenalty) ? N(e.nonBetPenalty,1)
+      : has(e.penaltyNoBet) ? N(e.penaltyNoBet,1)
+      : 1;
+
+    /* Priorité au champ récent/affiché dans le bandeau : wrongBetPenalty.
+       Cela évite que l'ancien champ penaltyBadBet resté à 2 réécrase la valeur voulue à 1. */
+    var wrongBet = has(e.wrongBetPenalty) ? N(e.wrongBetPenalty,2)
+      : has(e.penaltyBadBet) ? N(e.penaltyBadBet,2)
+      : 2;
+
+    e.nonBetPenalty = noBet;
+    e.penaltyNoBet = noBet;
+    e.wrongBetPenalty = wrongBet;
+    e.penaltyBadBet = wrongBet;
+    return e;
+  }
+  window.bpV410CanonicalizePenaltyDay = canonicalizePenaltyDay;
+
+  function currentEventDayFromUI(){
+    var sel = document.getElementById('evtDaySelect');
+    if(sel && sel.value) return Number(sel.value) || Number(S().currentDay || 1);
+    return Number(S().currentDay || 1);
+  }
+
+  function syncPenaltyInputs(preferActive){
+    var day = currentEventDayFromUI();
+    var e = canonicalizePenaltyDay(day);
+    var no1 = document.getElementById('evtNoBetPenalty');
+    var no2 = document.getElementById('evtPenaltyNoBet');
+    var w1  = document.getElementById('evtWrongBetPenalty');
+    var w2  = document.getElementById('evtPenaltyBadBet');
+
+    if(preferActive && document.activeElement === w2 && has(w2.value)){
+      e.wrongBetPenalty = e.penaltyBadBet = N(w2.value,2);
+    }else if(preferActive && document.activeElement === w1 && has(w1.value)){
+      e.wrongBetPenalty = e.penaltyBadBet = N(w1.value,2);
+    }else if(w1 && has(w1.value)){
+      e.wrongBetPenalty = e.penaltyBadBet = N(w1.value,2);
+    }else if(w2 && has(w2.value)){
+      e.wrongBetPenalty = e.penaltyBadBet = N(w2.value,2);
+    }
+
+    if(preferActive && document.activeElement === no2 && has(no2.value)){
+      e.nonBetPenalty = e.penaltyNoBet = N(no2.value,1);
+    }else if(preferActive && document.activeElement === no1 && has(no1.value)){
+      e.nonBetPenalty = e.penaltyNoBet = N(no1.value,1);
+    }else if(no1 && has(no1.value)){
+      e.nonBetPenalty = e.penaltyNoBet = N(no1.value,1);
+    }else if(no2 && has(no2.value)){
+      e.nonBetPenalty = e.penaltyNoBet = N(no2.value,1);
+    }
+
+    if(no1) no1.value = e.nonBetPenalty;
+    if(no2) no2.value = e.nonBetPenalty;
+    if(w1)  w1.value  = e.wrongBetPenalty;
+    if(w2)  w2.value  = e.wrongBetPenalty;
+
+    /* Cache les anciens champs dupliqués pour éviter la confusion visuelle.
+       Ils restent synchronisés car certains anciens scripts les lisent encore. */
+    [no2,w2].forEach(function(inp){
+      var lab = inp && inp.closest ? inp.closest('label') : null;
+      if(lab) lab.style.display = 'none';
+    });
+
+    return e;
+  }
+  window.bpV410SyncPenaltyInputs = syncPenaltyInputs;
+
+  var oldRenderEvents = window.renderSpecialEventsAdmin;
+  if(typeof oldRenderEvents === 'function' && !oldRenderEvents.__bpV410Wrapped){
+    window.renderSpecialEventsAdmin = function(){
+      var r = oldRenderEvents.apply(this, arguments);
+      setTimeout(function(){ syncPenaltyInputs(false); }, 0);
+      return r;
+    };
+    window.renderSpecialEventsAdmin.__bpV410Wrapped = true;
+    try{ renderSpecialEventsAdmin = window.renderSpecialEventsAdmin; }catch(e){}
+  }
+
+  var oldSaveEvents = window.saveSpecialEventsFromAdmin;
+  if(typeof oldSaveEvents === 'function' && !oldSaveEvents.__bpV410Wrapped){
+    window.saveSpecialEventsFromAdmin = function(){
+      syncPenaltyInputs(true);
+      var day = currentEventDayFromUI();
+      var r = oldSaveEvents.apply(this, arguments);
+      canonicalizePenaltyDay(day);
+      setTimeout(function(){ syncPenaltyInputs(false); }, 0);
+      return r;
+    };
+    window.saveSpecialEventsFromAdmin.__bpV410Wrapped = true;
+    try{ saveSpecialEventsFromAdmin = window.saveSpecialEventsFromAdmin; }catch(e){}
+  }
+
+  var oldPreview = window.bpPreviewGainCalculation;
+  if(typeof oldPreview === 'function' && !oldPreview.__bpV410Wrapped){
+    window.bpPreviewGainCalculation = function(day){
+      canonicalizePenaltyDay(day);
+      var p = oldPreview.apply(this, arguments);
+      canonicalizePenaltyDay(day);
+      return p;
+    };
+    window.bpPreviewGainCalculation.__bpV410Wrapped = true;
+    try{ bpPreviewGainCalculation = window.bpPreviewGainCalculation; }catch(e){}
+  }
+
+  var oldApply = window.applySpecialEventBonuses;
+  if(typeof oldApply === 'function' && !oldApply.__bpV410Wrapped){
+    window.applySpecialEventBonuses = function(targetDay){
+      canonicalizePenaltyDay(targetDay);
+      return oldApply.apply(this, arguments);
+    };
+    window.applySpecialEventBonuses.__bpV410Wrapped = true;
+    try{ applySpecialEventBonuses = window.applySpecialEventBonuses; }catch(e){}
+  }
+
+  document.addEventListener('input', function(e){
+    if(e.target && /^(evtWrongBetPenalty|evtPenaltyBadBet|evtNoBetPenalty|evtPenaltyNoBet)$/.test(e.target.id || '')){
+      syncPenaltyInputs(true);
+    }
+  }, true);
+
+  document.addEventListener('change', function(e){
+    if(e.target && (e.target.id === 'evtDaySelect' || /^(evtWrongBetPenalty|evtPenaltyBadBet|evtNoBetPenalty|evtPenaltyNoBet)$/.test(e.target.id || ''))){
+      syncPenaltyInputs(true);
+    }
+  }, true);
+
+  ['renderAdmin','renderAll','tab'].forEach(function(fn){
+    var old = window[fn];
+    if(typeof old === 'function' && !old.__bpV410PenaltyWrap){
+      window[fn] = function(){
+        var r = old.apply(this, arguments);
+        setTimeout(function(){ syncPenaltyInputs(false); }, 0);
+        return r;
+      };
+      window[fn].__bpV410PenaltyWrap = true;
+      try{
+        if(fn === 'renderAdmin') renderAdmin = window[fn];
+        if(fn === 'renderAll') renderAll = window[fn];
+        if(fn === 'tab') tab = window[fn];
+      }catch(e){}
+    }
+  });
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ syncPenaltyInputs(false); }, 0); });
+  }else{
+    setTimeout(function(){ syncPenaltyInputs(false); }, 0);
+  }
+
+  console.log('[V410 PENALTY DAY CANONICAL FIX ACTIVE]');
+})();
+</script>
+
+<!-- V410 — PENALTY DAY CANONICAL FIX -->
+
 </body></html>
