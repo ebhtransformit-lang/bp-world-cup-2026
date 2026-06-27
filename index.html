@@ -41718,9 +41718,9 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
   function recentBox(team, beforeDay){
     var items = recentForTeam(team, beforeDay, 2);
     if(!items.length){
-      return '<div class="bp-v415-team-recent"><div class="bp-v415-team-recent-title">Matchs récents</div><div class="bp-v415-team-recent-line"><span class="bp-v415-team-recent-opp">Aucun résultat</span><span class="bp-v415-team-recent-score">—</span></div></div>';
+      return '<div class="bp-v415-team-recent"><div class="bp-v415-team-recent-title">Forme récente</div><div class="bp-v415-team-recent-line"><span class="bp-v415-team-recent-opp">Aucun résultat</span><span class="bp-v415-team-recent-score">—</span></div></div>';
     }
-    return '<div class="bp-v415-team-recent"><div class="bp-v415-team-recent-title">Matchs récents</div>' +
+    return '<div class="bp-v415-team-recent"><div class="bp-v415-team-recent-title">Forme récente</div>' +
       items.map(function(x){
         return '<div class="bp-v415-team-recent-line"><span class="bp-v415-team-recent-opp">J'+esc(x.day)+' · '+esc(x.opponent)+'</span><span class="bp-v415-team-recent-score">'+esc(x.score)+'</span></div>';
       }).join('') + '</div>';
@@ -42229,5 +42229,535 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
 
   document.addEventListener('DOMContentLoaded', normalizeTeamBoxes);
   setTimeout(normalizeTeamBoxes, 250);
+})();
+</script>
+
+
+<!-- V420 — PRONO INTERACTION HARD FIX : champs scores/mise + Modifier + Sauvegarder
+     Objectif : corriger le verrouillage parasite provoqué par les anciens normalizers V408/V409.
+     Règle : seule la BDD/state fait foi. Le texte affiché "Validée le..." ne doit jamais reverrouiller une carte. -->
+<style id="bp-v420-prono-interaction-hard-fix-css">
+  #bets .bet-card.bp-v420-editing,
+  #bets .bet-card.bp-v420-draft{
+    opacity:1!important;
+  }
+  #bets .bet-card.bp-v420-editing .scoreA,
+  #bets .bet-card.bp-v420-editing .scoreB,
+  #bets .bet-card.bp-v420-editing .stake,
+  #bets .bet-card.bp-v420-draft .scoreA,
+  #bets .bet-card.bp-v420-draft .scoreB,
+  #bets .bet-card.bp-v420-draft .stake{
+    pointer-events:auto!important;
+    opacity:1!important;
+    filter:none!important;
+  }
+  #bets .bp-v420-save,
+  #bets .bp-v420-edit{
+    pointer-events:auto!important;
+    cursor:pointer!important;
+  }
+</style>
+
+<script id="bp-v420-prono-interaction-hard-fix-js">
+(function(){
+  'use strict';
+  if(window.__BP_V420_PRONO_INTERACTION_FIX__) return;
+  window.__BP_V420_PRONO_INTERACTION_FIX__ = true;
+  window.BP_APP_VERSION = 'v420-prono-interaction-hard-fix';
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function n(v,d){ var x=Number(v); return Number.isFinite(x) ? x : d; }
+  function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function mid(card){ return String(card && card.id || '').replace(/^betCard_/,''); }
+
+  function currentDaySafe(){
+    try{ if(typeof currentPronoDay === 'function') return Number(currentPronoDay()); }catch(e){}
+    return Number(S().currentDay || window.pronoDayDisplayed || 1);
+  }
+
+  function openDaySafe(){
+    try{ if(typeof onlyOpenDay === 'function') return Number(onlyOpenDay()); }catch(e){}
+    return Number(S().currentDay || 1);
+  }
+
+  function isOpenDay(){
+    var d=currentDaySafe();
+    try{ if(typeof pronoDayIsAvailable === 'function') return !!pronoDayIsAvailable(d); }catch(e){}
+    try{ if(typeof isDayClosed === 'function') return Number(d)===Number(openDaySafe()) && !isDayClosed(d); }catch(e){}
+    return Number(d)===Number(openDaySafe());
+  }
+
+  function currentPlayer(){
+    var st=S();
+    try{
+      if(window.currentRole === 'user' && window.currentUserIndex !== null && st.players && st.players[window.currentUserIndex]){
+        return st.players[window.currentUserIndex];
+      }
+      if(typeof player === 'function'){
+        var p = player();
+        if(p) return p;
+      }
+    }catch(e){}
+    var sel=document.getElementById('activePlayer');
+    return arr(st.players)[n(sel && sel.value,0)] || null;
+  }
+
+  function betOf(id){
+    var st=S(), p=currentPlayer(), d=currentDaySafe();
+    if(!p) return null;
+    return arr(st.bets).find(function(b){
+      return Number(b.day)===Number(d) &&
+             String(b.matchId)===String(id) &&
+             String(b.player)===String(p.name);
+    }) || null;
+  }
+
+  function splitScore(b){
+    if(!b) return [0,0];
+    if(b.scoreA !== undefined && b.scoreB !== undefined) return [n(b.scoreA,0), n(b.scoreB,0)];
+    var s=String(b.score || b.predictedScore || '0-0').replace(/\s+/g,'').split(/[-–]/);
+    return [n(s[0],0), n(s[1],0)];
+  }
+
+  function setControlsFromBet(card,b){
+    if(!card || !b) return;
+    var sc=splitScore(b);
+    var a=card.querySelector('.scoreA');
+    var c=card.querySelector('.scoreB');
+    var st=card.querySelector('.stake');
+    if(a) a.value=String(sc[0]);
+    if(c) c.value=String(sc[1]);
+    if(st) st.value=String(n(b.stake,1));
+  }
+
+  function setLocked(card,locked){
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){
+      el.disabled = !!locked;
+      if(locked) el.setAttribute('disabled','disabled');
+      else el.removeAttribute('disabled');
+      el.style.pointerEvents = locked ? '' : 'auto';
+    });
+    card.classList.toggle('lockedCard', !!locked);
+    card.classList.toggle('bp-v420-draft', !locked);
+  }
+
+  function actions(card){
+    var a=card.querySelector(':scope > .bet-actions') || card.querySelector('.bet-actions');
+    if(!a){
+      a=document.createElement('div');
+      a.className='bet-actions bp-v334-actions';
+      card.appendChild(a);
+    }
+    a.className='bet-actions bp-v334-actions';
+    return a;
+  }
+
+  function renderDraft(card,id){
+    var a=actions(card);
+    a.innerHTML =
+      '<div class="bp-v334-status warn">À confirmer avant clôture.</div>'+
+      '<div class="bp-v334-right">'+
+        '<button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button>'+
+        '<button type="button" class="bp-v334-btn bp-v334-cta bp-v334-save bp-v420-save" data-bp-v420-save="'+esc(id)+'">Sauvegarder la mise</button>'+
+      '</div>';
+
+    var badge=card.querySelector('.bet-title .badge');
+    if(badge && !/Mise non disponible|fermée|future/i.test(badge.textContent || '')){
+      badge.className='badge';
+      badge.textContent='Brouillon';
+    }
+
+    card.dataset.bpV420Mode='draft';
+    card.classList.add('bp-v420-editing','bp-v420-draft');
+    delete card.dataset.bpV334ForceSaved;
+    delete card.dataset.bpV337Saved;
+    setLocked(card,false);
+  }
+
+  function renderSaved(card,id,b){
+    var a=actions(card);
+    var when=b && b.validatedAt ? new Date(b.validatedAt).toLocaleString('fr-FR') : '';
+    var status='Validée' + (when ? ' le ' + when : '');
+    a.innerHTML =
+      '<div class="bp-v334-status good">'+esc(status)+'</div>'+
+      '<div class="bp-v334-right">'+
+        '<button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button>'+
+        '<button type="button" class="bp-v334-btn bp-v334-cta bp-v334-edit bp-v420-edit" data-bp-v420-edit="'+esc(id)+'">✏️ Modifier la mise</button>'+
+      '</div>';
+
+    var badge=card.querySelector('.bet-title .badge');
+    if(badge){ badge.className='badge ok'; badge.textContent='✅ Validée'; }
+
+    setControlsFromBet(card,b);
+    card.dataset.bpV420Mode='saved';
+    card.classList.remove('bp-v420-editing','bp-v420-draft');
+    setLocked(card,true);
+  }
+
+  function isValidated(b){
+    return !!b && String(b.status || '').toUpperCase() === 'VALIDATED';
+  }
+
+  function normalizeCard(card){
+    if(!card || !/^betCard_/.test(String(card.id||''))) return;
+    if(!isOpenDay()) return;
+
+    var id=mid(card);
+    if(!id) return;
+
+    var b=betOf(id);
+
+    /* POINT CRITIQUE :
+       on ignore volontairement le texte visible de la carte.
+       Les anciens V408/V409 reverrouillaient les champs dès qu'ils lisaient "Validée le".
+       Ici, seule la vraie donnée state.bets[].status fait foi. */
+    if(isValidated(b) && card.dataset.bpV420Editing !== '1'){
+      renderSaved(card,id,b);
+    }else{
+      if(b) setControlsFromBet(card,b);
+      renderDraft(card,id);
+    }
+  }
+
+  function normalizeAll(){
+    document.querySelectorAll('#betRows .bet-card[id^="betCard_"]').forEach(normalizeCard);
+  }
+
+  function schedule(){
+    [0,80,220,520,900,1400].forEach(function(ms){ setTimeout(normalizeAll, ms); });
+  }
+
+  function forceEdit(id){
+    var st=S(), b=betOf(id), card=document.getElementById('betCard_'+id);
+    if(!card) return false;
+
+    if(b){
+      b.status='DRAFT';
+      b.validatedAt=null;
+      b.savedAt=null;
+    }
+    card.dataset.bpV420Editing='1';
+    try{ if(typeof save === 'function') save(); }catch(e){}
+    renderDraft(card,id);
+    return false;
+  }
+
+  window.bpV420EditBet = forceEdit;
+
+  var oldEdit = window.editBet;
+  window.editBet = function(id){
+    try{ forceEdit(id); return false; }
+    catch(e){
+      console.error('[V420] editBet fallback',e);
+      if(typeof oldEdit === 'function') return oldEdit.apply(this,arguments);
+      return false;
+    }
+  };
+  try{ editBet = window.editBet; }catch(e){}
+
+  document.addEventListener('click',function(e){
+    var editBtn=e.target && e.target.closest ? e.target.closest('[data-bp-v420-edit], .bp-v420-edit') : null;
+    if(editBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      var id=editBtn.getAttribute('data-bp-v420-edit') || mid(editBtn.closest('.bet-card'));
+      return forceEdit(id);
+    }
+
+    var saveBtn=e.target && e.target.closest ? e.target.closest('[data-bp-v420-save], .bp-v420-save') : null;
+    if(saveBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      var sid=saveBtn.getAttribute('data-bp-v420-save') || mid(saveBtn.closest('.bet-card'));
+      if(typeof validateSingleBet === 'function') return validateSingleBet(sid);
+    }
+  }, true);
+
+  document.addEventListener('input',function(e){
+    var card=e.target && e.target.closest ? e.target.closest('#betRows .bet-card[id^="betCard_"]') : null;
+    if(card && e.target.matches && e.target.matches('.scoreA,.scoreB,.stake')){
+      card.dataset.bpV420Editing='1';
+      card.classList.add('bp-v420-editing','bp-v420-draft');
+      setLocked(card,false);
+    }
+  }, true);
+
+  document.addEventListener('change',function(e){
+    var card=e.target && e.target.closest ? e.target.closest('#betRows .bet-card[id^="betCard_"]') : null;
+    if(card && e.target.matches && e.target.matches('.scoreA,.scoreB,.stake')){
+      card.dataset.bpV420Editing='1';
+      card.classList.add('bp-v420-editing','bp-v420-draft');
+      setLocked(card,false);
+      setTimeout(function(){ normalizeCard(card); },30);
+    }
+  }, true);
+
+  ['renderBets','renderAll'].forEach(function(fn){
+    var old=window[fn];
+    if(typeof old === 'function' && !old.__bpV420Wrapped){
+      window[fn]=function(){
+        var r=old.apply(this,arguments);
+        schedule();
+        return r;
+      };
+      window[fn].__bpV420Wrapped=true;
+      try{
+        if(fn==='renderBets') renderBets=window[fn];
+        if(fn==='renderAll') renderAll=window[fn];
+      }catch(e){}
+    }
+  });
+
+  try{
+    var root=document.getElementById('betRows');
+    if(root && window.MutationObserver){
+      new MutationObserver(function(){ setTimeout(normalizeAll,120); setTimeout(normalizeAll,700); }).observe(root,{childList:true,subtree:true,characterData:true});
+    }
+  }catch(e){}
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+  else schedule();
+
+  console.log('[V420 PRONO INTERACTION HARD FIX ACTIVE]');
+})();
+</script>
+
+
+<!-- V421 — PRONO STAKE + EDIT FIX
+     Correction ciblée écran Pronostics uniquement.
+     - évite le dropdown natif de mise qui s'ouvre blanc / se referme ;
+     - remplace visuellement la mise par un input numérique 1-4 compatible validateSingleBet (.stake.value) ;
+     - rend Modifier la mise capturable même si d'anciens patchs ont perdu le handler ;
+     - neutralise l'assombrissement parasite des cartes en édition/brouillon. -->
+<style id="bp-v421-prono-stake-edit-fix-css">
+#bets .bet-card,
+#betRows .bet-card{
+  opacity:1!important;
+  filter:none!important;
+}
+#bets .bet-card.bp-v421-editing,
+#betRows .bet-card.bp-v421-editing,
+#bets .bet-card.bp-v420-editing,
+#betRows .bet-card.bp-v420-editing,
+#bets .bet-card.bp-v420-draft,
+#betRows .bet-card.bp-v420-draft{
+  opacity:1!important;
+  filter:none!important;
+  pointer-events:auto!important;
+}
+#bets .bet-card .scoreA,
+#bets .bet-card .scoreB,
+#bets .bet-card .stake,
+#betRows .bet-card .scoreA,
+#betRows .bet-card .scoreB,
+#betRows .bet-card .stake{
+  pointer-events:auto!important;
+}
+#bets .bet-card input.stake.bp-v421-stake-input,
+#betRows .bet-card input.stake.bp-v421-stake-input{
+  width:118px!important;
+  height:82px!important;
+  border-radius:22px!important;
+  border:1px solid rgba(122,0,25,.95)!important;
+  background:linear-gradient(180deg,#130009,#030303)!important;
+  color:#fff!important;
+  font-size:38px!important;
+  font-weight:1000!important;
+  text-align:center!important;
+  outline:none!important;
+  box-shadow:inset 0 0 20px rgba(122,0,25,.25)!important;
+  appearance:textfield!important;
+  -moz-appearance:textfield!important;
+}
+#bets .bet-card input.stake.bp-v421-stake-input::-webkit-outer-spin-button,
+#bets .bet-card input.stake.bp-v421-stake-input::-webkit-inner-spin-button,
+#betRows .bet-card input.stake.bp-v421-stake-input::-webkit-outer-spin-button,
+#betRows .bet-card input.stake.bp-v421-stake-input::-webkit-inner-spin-button{
+  opacity:1!important;
+  height:82px!important;
+}
+#bets .bp-v334-edit,#bets .bp-v391-edit,#bets .bp-v420-edit,#bets .editBtn,
+#betRows .bp-v334-edit,#betRows .bp-v391-edit,#betRows .bp-v420-edit,#betRows .editBtn{
+  pointer-events:auto!important;
+  cursor:pointer!important;
+  z-index:50!important;
+  position:relative!important;
+}
+</style>
+<script id="bp-v421-prono-stake-edit-fix-js">
+(function(){
+  'use strict';
+  if(window.__BP_V421_PRONO_STAKE_EDIT_FIX__) return;
+  window.__BP_V421_PRONO_STAKE_EDIT_FIX__ = true;
+  window.BP_APP_VERSION = 'v421-prono-stake-edit-fix';
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function N(v,d){ var x=Number(v); return Number.isFinite(x) ? x : d; }
+  function mid(card){ return String(card && card.id || '').replace(/^betCard_/,''); }
+  function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function rootCards(){ return document.querySelectorAll('#betRows .bet-card[id^="betCard_"], #bets .bet-card[id^="betCard_"]'); }
+  function currentDaySafe(){ try{ if(typeof currentPronoDay==='function') return Number(currentPronoDay()); }catch(e){} return Number(S().currentDay || window.pronoDayDisplayed || 1); }
+  function currentPlayer(){
+    var st=S();
+    try{ if(window.currentRole==='user' && window.currentUserIndex!=null && st.players && st.players[window.currentUserIndex]) return st.players[window.currentUserIndex]; }catch(e){}
+    try{ if(typeof player==='function'){ var p=player(); if(p) return p; } }catch(e){}
+    var sel=document.getElementById('activePlayer');
+    return arr(st.players)[N(sel && sel.value,0)] || null;
+  }
+  function betOf(id){
+    var st=S(), p=currentPlayer(), d=currentDaySafe();
+    if(!p) return null;
+    return arr(st.bets).find(function(b){ return Number(b.day)===Number(d) && String(b.matchId)===String(id) && String(b.player)===String(p.name); }) || null;
+  }
+  function splitScore(b){
+    if(!b) return [0,0];
+    if(b.scoreA!==undefined && b.scoreB!==undefined) return [N(b.scoreA,0),N(b.scoreB,0)];
+    var s=String(b.score||b.predictedScore||'0-0').replace(/\s+/g,'').split(/[-–]/);
+    return [N(s[0],0),N(s[1],0)];
+  }
+  function isValidated(b){ return !!b && String(b.status||'').toUpperCase()==='VALIDATED'; }
+
+  function convertStake(card){
+    if(!card) return;
+    var el=card.querySelector('.stake');
+    if(!el) return;
+    var v=Math.min(4,Math.max(1,N(el.value || el.getAttribute('value'),1)));
+    if(el.tagName && el.tagName.toLowerCase()==='select'){
+      var inp=document.createElement('input');
+      inp.type='number'; inp.min='1'; inp.max='4'; inp.step='1'; inp.value=String(v);
+      inp.className=(el.className || 'stake') + ' bp-v421-stake-input';
+      inp.setAttribute('data-match', el.getAttribute('data-match') || mid(card));
+      inp.setAttribute('aria-label', el.getAttribute('aria-label') || 'Mise');
+      if(el.disabled){ inp.disabled=true; inp.setAttribute('disabled','disabled'); }
+      el.parentNode.replaceChild(inp,el);
+    }else{
+      el.classList.add('bp-v421-stake-input');
+      el.setAttribute('min','1'); el.setAttribute('max','4'); el.setAttribute('step','1');
+      el.value=String(v);
+    }
+  }
+
+  function setUnlocked(card){
+    if(!card) return;
+    card.dataset.bpV420Editing='1';
+    card.dataset.bpV421Editing='1';
+    card.classList.add('bp-v421-editing','bp-v420-editing','bp-v420-draft');
+    card.classList.remove('lockedCard');
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){
+      el.disabled=false;
+      el.removeAttribute('disabled');
+      el.style.pointerEvents='auto';
+    });
+  }
+  function setLocked(card){
+    if(!card) return;
+    card.classList.remove('bp-v421-editing','bp-v420-editing','bp-v420-draft');
+    card.querySelectorAll('.scoreA,.scoreB,.stake').forEach(function(el){
+      el.disabled=true;
+      el.setAttribute('disabled','disabled');
+    });
+  }
+  function actions(card){
+    var a=card.querySelector(':scope > .bet-actions') || card.querySelector('.bet-actions');
+    if(!a){ a=document.createElement('div'); a.className='bet-actions bp-v334-actions'; card.appendChild(a); }
+    return a;
+  }
+  function renderDraft(card){
+    var id=mid(card), a=actions(card);
+    a.className='bet-actions bp-v334-actions bp-v421-actions';
+    a.innerHTML='<div class="bp-v334-status warn">À confirmer avant clôture.</div><div class="bp-v334-right"><button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button><button type="button" class="bp-v334-btn bp-v334-cta bp-v334-save bp-v421-save" data-bp-v421-save="'+esc(id)+'">Sauvegarder la mise</button></div>';
+    setUnlocked(card);
+  }
+  function renderSaved(card,b){
+    var id=mid(card), a=actions(card);
+    var when=b && b.validatedAt ? new Date(b.validatedAt).toLocaleString('fr-FR') : '';
+    a.className='bet-actions bp-v334-actions bp-v421-actions';
+    a.innerHTML='<div class="bp-v334-status good">Validée'+(when?' le '+esc(when):'')+'</div><div class="bp-v334-right"><button type="button" class="bp-v334-btn bp-v334-dice">🎲 Dés réaliste</button><button type="button" class="bp-v334-btn bp-v334-cta bp-v334-edit bp-v421-edit" data-bp-v421-edit="'+esc(id)+'">✏️ Modifier la mise</button></div>';
+    if(b){
+      var sc=splitScore(b), sa=card.querySelector('.scoreA'), sb=card.querySelector('.scoreB'), st=card.querySelector('.stake');
+      if(sa) sa.value=String(sc[0]); if(sb) sb.value=String(sc[1]); if(st) st.value=String(N(b.stake,1));
+    }
+    setLocked(card);
+  }
+  function normalizeCard(card){
+    if(!card || !/^betCard_/.test(String(card.id||''))) return;
+    convertStake(card);
+    var id=mid(card), b=betOf(id);
+    if(card.dataset.bpV421Editing==='1' || card.dataset.bpV420Editing==='1'){
+      setUnlocked(card); return;
+    }
+    if(isValidated(b)) renderSaved(card,b);
+    else renderDraft(card);
+  }
+  function normalizeAll(){ rootCards().forEach(normalizeCard); }
+  function schedule(){ [0,50,150,350,800,1400].forEach(function(ms){ setTimeout(normalizeAll,ms); }); }
+
+  function editCard(card){
+    if(!card) return false;
+    convertStake(card);
+    renderDraft(card);
+    return false;
+  }
+
+  window.bpV421NormalizeProno = normalizeAll;
+  window.bpV421EditCard = editCard;
+
+  document.addEventListener('pointerdown',function(e){
+    var btn=e.target && e.target.closest ? e.target.closest('.bp-v421-edit,.bp-v420-edit,.bp-v391-edit,.bp-v334-edit,.editBtn,button') : null;
+    if(!btn) return;
+    var txt=(btn.textContent||'').trim();
+    if(!/Modifier la mise/i.test(txt) && !btn.matches('.bp-v421-edit,.bp-v420-edit,.bp-v391-edit,.bp-v334-edit,.editBtn')) return;
+    var card=btn.closest && btn.closest('.bet-card[id^="betCard_"]');
+    if(!card) return;
+    e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+    editCard(card);
+  }, true);
+
+  document.addEventListener('click',function(e){
+    var save=e.target && e.target.closest ? e.target.closest('.bp-v421-save,.bp-v420-save,.bp-v391-save,.bp-v334-save') : null;
+    if(save){
+      var card=save.closest('.bet-card[id^="betCard_"]');
+      if(card){ convertStake(card); card.dataset.bpV421Editing=''; card.dataset.bpV420Editing=''; }
+      return;
+    }
+  }, true);
+
+  document.addEventListener('input',function(e){
+    if(e.target && e.target.matches && e.target.matches('#bets .bet-card .scoreA,#bets .bet-card .scoreB,#bets .bet-card .stake,#betRows .bet-card .scoreA,#betRows .bet-card .scoreB,#betRows .bet-card .stake')){
+      var card=e.target.closest('.bet-card[id^="betCard_"]');
+      if(card) setUnlocked(card);
+      if(e.target.classList.contains('stake')){
+        var v=Math.min(4,Math.max(1,N(e.target.value,1)));
+        if(String(e.target.value)!==String(v)) e.target.value=String(v);
+      }
+    }
+  }, true);
+  document.addEventListener('change',function(e){
+    if(e.target && e.target.matches && e.target.matches('#bets .bet-card .stake,#betRows .bet-card .stake')){
+      var v=Math.min(4,Math.max(1,N(e.target.value,1)));
+      e.target.value=String(v);
+      var card=e.target.closest('.bet-card[id^="betCard_"]');
+      if(card) setUnlocked(card);
+    }
+  }, true);
+
+  ['renderBets','renderAll','changePronoDay'].forEach(function(fn){
+    var old=window[fn];
+    if(typeof old==='function' && !old.__bpV421Wrapped){
+      window[fn]=function(){ var r=old.apply(this,arguments); schedule(); return r; };
+      window[fn].__bpV421Wrapped=true;
+      try{ if(fn==='renderBets') renderBets=window[fn]; if(fn==='renderAll') renderAll=window[fn]; if(fn==='changePronoDay') changePronoDay=window[fn]; }catch(e){}
+    }
+  });
+  try{
+    var root=document.getElementById('betRows') || document.getElementById('bets');
+    if(root && window.MutationObserver){ new MutationObserver(function(){ setTimeout(normalizeAll,80); }).observe(root,{childList:true,subtree:true}); }
+  }catch(e){}
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',schedule); else schedule();
+  console.log('[V421 PRONO STAKE + EDIT FIX ACTIVE]');
 })();
 </script>
