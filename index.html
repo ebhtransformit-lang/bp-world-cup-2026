@@ -40949,4 +40949,343 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
 
 <!-- V410 — PENALTY DAY CANONICAL FIX -->
 
+
+
+<script>
+/* V412 — PENALTY DAY OUTCOME FIX
+   Règle canonique : Penalty Day "mauvais prono" ne s'applique QUE si le résultat du pari est perdu.
+   Un score non exact mais avec le bon vainqueur / bon nul reste un pari gagné : aucune pénalité.
+   Patch final post-V410 : nettoie la prévisualisation et la validation BDD avant application.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V412_PENALTY_OUTCOME_FIX__) return;
+  window.__BP_V412_PENALTY_OUTCOME_FIX__ = true;
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || (window.state = {}); }
+  function A(v){ return Array.isArray(v) ? v : []; }
+  function N(v,d){ var n = Number(v); return Number.isFinite(n) ? n : (d || 0); }
+  function R(v){ return Math.round(N(v,0) * 100) / 100; }
+  function T(v){ return String(v == null ? '' : v); }
+  function U(v){ return T(v).toUpperCase(); }
+  function key(day){ return String(Number(day)||1); }
+  function outcome(a,b){ a=N(a,0); b=N(b,0); return a>b ? 'A' : (a<b ? 'B' : 'N'); }
+  function outLabel(o,m){ return o === 'A' ? (m && m.teamA || 'Équipe A') : (o === 'B' ? (m && m.teamB || 'Équipe B') : 'Nul'); }
+  function scoreTxt(a,b){ return N(a,0) + ' - ' + N(b,0); }
+  function playerName(p){ return T(p && (p.name || p.player || p.playerName || p.pseudo || p.code)).trim(); }
+  function betA(b){ if(b && b.scoreA != null) return N(b.scoreA,0); var p=T(b && (b.score || b.predictedScore) || '0-0').split(/[-–]/); return N(p[0],0); }
+  function betB(b){ if(b && b.scoreB != null) return N(b.scoreB,0); var p=T(b && (b.score || b.predictedScore) || '0-0').split(/[-–]/); return N(p[1],0); }
+  function isValidated(b){ return U(b && b.status) === 'VALIDATED' || b && b.validated === true; }
+  function matchById(mid){ return A(S().matches).find(function(m){ return T(m.id) === T(mid); }); }
+  function betsOf(day){ return A(S().bets).filter(function(b){ return Number(b.day) === Number(day) && isValidated(b); }); }
+  function findBet(day,mid,pname){ return betsOf(day).find(function(b){ return T(b.matchId) === T(mid) && T(b.player || b.playerName).trim() === T(pname).trim(); }); }
+  function eventFor(day){
+    var st=S(); if(!st.specialEvents || typeof st.specialEvents !== 'object' || Array.isArray(st.specialEvents)) st.specialEvents={};
+    var e = st.specialEvents[key(day)] || st.specialEvents[Number(day)] || {};
+    if(typeof window.bpV410CanonicalizePenaltyDay === 'function') e = window.bpV410CanonicalizePenaltyDay(day) || e;
+    return {
+      penaltyDay: !!e.penaltyDay,
+      nonBetPenalty: N(e.nonBetPenalty != null ? e.nonBetPenalty : e.penaltyNoBet,1),
+      wrongBetPenalty: N(e.wrongBetPenalty != null ? e.wrongBetPenalty : e.penaltyBadBet,2)
+    };
+  }
+  function ruleOfPreview(p){
+    var r = p && p.rule || {};
+    return {
+      resultMultiplier: N(r.resultMultiplier != null ? r.resultMultiplier : r.correctMultiplier,2),
+      exactScoreBonus: N(r.exactScoreBonus != null ? r.exactScoreBonus : r.exactBonus,2),
+      ref: r.ref || r.ruleRef || 'R2',
+      label: r.label || r.name || r.ref || 'R2'
+    };
+  }
+  function eventMult(day,mid,exact){
+    try{ if(typeof window.eventMultiplierForBet === 'function') return N(window.eventMultiplierForBet(day,mid,exact),1); }catch(e){}
+    return 1;
+  }
+  function recomputeWinningDetail(p,d,b,m){
+    var rule = ruleOfPreview(p);
+    var a = betA(b), bb = betB(b);
+    var exact = (a === N(m.scoreA,0) && bb === N(m.scoreB,0));
+    var stake = N(b.stake,0);
+    var mult = eventMult(Number(d.day), d.matchId, exact);
+    var baseGain = R(stake * rule.resultMultiplier * mult);
+    var exactBonus = exact ? R(rule.exactScoreBonus) : 0;
+    var gain = R(baseGain + exactBonus);
+    d.prediction = outLabel(outcome(a,bb),m);
+    d.predictedScore = scoreTxt(a,bb);
+    d.officialScore = scoreTxt(m.scoreA,m.scoreB);
+    d.officialScoreA = N(m.scoreA,0);
+    d.officialScoreB = N(m.scoreB,0);
+    d.result = outLabel(outcome(m.scoreA,m.scoreB),m);
+    d.actualOutcome = outcome(m.scoreA,m.scoreB);
+    d.baseGain = baseGain;
+    d.exactBonus = exactBonus;
+    d.gain = gain;
+    d.netGain = R(gain - stake);
+    d.gainLoss = d.netGain;
+    d.win = true;
+    d.exactScore = exact;
+    d.penaltyDayApplied = false;
+    d.penaltyType = '';
+    d.penaltyAmount = 0;
+    d.status = exact ? 'GAGNÉ + SCORE EXACT (+2 FID)' : 'GAGNÉ (MISE ×2)';
+    if(mult > 1) d.status += ' · BONUS x' + mult;
+    d.gainRuleRef = rule.ref;
+    d.gainRuleLabel = rule.label;
+    return d;
+  }
+  function rebuildSummary(p){
+    var rows = {}, totalNet=0, totalGain=0, exact=0, won=0, lost=0, valid=0, stake=0;
+    A(p.details).forEach(function(d){
+      if(!d || !d.player || d.player === 'RÉSERVE') return;
+      var pname = T(d.player);
+      if(!rows[pname]) rows[pname] = {player:pname, stake:0, gain:0, net:0, exact:0, won:0, lost:0, bets:0};
+      var r = rows[pname];
+      r.stake = R(r.stake + N(d.stake,0));
+      r.gain = R(r.gain + Math.max(0,N(d.gain != null ? d.gain : d.baseGain,0)));
+      r.net = R(r.net + N(d.netGain,0));
+      if(d.matchId && !/^EVENT_|RECHARGE/i.test(T(d.matchId))) r.bets += 1;
+      if(d.exactScore || U(d.status).includes('SCORE EXACT')) r.exact += 1;
+      if(d.win === true || U(d.status).startsWith('GAGNÉ')) r.won += 1;
+      else if(U(d.status).includes('PERDU') || U(d.status).includes('PENALTY')) r.lost += 1;
+    });
+    A(p.details).forEach(function(d){
+      if(!d || !d.player || d.player === 'RÉSERVE') return;
+      totalNet = R(totalNet + N(d.netGain,0));
+      if(d.win === true || U(d.status).startsWith('GAGNÉ')){ won += 1; totalGain = R(totalGain + Math.max(0,N(d.gain != null ? d.gain : d.baseGain,0))); }
+      else if(U(d.status).includes('PERDU')) lost += 1;
+      if(d.exactScore || U(d.status).includes('SCORE EXACT')) exact += 1;
+      if(d.matchId && !/^EVENT_|RECHARGE/i.test(T(d.matchId)) && N(d.stake,0)>0){ valid += 1; stake = R(stake + N(d.stake,0)); }
+    });
+    p.players = Object.values(rows).sort(function(a,b){ return N(b.net,0)-N(a.net,0) || N(b.gain,0)-N(a.gain,0) || T(a.player).localeCompare(T(b.player)); });
+    p.totalNet = totalNet;
+    p.totalGain = p.totalPayout = totalGain;
+    p.exactScores = exact;
+    p.winningBets = won;
+    p.losingBets = lost;
+    p.validBets = valid || p.validBets;
+    p.totalStake = stake || p.totalStake;
+    var reserveBefore = N(p.reserveBefore, N(S().reserveBalance, N(S().reserveTarget,500)));
+    p.reserveImpact = R(N(p.totalPayout,0) - N(p.totalStake,0));
+    if(p.penaltyDay) p.reserveImpact = R(p.reserveImpact - N(p.penaltyTotal,0));
+    p.reserveAfter = R(reserveBefore - N(p.reserveImpact,0));
+    return p;
+  }
+  function cleanPenaltyPreview(p){
+    if(!p || p.__v412PenaltyOutcomeFixed) return p;
+    var day = Number(p.day)||0;
+    var e = eventFor(day);
+    if(!day || !e.penaltyDay){ p.__v412PenaltyOutcomeFixed = true; return p; }
+
+    var beforePenalty = N(p.penaltyTotal,0);
+    var removed = 0, removedCount = 0;
+
+    A(p.details).forEach(function(d){
+      if(!d || !d.player || d.player === 'RÉSERVE' || !d.matchId) return;
+      var m = matchById(d.matchId); if(!m) return;
+      var b = findBet(day, d.matchId, d.player); if(!b) return;
+      var pred = outcome(betA(b), betB(b));
+      var actual = outcome(m.scoreA, m.scoreB);
+      var wasPenalty = d.penaltyDayApplied || d.penaltyType === 'WRONG_BET' || U(d.status).includes('PENALTY DAY') || U(d.status).includes('MAUVAIS PRONO');
+
+      if(pred === actual && wasPenalty){
+        removed += N(d.penaltyAmount, e.wrongBetPenalty);
+        removedCount += 1;
+        recomputeWinningDetail(p,d,b,m);
+      }
+    });
+
+    if(removed > 0){
+      p.penaltyTotal = R(Math.max(0, beforePenalty - removed));
+      p.penaltyWrong = Math.max(0, N(p.penaltyWrong,0) - removedCount);
+      p.penaltyCount = Math.max(0, N(p.penaltyCount,0) - removedCount);
+      p.penaltyOutcomeFix = {removedWrongPenaltyCount:removedCount, removedWrongPenaltyTotal:R(removed)};
+    }
+
+    rebuildSummary(p);
+    p.__v412PenaltyOutcomeFixed = true;
+    return p;
+  }
+  window.bpV412CleanPenaltyPreview = cleanPenaltyPreview;
+
+  var oldPreview = window.bpPreviewGainCalculation;
+  if(typeof oldPreview === 'function' && !oldPreview.__bpV412Wrapped){
+    window.bpPreviewGainCalculation = function(day){
+      var p = oldPreview.apply(this, arguments);
+      return cleanPenaltyPreview(p);
+    };
+    window.bpPreviewGainCalculation.__bpV412Wrapped = true;
+    try{ bpPreviewGainCalculation = window.bpPreviewGainCalculation; }catch(e){}
+  }
+
+  var oldValidate = window.bpValidateGainPreview || window.validateGainPreviewAndPersist;
+  if(typeof oldValidate === 'function' && !oldValidate.__bpV412Wrapped){
+    var wrappedValidate = async function(){
+      if(window.__BP_LAST_GAIN_PREVIEW__) window.__BP_LAST_GAIN_PREVIEW__ = cleanPenaltyPreview(window.__BP_LAST_GAIN_PREVIEW__);
+      return oldValidate.apply(this, arguments);
+    };
+    wrappedValidate.__bpV412Wrapped = true;
+    window.bpValidateGainPreview = wrappedValidate;
+    window.validateGainPreviewAndPersist = wrappedValidate;
+  }
+
+  console.log('[V412 PENALTY DAY OUTCOME FIX ACTIVE]');
+})();
+</script>
+
+<!-- V412 — PENALTY DAY OUTCOME FIX -->
+
+
+
+<script>
+/* V413 — PENALTY DAY ENGINE SAFE FINAL
+   Fix définitif moteur :
+   - La pénalité mauvais prono s'applique uniquement quand le résultat A/B/N est faux.
+   - Un bon vainqueur / bon nul avec score exact faux reste GAGNÉ, sans pénalité.
+   - Neutralise l'ancien applySpecialEventBonuses qui ajoutait des pénalités séparées potentiellement incohérentes.
+   - Répare aussi toute preview déjà polluée avant validation.
+*/
+(function(){
+  'use strict';
+  if(window.__BP_V413_PENALTY_ENGINE_SAFE_FINAL__) return;
+  window.__BP_V413_PENALTY_ENGINE_SAFE_FINAL__ = true;
+
+  function S(){ try{ if(typeof state !== 'undefined' && state) return state; }catch(e){} return window.state || (window.state = {}); }
+  function A(v){ return Array.isArray(v) ? v : []; }
+  function N(v,d){ var n=Number(v); return Number.isFinite(n)?n:(d||0); }
+  function R(v){ return Math.round(N(v,0)*100)/100; }
+  function T(v){ return String(v==null?'':v); }
+  function U(v){ return T(v).toUpperCase(); }
+  function key(d){ return String(Number(d)||1); }
+  function outcome(a,b){ a=N(a,0); b=N(b,0); return a>b?'A':(a<b?'B':'N'); }
+  function scoreTxt(a,b){ return N(a,0)+' - '+N(b,0); }
+  function outLabel(o,m){ return o==='A'?(m&&m.teamA||'Équipe A'):(o==='B'?(m&&m.teamB||'Équipe B'):'Nul'); }
+  function betA(b){ if(b && b.scoreA!=null) return N(b.scoreA,0); var p=T(b && (b.score||b.predictedScore)||'0-0').split(/[-–]/); return N(p[0],0); }
+  function betB(b){ if(b && b.scoreB!=null) return N(b.scoreB,0); var p=T(b && (b.score||b.predictedScore)||'0-0').split(/[-–]/); return N(p[1],0); }
+  function isValidated(b){ return U(b && b.status)==='VALIDATED' || !!(b && b.validated===true); }
+  function eventFor(day){
+    var st=S(); if(!st.specialEvents || typeof st.specialEvents!=='object' || Array.isArray(st.specialEvents)) st.specialEvents={};
+    var e=st.specialEvents[key(day)] || st.specialEvents[Number(day)] || {};
+    if(typeof window.bpV410CanonicalizePenaltyDay==='function') e=window.bpV410CanonicalizePenaltyDay(day)||e;
+    return {
+      penaltyDay:!!e.penaltyDay,
+      nonBetPenalty:N(e.nonBetPenalty!=null?e.nonBetPenalty:e.penaltyNoBet,1),
+      wrongBetPenalty:N(e.wrongBetPenalty!=null?e.wrongBetPenalty:e.penaltyBadBet,1)
+    };
+  }
+  function matchesOf(day){ return A(S().matches).filter(function(m){ return Number(m.day)===Number(day); }); }
+  function matchById(mid){ return A(S().matches).find(function(m){ return T(m.id)===T(mid); }); }
+  function playersNames(){ return A(S().players).map(function(p){ return T(p && (p.name||p.player||p.playerName||p.pseudo||p.code)).trim(); }).filter(function(n){ return n && n!=='RÉSERVE'; }); }
+  function betsOf(day){ return A(S().bets).filter(function(b){ return Number(b.day)===Number(day) && isValidated(b); }); }
+  function findBet(day,mid,pname){ return betsOf(day).find(function(b){ return T(b.matchId)===T(mid) && T(b.player||b.playerName).trim()===T(pname).trim(); }); }
+  function ruleOf(p){ var r=p&&p.rule||{}; return { resultMultiplier:N(r.resultMultiplier!=null?r.resultMultiplier:r.correctMultiplier,2), exactScoreBonus:N(r.exactScoreBonus!=null?r.exactScoreBonus:r.exactBonus,2), ref:r.ref||r.ruleRef||'R2', label:r.label||r.name||r.ref||'R2' }; }
+  function eventMult(day,mid,exact){ try{ if(typeof window.eventMultiplierForBet==='function') return N(window.eventMultiplierForBet(day,mid,exact),1); }catch(e){} return 1; }
+
+  function recomputeBetDetail(p,d,b,m){
+    var rule=ruleOf(p), a=betA(b), bb=betB(b), stake=N(b.stake,0);
+    var pred=outcome(a,bb), actual=outcome(m.scoreA,m.scoreB), exact=(a===N(m.scoreA,0) && bb===N(m.scoreB,0));
+    var win=(pred===actual), mult=eventMult(Number(d.day||p.day), d.matchId, exact);
+    d.prediction=outLabel(pred,m); d.predictedScore=scoreTxt(a,bb);
+    d.officialScore=scoreTxt(m.scoreA,m.scoreB); d.officialScoreA=N(m.scoreA,0); d.officialScoreB=N(m.scoreB,0);
+    d.result=outLabel(actual,m); d.actualOutcome=actual; d.stake=stake;
+    d.exactScore=exact; d.win=win; d.penaltyDayApplied=false; d.penaltyType=''; d.penaltyAmount=0;
+    if(win){
+      d.baseGain=R(stake*rule.resultMultiplier*mult); d.exactBonus=exact?R(rule.exactScoreBonus):0; d.gain=R(d.baseGain+d.exactBonus); d.netGain=R(d.gain-stake);
+      d.status=exact?'GAGNÉ + SCORE EXACT (+2 FID)':'GAGNÉ (MISE ×2)'; if(mult>1) d.status+=' · BONUS x'+mult;
+    }else{
+      var e=eventFor(Number(d.day||p.day)); var penalty=e.penaltyDay?e.wrongBetPenalty:0;
+      d.baseGain=0; d.exactBonus=0; d.gain=0; d.netGain=R(-stake-penalty);
+      d.status=penalty>0?'PERDU + PENALTY DAY (-'+penalty+' FID)':'PERDU';
+      d.penaltyDayApplied=penalty>0; d.penaltyType=penalty>0?'WRONG_BET':''; d.penaltyAmount=penalty;
+    }
+    d.gainLoss=d.netGain; d.gainRuleRef=rule.ref; d.gainRuleLabel=rule.label+(d.penaltyDayApplied?' + Penalty Day':'');
+    return d;
+  }
+
+  function rebuild(p){
+    var rows={}, totalNet=0,totalPayout=0,totalStake=0,exact=0,won=0,lost=0,valid=0,penaltyTotal=0,penaltyWrong=0,penaltyMissed=0;
+    A(p.details).forEach(function(d){
+      if(!d || !d.player || d.player==='RÉSERVE') return;
+      var pname=T(d.player); if(!rows[pname]) rows[pname]={player:pname,stake:0,gain:0,net:0,exact:0,won:0,lost:0,bets:0};
+      var r=rows[pname], st=N(d.stake,0), gain=N(d.gain!=null?d.gain:d.baseGain,0), net=N(d.netGain,0);
+      r.stake=R(r.stake+st); r.gain=R(r.gain+Math.max(0,gain)); r.net=R(r.net+net);
+      if(d.matchId && !/^EVENT_|RECHARGE/i.test(T(d.matchId))){ r.bets++; valid++; totalStake=R(totalStake+st); }
+      if(d.exactScore || U(d.status).includes('SCORE EXACT')){ r.exact++; exact++; }
+      if(d.win===true || U(d.status).startsWith('GAGNÉ')){ r.won++; won++; totalPayout=R(totalPayout+Math.max(0,gain)); }
+      else if(U(d.status).includes('PERDU') || U(d.status).includes('PENALTY')){ r.lost++; lost++; }
+      totalNet=R(totalNet+net);
+      if(d.penaltyDayApplied || d.penaltyType){ penaltyTotal=R(penaltyTotal+N(d.penaltyAmount,0)); if(d.penaltyType==='NO_BET') penaltyMissed++; if(d.penaltyType==='WRONG_BET') penaltyWrong++; }
+    });
+    p.players=Object.values(rows).sort(function(a,b){ return N(b.net,0)-N(a.net,0)||N(b.gain,0)-N(a.gain,0)||T(a.player).localeCompare(T(b.player)); });
+    p.totalNet=totalNet; p.totalGain=p.totalPayout=totalPayout; p.totalStake=totalStake||p.totalStake; p.validBets=valid||p.validBets;
+    p.exactScores=exact; p.winningBets=won; p.losingBets=lost; p.penaltyTotal=penaltyTotal; p.penaltyWrong=penaltyWrong; p.penaltyMissed=penaltyMissed; p.penaltyCount=penaltyWrong+penaltyMissed;
+    var before=N(p.reserveBefore,N(S().reserveBalance,N(S().reserveTarget,500))); p.reserveImpact=R(N(p.totalPayout,0)-N(p.totalStake,0)-N(p.penaltyTotal,0)); p.reserveAfter=R(before-N(p.reserveImpact,0));
+    return p;
+  }
+
+  function normalizePenaltyPreview(p){
+    if(!p || p.__v413PenaltyNormalized) return p;
+    var day=Number(p.day)||0, e=eventFor(day); if(!day || !e.penaltyDay){ p.__v413PenaltyNormalized=true; return p; }
+
+    // Supprime les anciennes lignes techniques séparées : la pénalité est intégrée à la ligne du match perdu.
+    p.details=A(p.details).filter(function(d){ return !(d && /^EVENT_PENALTY_/i.test(T(d.matchId))); });
+
+    A(p.details).forEach(function(d){
+      if(!d || !d.player || d.player==='RÉSERVE' || !d.matchId) return;
+      var m=matchById(d.matchId); if(!m) return;
+      var b=findBet(day,d.matchId,d.player);
+      if(b){ recomputeBetDetail(p,d,b,m); }
+    });
+
+    // Ajoute les non-mises seulement une fois, comme lignes de penalty visibles.
+    var existingNoBet={};
+    A(p.details).forEach(function(d){ if(d && d.penaltyType==='NO_BET') existingNoBet[T(d.player)+'|'+T(d.matchId)]=true; });
+    matchesOf(day).forEach(function(m){
+      playersNames().forEach(function(pname){
+        if(findBet(day,m.id,pname)) return;
+        var k=pname+'|'+T(m.id); if(existingNoBet[k]) return;
+        p.details.push({day:day,matchId:m.id,match:m.teamA+' - '+m.teamB,player:pname,stake:0,prediction:'Aucune mise',predictedScore:'',officialScore:scoreTxt(m.scoreA,m.scoreB),officialScoreA:N(m.scoreA,0),officialScoreB:N(m.scoreB,0),result:outLabel(outcome(m.scoreA,m.scoreB),m),actualOutcome:outcome(m.scoreA,m.scoreB),status:'NON MISÉ + PENALTY DAY (-'+e.nonBetPenalty+' FID)',baseGain:0,exactBonus:0,gain:0,netGain:R(-e.nonBetPenalty),win:false,exactScore:false,penaltyDayApplied:true,penaltyType:'NO_BET',penaltyAmount:e.nonBetPenalty,gainRuleRef:ruleOf(p).ref,gainRuleLabel:ruleOf(p).label+' + Penalty Day'});
+      });
+    });
+
+    rebuild(p);
+    p.__v413PenaltyNormalized=true;
+    return p;
+  }
+  window.bpV413NormalizePenaltyPreview=normalizePenaltyPreview;
+
+  var oldPreview=window.bpPreviewGainCalculation;
+  if(typeof oldPreview==='function' && !oldPreview.__bpV413Wrapped){
+    window.bpPreviewGainCalculation=function(day){ return normalizePenaltyPreview(oldPreview.apply(this,arguments)); };
+    window.bpPreviewGainCalculation.__bpV413Wrapped=true; try{ bpPreviewGainCalculation=window.bpPreviewGainCalculation; }catch(e){}
+  }
+
+  // Neutralise uniquement la partie Penalty Day du vieux applySpecialEventBonuses, pour éviter double pénalité.
+  var oldApply=window.applySpecialEventBonuses;
+  if(typeof oldApply==='function' && !oldApply.__bpV413Wrapped){
+    window.applySpecialEventBonuses=function(targetDay){
+      var st=S(), day=Number(targetDay)||Number(st.currentDay)||1, ev=st.specialEvents && (st.specialEvents[key(day)]||st.specialEvents[day]);
+      var was=ev && ev.penaltyDay;
+      if(ev) ev.penaltyDay=false;
+      try{ return oldApply.apply(this,arguments); }
+      finally{ if(ev) ev.penaltyDay=was; }
+    };
+    window.applySpecialEventBonuses.__bpV413Wrapped=true; try{ applySpecialEventBonuses=window.applySpecialEventBonuses; }catch(e){}
+  }
+
+  var oldValidate=window.bpValidateGainPreview || window.validateGainPreviewAndPersist;
+  if(typeof oldValidate==='function' && !oldValidate.__bpV413Wrapped){
+    var v=async function(){
+      if(window.__BP_LAST_GAIN_PREVIEW__) window.__BP_LAST_GAIN_PREVIEW__=normalizePenaltyPreview(window.__BP_LAST_GAIN_PREVIEW__);
+      return oldValidate.apply(this,arguments);
+    };
+    v.__bpV413Wrapped=true; window.bpValidateGainPreview=v; window.validateGainPreviewAndPersist=v;
+  }
+
+  console.log('[V413 PENALTY ENGINE SAFE FINAL ACTIVE]');
+})();
+</script>
+
+<!-- V413 — PENALTY DAY ENGINE SAFE FINAL -->
+
 </body></html>
