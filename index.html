@@ -2557,7 +2557,7 @@ window.BP_SUPABASE_APP_ID = "bp-world-cup-2026";
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>window.BP_APP_VERSION = "v95-bdd-manuelle-sans-autosave";</script>
+<script>window.BP_APP_VERSION = "v417-recent-right-layout-fix";</script>
 <script>
 /* V83 EARLY GUARD — bloque les anciens timers de synchro avant leur création */
 (function(){
@@ -41574,4 +41574,660 @@ select option:checked{background:#7A0019!important;color:#fff!important;}
 
 <!-- V414 — PROFILE PSEUDO OWNER FIX -->
 
+
+
+<!-- V415 — Recent teams + KO FIFA safer bracket (UX only, no gain/BDD engine change) -->
+<style id="bp-v415-recent-ko-css">
+  /* Derniers matchs sous les drapeaux, sans toucher aux inputs */
+  #bets .bet-inline-row .flag-wrap{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:8px!important;
+    min-width:150px!important;
+  }
+  #bets .bp-v415-team-recent{
+    width:100%!important;
+    max-width:178px!important;
+    padding:10px 10px!important;
+    border-radius:15px!important;
+    border:1px solid rgba(255,255,255,.12)!important;
+    background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(0,0,0,.28))!important;
+    box-shadow:0 10px 24px rgba(0,0,0,.18)!important;
+    text-align:left!important;
+  }
+  #bets .bp-v415-team-recent-title{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:6px!important;
+    margin-bottom:7px!important;
+    color:rgba(255,255,255,.82)!important;
+    font-size:9px!important;
+    line-height:1!important;
+    font-weight:1000!important;
+    text-transform:uppercase!important;
+    letter-spacing:.9px!important;
+  }
+  #bets .bp-v415-team-recent-line{
+    display:grid!important;
+    grid-template-columns:1fr auto!important;
+    gap:7px!important;
+    align-items:center!important;
+    min-height:25px!important;
+    margin-top:5px!important;
+    padding:5px 7px!important;
+    border-radius:10px!important;
+    background:rgba(0,0,0,.30)!important;
+    border:1px solid rgba(255,255,255,.075)!important;
+    color:rgba(255,255,255,.86)!important;
+    font-size:11px!important;
+    line-height:1.12!important;
+    font-weight:900!important;
+  }
+  #bets .bp-v415-team-recent-opp{
+    min-width:0!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  #bets .bp-v415-team-recent-score{
+    min-width:42px!important;
+    padding:3px 6px!important;
+    border-radius:999px!important;
+    text-align:center!important;
+    font-variant-numeric:tabular-nums!important;
+    font-size:11px!important;
+    font-weight:1000!important;
+    color:#fff!important;
+    background:linear-gradient(135deg,#7A0019,#2a0a11)!important;
+    border:1px solid rgba(255,255,255,.14)!important;
+  }
+
+  /* KO : placeholders 3e propres, pas de fausse attribution avant confirmation FIFA */
+  #finalBracket .bp-ko-unresolved-v415{
+    color:#cfcfcf!important;
+    font-style:italic!important;
+  }
+  #finalBracket .bp-ko-source{
+    display:block!important;
+    color:#8f8f8f!important;
+    font-size:10px!important;
+    line-height:1.15!important;
+    margin-top:1px!important;
+  }
+</style>
+
+<script id="bp-v415-recent-ko-js">
+(function(){
+  'use strict';
+  if(window.__BP_V415_RECENT_KO__) return;
+  window.__BP_V415_RECENT_KO__ = true;
+
+  function S(){ return window.state || {}; }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function esc(v){
+    return String(v == null ? '' : v).replace(/[&<>'"]/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];
+    });
+  }
+  function norm(v){ return String(v || '').trim().toLowerCase(); }
+  function num(v,d){ var n=Number(v); return Number.isFinite(n) ? n : (d||0); }
+  function hasScore(m){
+    return !!m && m.scoreA !== null && m.scoreA !== undefined && m.scoreB !== null && m.scoreB !== undefined && String(m.scoreA) !== '' && String(m.scoreB) !== '';
+  }
+  function currentShownDay(){
+    try{ if(typeof window.currentPronoDay === 'function') return Number(window.currentPronoDay()); }catch(e){}
+    return Number(S().currentDay || 1);
+  }
+  function isDayPlayable(day){
+    try{ if(typeof window.pronoDayIsAvailable === 'function') return !!window.pronoDayIsAvailable(day); }catch(e){}
+    try{ if(typeof window.onlyOpenDay === 'function' && typeof window.isDayClosed === 'function') return Number(window.onlyOpenDay()) === Number(day) && !window.isDayClosed(day); }catch(e){}
+    return false;
+  }
+
+  /* ---------- Derniers matchs : source = matchId, pas DOM texte ---------- */
+  function scoreForMatch(m){
+    if(!hasScore(m)) return null;
+    return {a:Number(m.scoreA), b:Number(m.scoreB)};
+  }
+  function recentForTeam(team, beforeDay, limit){
+    var t = norm(team);
+    if(!t) return [];
+    return arr(S().matches)
+      .filter(function(m){
+        return Number(m.day || 0) < Number(beforeDay || 0)
+          && (norm(m.teamA) === t || norm(m.teamB) === t)
+          && scoreForMatch(m);
+      })
+      .sort(function(a,b){
+        return Number(b.day || 0) - Number(a.day || 0) || Number(b.matchNo || 0) - Number(a.matchNo || 0);
+      })
+      .slice(0, limit || 2)
+      .map(function(m){
+        var sc = scoreForMatch(m);
+        var home = norm(m.teamA) === t;
+        return {
+          opponent: home ? m.teamB : m.teamA,
+          score: home ? (sc.a + '-' + sc.b) : (sc.b + '-' + sc.a),
+          day: Number(m.day || 0)
+        };
+      });
+  }
+  function recentBox(team, beforeDay){
+    var items = recentForTeam(team, beforeDay, 2);
+    if(!items.length){
+      return '<div class="bp-v415-team-recent"><div class="bp-v415-team-recent-title">Matchs récents</div><div class="bp-v415-team-recent-line"><span class="bp-v415-team-recent-opp">Aucun résultat</span><span class="bp-v415-team-recent-score">—</span></div></div>';
+    }
+    return '<div class="bp-v415-team-recent"><div class="bp-v415-team-recent-title">Matchs récents</div>' +
+      items.map(function(x){
+        return '<div class="bp-v415-team-recent-line"><span class="bp-v415-team-recent-opp">J'+esc(x.day)+' · '+esc(x.opponent)+'</span><span class="bp-v415-team-recent-score">'+esc(x.score)+'</span></div>';
+      }).join('') + '</div>';
+  }
+  function decorateRecent(){
+    var day = currentShownDay();
+    document.querySelectorAll('#betRows .bet-card').forEach(function(card){
+      var mid = String(card.id || '').replace(/^betCard_/,'');
+      var m = arr(S().matches).find(function(x){ return String(x.id) === mid; });
+      if(!m) return;
+
+      card.querySelectorAll('.bp-v415-team-recent').forEach(function(x){ x.remove(); });
+
+      if(!isDayPlayable(day)) return;
+
+      var wraps = card.querySelectorAll('.bet-inline-row .flag-wrap');
+      if(wraps.length < 2) return;
+      wraps[0].insertAdjacentHTML('beforeend', recentBox(m.teamA, day));
+      wraps[wraps.length - 1].insertAdjacentHTML('beforeend', recentBox(m.teamB, day));
+    });
+  }
+  window.bpV415DecorateRecent = decorateRecent;
+
+  /* ---------- Classement + KO : résolution officielle sans faux 3e ---------- */
+  function groupLetter(group){
+    var m = String(group || '').match(/^Groupe\s+([A-L])$/i);
+    return m ? m[1].toUpperCase() : null;
+  }
+  function groupName(letter){ return 'Groupe ' + String(letter || '').toUpperCase(); }
+  function isGroup(group){ return !!groupLetter(group); }
+
+  function computeStandings(){
+    var standings = {};
+    arr(S().matches).filter(function(m){ return isGroup(m.group); }).forEach(function(m){
+      var g = String(m.group);
+      if(!standings[g]) standings[g] = [];
+      [m.teamA,m.teamB].forEach(function(team){
+        if(team && !standings[g].some(function(x){ return x.team === team; })){
+          standings[g].push({team:team, group:g, played:0, won:0, drawn:0, lost:0, gf:0, ga:0, gd:0, pts:0});
+        }
+      });
+    });
+    arr(S().matches).filter(function(m){ return isGroup(m.group) && hasScore(m); }).forEach(function(m){
+      var table = standings[m.group] || [];
+      var a = table.find(function(x){ return x.team === m.teamA; });
+      var b = table.find(function(x){ return x.team === m.teamB; });
+      if(!a || !b) return;
+      var sa = Number(m.scoreA), sb = Number(m.scoreB);
+      a.played++; b.played++;
+      a.gf += sa; a.ga += sb; b.gf += sb; b.ga += sa;
+      if(sa > sb){ a.won++; b.lost++; a.pts += 3; }
+      else if(sa < sb){ b.won++; a.lost++; b.pts += 3; }
+      else { a.drawn++; b.drawn++; a.pts += 1; b.pts += 1; }
+      a.gd = a.gf - a.ga; b.gd = b.gf - b.ga;
+    });
+    Object.values(standings).forEach(function(table){
+      table.sort(function(a,b){
+        return num(b.pts)-num(a.pts) || num(b.gd)-num(a.gd) || num(b.gf)-num(a.gf) || String(a.team).localeCompare(String(b.team),'fr');
+      });
+    });
+    return standings;
+  }
+  window.computeGroupStandings = computeStandings;
+
+  function groupComplete(letter, standings){
+    var table = standings[groupName(letter)];
+    return !!(table && table.length >= 4 && table.every(function(r){ return Number(r.played) >= 3; }));
+  }
+  function teamHTML(team){
+    try{ if(typeof window.f === 'function') return window.f(team); }catch(e){}
+    return esc(team);
+  }
+  function flagOnlySafe(team){
+    try{ if(typeof window.flagOnly === 'function') return window.flagOnly(team); }catch(e){}
+    return '';
+  }
+  function renderGroups(){
+    var el = document.getElementById('groupStandings');
+    if(!el) return;
+    var standings = computeStandings();
+    var order = Object.keys(standings).sort(function(a,b){ return a.localeCompare(b,'fr',{numeric:true}); });
+    el.innerHTML = '<div class="worldcup-groups-grid">' + order.map(function(group){
+      var rows = standings[group].map(function(r,i){
+        return '<div class="worldcup-team-row '+(i<2?'qualified':(i===2?'possible':''))+'">'
+          + '<div class="worldcup-rank">'+(i+1)+'</div>'
+          + '<div class="worldcup-team-name">'+flagOnlySafe(r.team)+'<span>'+esc(r.team)+'</span></div>'
+          + '<div class="worldcup-stat worldcup-pts">'+esc(r.pts)+'</div>'
+          + '<div class="worldcup-stat">'+esc(r.played)+'</div>'
+          + '<div class="worldcup-stat">'+esc(r.won)+'</div>'
+          + '<div class="worldcup-stat">'+esc(r.drawn)+'</div>'
+          + '<div class="worldcup-stat">'+esc(r.lost)+'</div>'
+          + '<div class="worldcup-stat">'+esc(r.gf)+'</div>'
+          + '<div class="worldcup-stat">'+esc(r.ga)+'</div>'
+          + '</div>';
+      }).join('');
+      return '<div class="worldcup-group-card">'
+        + '<div class="worldcup-group-title">'+esc(group)+'</div>'
+        + '<div class="worldcup-team-row head"><div>#</div><div>Pays</div><div class="worldcup-pts">NP</div><div>MJ</div><div>G</div><div>N</div><div>P</div><div>BM</div><div>BE</div></div>'
+        + rows
+        + '</div>';
+    }).join('') + '</div><div class="bp-wc-legend"><div class="bp-wc-legend-left"><span><i class="bp-wc-dot q"></i>Qualifié direct</span><span><i class="bp-wc-dot p"></i>3e possible</span></div><div class="bp-wc-legend-right"><span>NP : Points</span><span>MJ : Matchs joués</span><span>BM : Buts marqués</span><span>BE : Buts encaissés</span></div></div>';
+  }
+  window.renderGroupStandings = renderGroups;
+
+  function makeSlot(label, resolved, source){
+    return {name:String(label || 'À déterminer'), resolved:!!resolved, source:String(source || '')};
+  }
+  function resolveSlot(label, standings){
+    var raw = String(label || '').trim();
+    var m = raw.match(/^Group\s+([A-L])\s+Winners?$/i);
+    if(m){
+      var l = m[1].toUpperCase(), t = standings[groupName(l)];
+      return (groupComplete(l, standings) && t && t[0]) ? makeSlot(t[0].team, true, '1er ' + groupName(l)) : makeSlot('1er ' + groupName(l), false, raw);
+    }
+    m = raw.match(/^Group\s+([A-L])\s+Runners?\s+Up$/i);
+    if(m){
+      var l2 = m[1].toUpperCase(), t2 = standings[groupName(l2)];
+      return (groupComplete(l2, standings) && t2 && t2[1]) ? makeSlot(t2[1].team, true, '2e ' + groupName(l2)) : makeSlot('2e ' + groupName(l2), false, raw);
+    }
+    m = raw.match(/^Group\s+([A-L](?:\/[A-L])*)\s+3rd\s+Place$/i);
+    if(m){
+      return makeSlot('Meilleur 3e ' + m[1].toUpperCase(), false, raw);
+    }
+    m = raw.match(/^Match\s+(\d+)\s+Winner$/i);
+    if(m){
+      return makeSlot('Vainqueur match ' + m[1], false, raw);
+    }
+    m = raw.match(/^Match\s+(\d+)\s+Loser$/i);
+    if(m){
+      return makeSlot('Perdant match ' + m[1], false, raw);
+    }
+    return raw ? makeSlot(raw, true, '') : makeSlot('À déterminer', false, '');
+  }
+  function slotHTML(s){
+    if(!s || !s.resolved) return '<span class="bp-ko-unresolved-v415">'+esc(s && s.name || 'À déterminer')+'</span>' + (s && s.source ? '<span class="bp-ko-source">'+esc(s.source)+'</span>' : '');
+    return teamHTML(s.name) + (s.source ? '<span class="bp-ko-source">'+esc(s.source)+'</span>' : '');
+  }
+  function phaseKey(m){
+    var p = String((m && (m.phase || m.group)) || '').toLowerCase();
+    if(p.includes('round of 32')) return 'r32';
+    if(p.includes('round of 16')) return 'r16';
+    if(p.includes('quarter')) return 'qf';
+    if(p.includes('semi')) return 'sf';
+    return '';
+  }
+  function matchNo(m){ return Number(m && (m.matchNo || String(m.id||'').replace(/\D/g,''))) || 0; }
+  function resolvedMatches(){
+    var standings = computeStandings();
+    return arr(S().matches)
+      .filter(function(m){ return !isGroup(m.group) && phaseKey(m); })
+      .sort(function(a,b){ return matchNo(a)-matchNo(b); })
+      .map(function(m){
+        return {
+          match:m,
+          no:matchNo(m),
+          key:phaseKey(m),
+          a:resolveSlot(m.teamA, standings),
+          b:resolveSlot(m.teamB, standings),
+          hasScore:hasScore(m),
+          scoreA:m.scoreA,
+          scoreB:m.scoreB
+        };
+      });
+  }
+  function renderKnockout(){
+    var el = document.getElementById('finalBracket');
+    if(!el) return;
+    var all = resolvedMatches();
+    var defs = [
+      {key:'r32', title:'1/16 de finale', count:8},
+      {key:'r16', title:'1/8 de finale', count:4},
+      {key:'qf', title:'1/4 de finale', count:2},
+      {key:'sf', title:'1/2 finale', count:1}
+    ];
+    function list(def, side){
+      var ms = all.filter(function(x){ return x.key === def.key; });
+      var half = Math.ceil(ms.length / 2);
+      return (side === 'left' ? ms.slice(0, half) : ms.slice(half)).slice(0, def.count);
+    }
+    function card(x, label, i){
+      var a = x ? x.a : makeSlot(label + ' · ' + (i+1), false, '');
+      var b = x ? x.b : makeSlot('À déterminer', false, '');
+      var unresolved = !x || !a.resolved || !b.resolved;
+      return '<div class="knockout-match '+(x && x.hasScore?'played':'')+' '+(unresolved?'unresolved':'')+'">'
+        + '<div class="knockout-team"><span>'+slotHTML(a)+'</span><b>'+(x && x.hasScore ? esc(x.scoreA) : '')+'</b></div>'
+        + '<div class="knockout-team"><span>'+slotHTML(b)+'</span><b>'+(x && x.hasScore ? esc(x.scoreB) : '')+'</b></div>'
+        + '</div>';
+    }
+    function round(def, side){
+      var ms = list(def, side), html = [];
+      for(var i=0;i<def.count;i++) html.push(card(ms[i], def.title, i));
+      return '<div class="knockout-round '+side+'"><h3>'+esc(def.title)+'</h3>'+html.join('')+'</div>';
+    }
+    var left = defs.map(function(d){ return round(d,'left'); }).join('');
+    var right = defs.slice().reverse().map(function(d){ return round(d,'right'); }).join('');
+    el.innerHTML = left
+      + '<div class="bp-final-center"><div class="bp-final-cup">🏆</div><div class="bp-final-title">B Partner<br>World Cup 2026</div><div class="bp-final-sub">Champion du monde</div><div class="bp-final-crown">👑</div></div>'
+      + right
+      + '<div class="bp-bracket-legend"><span class="bp-bracket-pill">À déterminer</span><span class="bp-bracket-pill played">Match joué</span><span class="bp-bracket-pill qualified">Qualifié résolu</span></div>';
+  }
+  window.renderKnockoutBoard = renderKnockout;
+
+  function refresh(){
+    try{ decorateRecent(); }catch(e){ console.warn('[V415] recent', e); }
+    try{ renderGroups(); }catch(e){ console.warn('[V415] groups', e); }
+    try{ renderKnockout(); }catch(e){ console.warn('[V415] ko', e); }
+  }
+
+  var oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function' && !oldRenderBets.__bpV415Wrapped){
+    window.renderBets = function(){
+      var r = oldRenderBets.apply(this, arguments);
+      setTimeout(decorateRecent, 0);
+      return r;
+    };
+    window.renderBets.__bpV415Wrapped = true;
+  }
+
+  var oldRenderCalendar = window.renderCalendar;
+  if(typeof oldRenderCalendar === 'function' && !oldRenderCalendar.__bpV415Wrapped){
+    window.renderCalendar = function(){
+      var r = oldRenderCalendar.apply(this, arguments);
+      setTimeout(function(){ renderGroups(); renderKnockout(); }, 0);
+      return r;
+    };
+    window.renderCalendar.__bpV415Wrapped = true;
+  }
+
+  var oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV415Wrapped){
+    window.renderAll = function(){
+      var r = oldRenderAll.apply(this, arguments);
+      setTimeout(refresh, 0);
+      return r;
+    };
+    window.renderAll.__bpV415Wrapped = true;
+  }
+
+  window.bpV415Audit = function(){
+    var out = {
+      day: currentShownDay(),
+      playable: isDayPlayable(currentShownDay()),
+      betCards: document.querySelectorAll('#betRows .bet-card').length,
+      recentBoxes: document.querySelectorAll('#betRows .bp-v415-team-recent').length,
+      koCards: document.querySelectorAll('#finalBracket .knockout-match').length
+    };
+    console.log('[V415 AUDIT]', out);
+    return out;
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(refresh, 250); });
+  setTimeout(refresh, 500);
+})();
+</script>
+
+
+
+<!-- V417 — FIX MATCHS RÉCENTS DROITE : layout stable dans cartes équipes (UX only) -->
+<style id="bp-v417-recent-team-card-layout-fix-css">
+  /*
+    V417 : le bloc Forme récente ne doit plus pousser le drapeau/nom de l'équipe droite.
+    Cause : la carte away était en row-reverse ; l'injection V415 ajoutait le bloc récent dans le flux,
+    ce qui plaçait la forme récente avant le drapeau et compressait le nom.
+    Correctif : grille interne stable, différente home/away, sans toucher au moteur de mise/gains/BDD.
+  */
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr)!important;
+    grid-template-areas:"flag name" "recent recent"!important;
+    align-items:center!important;
+    justify-content:initial!important;
+    column-gap:22px!important;
+    row-gap:12px!important;
+    min-width:0!important;
+    width:100%!important;
+    overflow:hidden!important;
+  }
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-away{
+    flex-direction:initial!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-areas:"name flag" "recent recent"!important;
+  }
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card img.flag,
+  #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card .flag:not(.bp-v415-team-recent *){
+    grid-area:flag!important;
+    justify-self:center!important;
+    align-self:center!important;
+  }
+  #bets .bp-v213-prono-card .bp-v213-team-name{
+    grid-area:name!important;
+    min-width:0!important;
+    max-width:100%!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  #bets .bp-v213-prono-card .bp-v213-away .bp-v213-team-name{
+    text-align:right!important;
+  }
+  #bets .bp-v213-prono-card .bp-v415-team-recent{
+    grid-area:recent!important;
+    justify-self:center!important;
+    width:min(100%,178px)!important;
+    max-width:178px!important;
+    margin:0!important;
+  }
+
+  @media(max-width:1050px){
+    #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card{
+      column-gap:14px!important;
+      row-gap:10px!important;
+    }
+  }
+  @media(max-width:720px){
+    #bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card,
+    #bets .bp-v213-prono-card .flag-wrap.bp-v213-away{
+      grid-template-columns:1fr!important;
+      grid-template-areas:"flag" "name" "recent"!important;
+      justify-items:center!important;
+      row-gap:7px!important;
+    }
+    #bets .bp-v213-prono-card .bp-v213-team-name,
+    #bets .bp-v213-prono-card .bp-v213-away .bp-v213-team-name{
+      text-align:center!important;
+    }
+    #bets .bp-v213-prono-card .bp-v415-team-recent{
+      width:min(100%,150px)!important;
+      max-width:150px!important;
+    }
+  }
+</style>
+<script id="bp-v417-recent-team-card-layout-fix-js">
+(function(){
+  'use strict';
+  if(window.__BP_V417_RECENT_TEAM_CARD_LAYOUT_FIX__) return;
+  window.__BP_V417_RECENT_TEAM_CARD_LAYOUT_FIX__ = true;
+  window.BP_APP_VERSION = 'v417-recent-right-layout-fix';
+
+  function normalizeRecentOrder(){
+    document.querySelectorAll('#bets .bp-v213-prono-card .flag-wrap.bp-v213-team-card').forEach(function(card){
+      var img = card.querySelector('img.flag');
+      var name = card.querySelector('.bp-v213-team-name');
+      var recent = card.querySelector('.bp-v415-team-recent');
+      if(img) img.style.gridArea = 'flag';
+      if(name) name.style.gridArea = 'name';
+      if(recent) recent.style.gridArea = 'recent';
+    });
+  }
+  window.bpV417NormalizeRecentOrder = normalizeRecentOrder;
+
+  var oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function' && !oldRenderBets.__bpV417Wrapped){
+    window.renderBets = function(){
+      var r = oldRenderBets.apply(this, arguments);
+      setTimeout(normalizeRecentOrder, 0);
+      return r;
+    };
+    window.renderBets.__bpV417Wrapped = true;
+    try{ renderBets = window.renderBets; }catch(e){}
+  }
+
+  var oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV417Wrapped){
+    window.renderAll = function(){
+      var r = oldRenderAll.apply(this, arguments);
+      setTimeout(normalizeRecentOrder, 0);
+      return r;
+    };
+    window.renderAll.__bpV417Wrapped = true;
+    try{ renderAll = window.renderAll; }catch(e){}
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(normalizeRecentOrder, 250); });
+  setTimeout(normalizeRecentOrder, 500);
+})();
+</script>
+
 </body></html>
+<!-- V418 — MATCHS RÉCENTS : même layout gauche/droite, zéro compression nom/drapeau (UX only) -->
+<style id="bp-v418-recent-same-team-box-css">
+  /*
+    V418 : on arrête de gérer gauche/droite différemment.
+    Les 2 cartes équipe utilisent exactement la même grille verticale :
+    drapeau -> nom -> forme récente.
+    Ne touche pas aux mises, gains, BDD, calculs.
+  */
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card,
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-home,
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-away{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    grid-template-rows:auto auto auto!important;
+    grid-template-areas:"flag" "name" "recent"!important;
+    justify-items:center!important;
+    align-items:center!important;
+    justify-content:center!important;
+    align-content:center!important;
+    gap:12px!important;
+    min-width:0!important;
+    width:100%!important;
+    overflow:hidden!important;
+    text-align:center!important;
+    flex-direction:column!important;
+  }
+
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card > img.flag,
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card > .flag{
+    grid-area:flag!important;
+    justify-self:center!important;
+    align-self:center!important;
+    margin:0!important;
+    position:static!important;
+    float:none!important;
+    transform:none!important;
+  }
+
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card > .bp-v213-team-name,
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-away > .bp-v213-team-name,
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-home > .bp-v213-team-name{
+    grid-area:name!important;
+    display:block!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    text-align:center!important;
+    white-space:nowrap!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    margin:0!important;
+    position:static!important;
+    float:none!important;
+    transform:none!important;
+  }
+
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card > .bp-v415-team-recent,
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-away > .bp-v415-team-recent,
+  #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-home > .bp-v415-team-recent{
+    grid-area:recent!important;
+    justify-self:center!important;
+    align-self:center!important;
+    width:min(100%,178px)!important;
+    max-width:178px!important;
+    margin:0 auto!important;
+    position:static!important;
+    float:none!important;
+    transform:none!important;
+  }
+
+  @media(max-width:1050px){
+    #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card,
+    #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-home,
+    #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card.bp-v213-away{
+      gap:9px!important;
+    }
+  }
+
+  @media(max-width:720px){
+    #bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card > .bp-v415-team-recent{
+      width:min(100%,150px)!important;
+      max-width:150px!important;
+    }
+  }
+</style>
+<script id="bp-v418-recent-same-team-box-js">
+(function(){
+  'use strict';
+  if(window.__BP_V418_RECENT_SAME_TEAM_BOX__) return;
+  window.__BP_V418_RECENT_SAME_TEAM_BOX__ = true;
+  window.BP_APP_VERSION = 'v418-recent-same-team-box';
+
+  function normalizeTeamBoxes(){
+    document.querySelectorAll('#bets .bp-v213-prono-card .bet-inline-row .flag-wrap.bp-v213-team-card').forEach(function(box){
+      box.classList.remove('bp-v418-bad-layout');
+      var img = box.querySelector(':scope > img.flag, :scope > .flag');
+      var name = box.querySelector(':scope > .bp-v213-team-name');
+      var recent = box.querySelector(':scope > .bp-v415-team-recent');
+      if(img){ img.style.gridArea = 'flag'; img.style.position = 'static'; img.style.transform = 'none'; }
+      if(name){ name.style.gridArea = 'name'; name.style.textAlign = 'center'; name.style.width = '100%'; name.style.maxWidth = '100%'; }
+      if(recent){ recent.style.gridArea = 'recent'; recent.style.position = 'static'; recent.style.transform = 'none'; recent.style.margin = '0 auto'; }
+    });
+  }
+
+  window.bpV418NormalizeTeamBoxes = normalizeTeamBoxes;
+
+  var oldRenderBets = window.renderBets;
+  if(typeof oldRenderBets === 'function' && !oldRenderBets.__bpV418Wrapped){
+    window.renderBets = function(){
+      var r = oldRenderBets.apply(this, arguments);
+      normalizeTeamBoxes();
+      return r;
+    };
+    window.renderBets.__bpV418Wrapped = true;
+    try{ renderBets = window.renderBets; }catch(e){}
+  }
+
+  var oldRenderAll = window.renderAll;
+  if(typeof oldRenderAll === 'function' && !oldRenderAll.__bpV418Wrapped){
+    window.renderAll = function(){
+      var r = oldRenderAll.apply(this, arguments);
+      normalizeTeamBoxes();
+      return r;
+    };
+    window.renderAll.__bpV418Wrapped = true;
+    try{ renderAll = window.renderAll; }catch(e){}
+  }
+
+  document.addEventListener('DOMContentLoaded', normalizeTeamBoxes);
+  setTimeout(normalizeTeamBoxes, 250);
+})();
+</script>
